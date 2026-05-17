@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature for PythonClaw
+about: Suggest a new feature for ClawSoul
 title: "[Feature] "
 labels: enhancement
 assignees: ''

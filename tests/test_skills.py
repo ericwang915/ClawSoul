@@ -11,7 +11,7 @@ import tempfile
 
 import pytest
 
-from pythonclaw.core.skill_loader import (
+from claw_soul.core.skill_loader import (
     SkillMetadata,
     SkillRegistry,
     load_skill_by_name,

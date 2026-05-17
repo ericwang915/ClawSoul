@@ -7,7 +7,7 @@ import tempfile
 import pytest
 from unittest.mock import MagicMock, patch
 
-from pythonclaw.core.compaction import (
+from claw_soul.core.compaction import (
     estimate_tokens,
     messages_to_text,
     persist_compaction,
@@ -267,7 +267,7 @@ class TestMemoryFlush:
 
 class TestAgentCompact:
     def _make_agent(self, tmp_path):
-        from pythonclaw.core.agent import Agent
+        from claw_soul.core.agent import Agent
         provider = MagicMock()
         provider.chat.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="[]"))]

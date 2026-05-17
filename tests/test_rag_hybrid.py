@@ -47,7 +47,7 @@ SAMPLE_TEXTS = [
 
 class TestChunker:
     def test_basic_paragraph_split(self):
-        from pythonclaw.core.retrieval.chunker import chunk_text
+        from claw_soul.core.retrieval.chunker import chunk_text
         text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
         chunks = chunk_text(text, source="test.txt")
         assert len(chunks) == 3
@@ -55,7 +55,7 @@ class TestChunker:
         assert chunks[0]["source"] == "test.txt"
 
     def test_long_paragraph_sliding_window(self):
-        from pythonclaw.core.retrieval.chunker import chunk_text
+        from claw_soul.core.retrieval.chunker import chunk_text
         long_text = "A" * 1200  # one big paragraph
         chunks = chunk_text(long_text, source="long.txt", chunk_size=400, overlap=80)
         # Should produce multiple chunks
@@ -65,11 +65,11 @@ class TestChunker:
             assert len(c["content"]) <= 400
 
     def test_empty_text(self):
-        from pythonclaw.core.retrieval.chunker import chunk_text
+        from claw_soul.core.retrieval.chunker import chunk_text
         assert chunk_text("", source="empty.txt") == []
 
     def test_load_corpus_from_directory(self, tmp_path):
-        from pythonclaw.core.retrieval.chunker import load_corpus_from_directory
+        from claw_soul.core.retrieval.chunker import load_corpus_from_directory
         (tmp_path / "doc1.txt").write_text("Hello world.\n\nSecond para.")
         (tmp_path / "doc2.md").write_text("Markdown content.")
         (tmp_path / "ignore.py").write_text("# ignored")
@@ -81,7 +81,7 @@ class TestChunker:
         assert len(corpus) >= 3  # 2 from doc1 + 1 from doc2
 
     def test_chunk_idx_monotone(self):
-        from pythonclaw.core.retrieval.chunker import chunk_text
+        from claw_soul.core.retrieval.chunker import chunk_text
         text = "Para one.\n\nPara two.\n\nPara three."
         chunks = chunk_text(text)
         indices = [c["chunk_idx"] for c in chunks]
@@ -92,7 +92,7 @@ class TestChunker:
 
 class TestBM25Retriever:
     def test_retrieve_returns_relevant(self):
-        from pythonclaw.core.retrieval.sparse import BM25Retriever
+        from claw_soul.core.retrieval.sparse import BM25Retriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = BM25Retriever()
         r.fit(corpus)
@@ -101,13 +101,13 @@ class TestBM25Retriever:
         assert any("Paris" in c or "Eiffel" in c for c in contents)
 
     def test_empty_corpus_returns_empty(self):
-        from pythonclaw.core.retrieval.sparse import BM25Retriever
+        from claw_soul.core.retrieval.sparse import BM25Retriever
         r = BM25Retriever()
         r.fit([])
         assert r.retrieve("anything", top_k=5) == []
 
     def test_top_k_respected(self):
-        from pythonclaw.core.retrieval.sparse import BM25Retriever
+        from claw_soul.core.retrieval.sparse import BM25Retriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = BM25Retriever()
         r.fit(corpus)
@@ -115,7 +115,7 @@ class TestBM25Retriever:
         assert len(results) <= 2
 
     def test_scores_descending(self):
-        from pythonclaw.core.retrieval.sparse import BM25Retriever
+        from claw_soul.core.retrieval.sparse import BM25Retriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = BM25Retriever()
         r.fit(corpus)
@@ -124,7 +124,7 @@ class TestBM25Retriever:
         assert scores == sorted(scores, reverse=True)
 
     def test_no_match_returns_empty(self):
-        from pythonclaw.core.retrieval.sparse import BM25Retriever
+        from claw_soul.core.retrieval.sparse import BM25Retriever
         corpus = make_corpus(["hello world", "foo bar"])
         r = BM25Retriever()
         r.fit(corpus)
@@ -136,7 +136,7 @@ class TestBM25Retriever:
 
 class TestEmbeddingRetriever:
     def test_retrieve_returns_results(self):
-        from pythonclaw.core.retrieval.dense import EmbeddingRetriever
+        from claw_soul.core.retrieval.dense import EmbeddingRetriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = EmbeddingRetriever()
         r.fit(corpus)
@@ -147,13 +147,13 @@ class TestEmbeddingRetriever:
                    for _, c in results)
 
     def test_empty_corpus_returns_empty(self):
-        from pythonclaw.core.retrieval.dense import EmbeddingRetriever
+        from claw_soul.core.retrieval.dense import EmbeddingRetriever
         r = EmbeddingRetriever()
         r.fit([])
         assert r.retrieve("anything", top_k=3) == []
 
     def test_top_k_respected(self):
-        from pythonclaw.core.retrieval.dense import EmbeddingRetriever
+        from claw_soul.core.retrieval.dense import EmbeddingRetriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = EmbeddingRetriever()
         r.fit(corpus)
@@ -161,7 +161,7 @@ class TestEmbeddingRetriever:
         assert len(results) <= 2
 
     def test_backend_name_set(self):
-        from pythonclaw.core.retrieval.dense import EmbeddingRetriever
+        from claw_soul.core.retrieval.dense import EmbeddingRetriever
         r = EmbeddingRetriever()
         assert hasattr(r, "backend_name")
         assert r.backend_name  # non-empty string
@@ -171,7 +171,7 @@ class TestEmbeddingRetriever:
 
 class TestRRF:
     def test_combines_two_lists(self):
-        from pythonclaw.core.retrieval.fusion import reciprocal_rank_fusion
+        from claw_soul.core.retrieval.fusion import reciprocal_rank_fusion
         a = {"_idx": 0, "content": "Paris"}
         b = {"_idx": 1, "content": "London"}
         c = {"_idx": 2, "content": "Berlin"}
@@ -182,19 +182,19 @@ class TestRRF:
         assert fused[0][1]["_idx"] == 0
 
     def test_single_list_passthrough(self):
-        from pythonclaw.core.retrieval.fusion import reciprocal_rank_fusion
+        from claw_soul.core.retrieval.fusion import reciprocal_rank_fusion
         a = {"_idx": 0, "content": "x"}
         b = {"_idx": 1, "content": "y"}
         fused = reciprocal_rank_fusion([[(1.0, a), (0.5, b)]])
         assert fused[0][1]["_idx"] == 0
 
     def test_empty_lists(self):
-        from pythonclaw.core.retrieval.fusion import reciprocal_rank_fusion
+        from claw_soul.core.retrieval.fusion import reciprocal_rank_fusion
         assert reciprocal_rank_fusion([]) == []
         assert reciprocal_rank_fusion([[]]) == []
 
     def test_scores_descending(self):
-        from pythonclaw.core.retrieval.fusion import reciprocal_rank_fusion
+        from claw_soul.core.retrieval.fusion import reciprocal_rank_fusion
         chunks = [{"_idx": i, "content": f"chunk {i}"} for i in range(5)]
         list1 = [(1.0 - i * 0.1, c) for i, c in enumerate(chunks)]
         list2 = list(reversed(list1))
@@ -207,7 +207,7 @@ class TestRRF:
 
 class TestLLMReranker:
     def test_reranks_by_llm_response(self):
-        from pythonclaw.core.retrieval.reranker import LLMReranker
+        from claw_soul.core.retrieval.reranker import LLMReranker
         corpus = make_corpus(SAMPLE_TEXTS)
         provider = make_provider("[2, 0, 1]")  # LLM says idx 2 is most relevant
         reranker = LLMReranker(provider)
@@ -217,7 +217,7 @@ class TestLLMReranker:
         assert len(result) == 2
 
     def test_fallback_on_bad_llm_response(self):
-        from pythonclaw.core.retrieval.reranker import LLMReranker
+        from claw_soul.core.retrieval.reranker import LLMReranker
         corpus = make_corpus(SAMPLE_TEXTS[:3])
         provider = make_provider("sorry I cannot help with that")
         reranker = LLMReranker(provider)
@@ -226,12 +226,12 @@ class TestLLMReranker:
         assert len(result) == 2
 
     def test_empty_candidates(self):
-        from pythonclaw.core.retrieval.reranker import LLMReranker
+        from claw_soul.core.retrieval.reranker import LLMReranker
         reranker = LLMReranker(make_provider())
         assert reranker.rerank("query", [], top_k=3) == []
 
     def test_single_candidate(self):
-        from pythonclaw.core.retrieval.reranker import LLMReranker
+        from claw_soul.core.retrieval.reranker import LLMReranker
         corpus = make_corpus(["only one"])
         reranker = LLMReranker(make_provider("[0]"))
         result = reranker.rerank("query", corpus, top_k=1)
@@ -242,7 +242,7 @@ class TestLLMReranker:
 
 class TestHybridRetriever:
     def test_sparse_only(self):
-        from pythonclaw.core.retrieval.retriever import HybridRetriever
+        from claw_soul.core.retrieval.retriever import HybridRetriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = HybridRetriever(use_sparse=True, use_dense=False, use_reranker=False)
         r.fit(corpus)
@@ -251,7 +251,7 @@ class TestHybridRetriever:
         assert any("Eiffel" in h["content"] for h in hits)
 
     def test_dense_only(self):
-        from pythonclaw.core.retrieval.retriever import HybridRetriever
+        from claw_soul.core.retrieval.retriever import HybridRetriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = HybridRetriever(use_sparse=False, use_dense=True, use_reranker=False)
         r.fit(corpus)
@@ -259,7 +259,7 @@ class TestHybridRetriever:
         assert len(hits) >= 1
 
     def test_hybrid_sparse_and_dense(self):
-        from pythonclaw.core.retrieval.retriever import HybridRetriever
+        from claw_soul.core.retrieval.retriever import HybridRetriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = HybridRetriever(use_sparse=True, use_dense=True, use_reranker=False)
         r.fit(corpus)
@@ -268,7 +268,7 @@ class TestHybridRetriever:
         assert any("Paris" in h["content"] or "Eiffel" in h["content"] for h in hits)
 
     def test_with_reranker(self):
-        from pythonclaw.core.retrieval.retriever import HybridRetriever
+        from claw_soul.core.retrieval.retriever import HybridRetriever
         provider = make_provider("[1, 0, 2]")  # LLM reorders
         corpus = make_corpus(SAMPLE_TEXTS)
         r = HybridRetriever(
@@ -279,7 +279,7 @@ class TestHybridRetriever:
         assert len(hits) <= 2
 
     def test_no_idx_in_results(self):
-        from pythonclaw.core.retrieval.retriever import HybridRetriever
+        from claw_soul.core.retrieval.retriever import HybridRetriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = HybridRetriever(use_sparse=True, use_dense=False, use_reranker=False)
         r.fit(corpus)
@@ -288,20 +288,20 @@ class TestHybridRetriever:
             assert "_idx" not in h, "Internal _idx should be stripped from results"
 
     def test_empty_corpus(self):
-        from pythonclaw.core.retrieval.retriever import HybridRetriever
+        from claw_soul.core.retrieval.retriever import HybridRetriever
         r = HybridRetriever(use_sparse=True, use_dense=False, use_reranker=False)
         r.fit([])
         assert r.retrieve("anything", top_k=3) == []
 
     def test_empty_query(self):
-        from pythonclaw.core.retrieval.retriever import HybridRetriever
+        from claw_soul.core.retrieval.retriever import HybridRetriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = HybridRetriever(use_sparse=True, use_dense=False, use_reranker=False)
         r.fit(corpus)
         assert r.retrieve("", top_k=3) == []
 
     def test_top_k_respected(self):
-        from pythonclaw.core.retrieval.retriever import HybridRetriever
+        from claw_soul.core.retrieval.retriever import HybridRetriever
         corpus = make_corpus(SAMPLE_TEXTS)
         r = HybridRetriever(use_sparse=True, use_dense=True, use_reranker=False)
         r.fit(corpus)
@@ -313,7 +313,7 @@ class TestHybridRetriever:
 
 class TestKnowledgeRAG:
     def test_load_and_retrieve(self, tmp_path):
-        from pythonclaw.core.knowledge.rag import KnowledgeRAG
+        from claw_soul.core.knowledge.rag import KnowledgeRAG
         (tmp_path / "animals.txt").write_text(
             "Dogs are loyal pets.\n\nCats are independent animals.\n\nBirds can fly."
         )
@@ -322,12 +322,12 @@ class TestKnowledgeRAG:
         assert any("Birds" in h["content"] or "fly" in h["content"] for h in hits)
 
     def test_empty_dir_returns_empty(self, tmp_path):
-        from pythonclaw.core.knowledge.rag import KnowledgeRAG
+        from claw_soul.core.knowledge.rag import KnowledgeRAG
         rag = KnowledgeRAG(str(tmp_path), provider=None, use_reranker=False)
         assert rag.retrieve("anything") == []
 
     def test_reload(self, tmp_path):
-        from pythonclaw.core.knowledge.rag import KnowledgeRAG
+        from claw_soul.core.knowledge.rag import KnowledgeRAG
         (tmp_path / "doc.txt").write_text("Initial content about trees.")
         rag = KnowledgeRAG(str(tmp_path), provider=None, use_reranker=False)
         initial_len = len(rag)
@@ -336,11 +336,11 @@ class TestKnowledgeRAG:
         assert len(rag) > initial_len
 
     def test_simplerag_alias(self, tmp_path):
-        from pythonclaw.core.knowledge.rag import SimpleRAG
+        from claw_soul.core.knowledge.rag import SimpleRAG
         assert SimpleRAG is not None  # backwards compat alias exists
 
     def test_result_has_source_and_content(self, tmp_path):
-        from pythonclaw.core.knowledge.rag import KnowledgeRAG
+        from claw_soul.core.knowledge.rag import KnowledgeRAG
         (tmp_path / "info.txt").write_text("The sky is blue.\n\nWater is wet.")
         rag = KnowledgeRAG(str(tmp_path), provider=None, use_reranker=False)
         hits = rag.retrieve("sky color", top_k=1)
@@ -353,7 +353,7 @@ class TestKnowledgeRAG:
 
 class TestMemoryManagerRAG:
     def _make_manager(self, tmp_path):
-        from pythonclaw.core.memory.manager import MemoryManager
+        from claw_soul.core.memory.manager import MemoryManager
         mem_dir = str(tmp_path / "memory")
         mgr = MemoryManager(memory_dir=mem_dir, use_dense=False)
         return mgr

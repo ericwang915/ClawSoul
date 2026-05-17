@@ -1,9 +1,9 @@
 include LICENSE README.md
-recursive-include pythonclaw *.py *.html *.css *.js *.png *.ico
+recursive-include claw_soul *.py *.html *.css *.js *.png *.ico
 recursive-include tests *.py
 
-exclude pythonclaw.json
-exclude pythonclaw.example.json
+exclude claw_soul.json
+exclude claw_soul.example.json
 exclude .env .env.example
 recursive-exclude * __pycache__
 recursive-exclude * *.py[cod]

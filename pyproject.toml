@@ -3,16 +3,16 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pythonclaw"
-version = "0.6.6"
-description = "OpenClaw reimagined in pure Python — autonomous AI agent with memory, RAG, skills, web dashboard, and multi-channel support."
+name = "claw_soul"
+version = "1.0.0"
+description = "ClawSoul — your virtual AI girlfriend on Telegram, powered by LLM with memory, RAG, and skills."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "Eric Wang", email = "wangchen2007915@gmail.com"},
 ]
-keywords = ["llm", "agent", "ai", "autonomous", "memory", "rag", "skills", "telegram", "discord", "whatsapp", "chatbot", "framework"]
+keywords = ["llm", "agent", "ai", "telegram", "chatbot", "virtual-girlfriend", "memory", "rag"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -30,8 +30,7 @@ dependencies = [
     "anthropic",
     "google-generativeai",
     "python-telegram-bot[job-queue]>=20.0",
-    "discord.py>=2.3",
-    "pywa[fastapi]>=2.8",
+
     "apscheduler>=3.10",
     "pyyaml>=6.0",
     "fastapi>=0.100",
@@ -46,19 +45,19 @@ dependencies = [
 ]
 
 [project.scripts]
-pythonclaw = "pythonclaw.main:main"
+claw_soul = "claw_soul.main:main"
 
 [project.urls]
-Homepage = "https://github.com/ericwang915/PythonClaw"
-Documentation = "https://github.com/ericwang915/PythonClaw#readme"
-Repository = "https://github.com/ericwang915/PythonClaw"
-Issues = "https://github.com/ericwang915/PythonClaw/issues"
+Homepage = "https://github.com/ericwang915/ClawSoul"
+Documentation = "https://github.com/ericwang915/ClawSoul#readme"
+Repository = "https://github.com/ericwang915/ClawSoul"
+Issues = "https://github.com/ericwang915/ClawSoul/issues"
 
 [tool.setuptools.packages.find]
-include = ["pythonclaw*"]
+include = ["claw_soul*"]
 
 [tool.setuptools.package-data]
-pythonclaw = [
+claw_soul = [
     "templates/**/*.py",
     "templates/**/*.sh",
     "templates/**/*.yaml",

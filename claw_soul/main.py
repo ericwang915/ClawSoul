@@ -1,0 +1,341 @@
+"""
+ClawSoul CLI — entry point.
+
+Subcommands
+-----------
+  onboard   Interactive first-time setup wizard
+  start     Start the agent daemon (web dashboard + Telegram)
+  stop      Stop the running daemon
+  status    Show daemon status
+  chat      Interactive CLI chat (foreground)
+"""
+
+import argparse
+import logging
+
+from . import config
+from .core.persistent_agent import PersistentAgent
+from .core.session_store import SessionStore
+
+# ── Provider builder ─────────────────────────────────────────────────────────
+
+def _build_provider():
+    """Instantiate the LLM provider selected by config."""
+    provider_name = config.get_str(
+        "llm", "provider", env="LLM_PROVIDER", default="deepseek"
+    ).lower()
+
+    if provider_name == "deepseek":
+        from .core.llm.openai_compatible import OpenAICompatibleProvider
+        api_key = config.get_str("llm", "deepseek", "apiKey", env="DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError("DEEPSEEK_API_KEY not set (env or claw_soul.json)")
+        return OpenAICompatibleProvider(
+            api_key=api_key,
+            base_url=config.get_str(
+                "llm", "deepseek", "baseUrl", default="https://api.deepseek.com/v1",
+            ),
+            model_name=config.get_str(
+                "llm", "deepseek", "model", default="deepseek-chat",
+            ),
+        )
+
+    if provider_name == "grok":
+        from .core.llm.openai_compatible import OpenAICompatibleProvider
+        api_key = config.get_str("llm", "grok", "apiKey", env="GROK_API_KEY")
+        if not api_key:
+            raise ValueError("GROK_API_KEY not set (env or claw_soul.json)")
+        return OpenAICompatibleProvider(
+            api_key=api_key,
+            base_url=config.get_str(
+                "llm", "grok", "baseUrl", default="https://api.x.ai/v1",
+            ),
+            model_name=config.get_str(
+                "llm", "grok", "model", default="grok-3",
+            ),
+        )
+
+    if provider_name in ("claude", "anthropic"):
+        from .core.llm.anthropic_client import AnthropicProvider
+        api_key = config.get_str("llm", "claude", "apiKey", env="ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY not set (env or claw_soul.json)")
+        return AnthropicProvider(
+            api_key=api_key,
+            model_name=config.get_str(
+                "llm", "claude", "model", default="claude-sonnet-4-20250514",
+            ),
+        )
+
+    if provider_name == "gemini":
+        from .core.llm.gemini_client import GeminiProvider
+        api_key = config.get_str("llm", "gemini", "apiKey", env="GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not set (env or claw_soul.json)")
+        return GeminiProvider(api_key=api_key)
+
+    if provider_name in ("kimi", "moonshot"):
+        from .core.llm.openai_compatible import OpenAICompatibleProvider
+        api_key = config.get_str("llm", "kimi", "apiKey", env="KIMI_API_KEY")
+        if not api_key:
+            raise ValueError("KIMI_API_KEY not set (env or claw_soul.json)")
+        return OpenAICompatibleProvider(
+            api_key=api_key,
+            base_url=config.get_str(
+                "llm", "kimi", "baseUrl", default="https://api.moonshot.cn/v1",
+            ),
+            model_name=config.get_str(
+                "llm", "kimi", "model", env="KIMI_MODEL", default="moonshot-v1-128k",
+            ),
+        )
+
+    if provider_name in ("glm", "zhipu", "chatglm"):
+        from .core.llm.openai_compatible import OpenAICompatibleProvider
+        api_key = config.get_str("llm", "glm", "apiKey", env="GLM_API_KEY")
+        if not api_key:
+            raise ValueError("GLM_API_KEY not set (env or claw_soul.json)")
+        return OpenAICompatibleProvider(
+            api_key=api_key,
+            base_url=config.get_str(
+                "llm", "glm", "baseUrl",
+                default="https://open.bigmodel.cn/api/paas/v4/",
+            ),
+            model_name=config.get_str(
+                "llm", "glm", "model", env="GLM_MODEL", default="glm-4-flash",
+            ),
+        )
+
+    raise ValueError(f"Unknown LLM_PROVIDER: '{provider_name}'")
+
+
+# ── Ensure config is ready (auto-onboard if needed) ─────────────────────────
+
+def _ensure_configured(config_path: str | None = None) -> None:
+    """If no API key is configured, run the onboard wizard first."""
+    from .onboard import needs_onboard, run_onboard
+
+    if needs_onboard(config_path):
+        print("[ClawSoul] No LLM provider configured. Starting setup wizard...\n")
+        run_onboard(config_path)
+
+
+# ── Subcommand handlers ─────────────────────────────────────────────────────
+
+def _cmd_onboard(args) -> None:
+    from .onboard import run_onboard
+    run_onboard(args.config)
+
+
+def _cmd_start(args) -> None:
+    _ensure_configured(args.config)
+
+    if args.foreground:
+        _run_foreground(args)
+    else:
+        from .daemon import start_daemon
+        start_daemon(config_path=args.config)
+
+
+def _run_foreground(args) -> None:
+    """Run the web server + Telegram bot in the foreground."""
+    provider = None
+    try:
+        provider = _build_provider()
+    except Exception as exc:
+        print(f"[ClawSoul] Warning: LLM provider not configured ({exc})")
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    try:
+        import uvicorn
+    except ImportError:
+        print("Error: Web mode requires 'fastapi' and 'uvicorn'.")
+        print("Install with: pip install claw_soul")
+        return
+
+    from .web.app import create_app
+
+    host = config.get_str("web", "host", default="0.0.0.0")
+    port = config.get_int("web", "port", default=7788)
+
+    app = create_app(provider, build_provider_fn=_build_provider)
+
+    # Auto-start Telegram if token is configured
+    tg_token = config.get_str("channels", "telegram", "token", default="")
+    if tg_token:
+        from .server import start_telegram
+        from .web import app as web_app_module
+        print("[ClawSoul] Telegram bot auto-detected, starting...")
+
+        @app.on_event("startup")
+        async def _start_telegram():
+            bots = await start_telegram(provider, fastapi_app=app)
+            web_app_module._active_bots.extend(bots)
+
+    print(f"[ClawSoul] Web dashboard: http://localhost:{port}")
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+def _cmd_stop(args) -> None:
+    from .daemon import stop_daemon
+    stop_daemon()
+
+
+def _cmd_status(args) -> None:
+    from .daemon import print_status
+    print_status()
+
+
+def _cmd_chat(args) -> None:
+    _ensure_configured(args.config)
+
+    try:
+        provider = _build_provider()
+    except Exception as exc:
+        print(f"Error: {exc}")
+        return
+
+    provider_name = config.get_str("llm", "provider", env="LLM_PROVIDER", default="deepseek")
+    verbose = config.get("agent", "verbose", default=True)
+
+    store = SessionStore()
+    session_id = "cli"
+
+    print(f"Initializing ClawSoul with Provider: {provider_name.upper()}...")
+    agent = PersistentAgent(
+        provider=provider,
+        verbose=bool(verbose),
+        store=store,
+        session_id=session_id,
+    )
+    print(f"Loaded {len(agent.loaded_skill_names)} active skills.")
+
+    restored = len(agent.messages) - 1
+    if restored > 0:
+        print(f"Restored {restored} messages from previous session.")
+
+    cfg_path = config.config_path()
+    cfg_source = f" (config: {cfg_path})" if cfg_path else ""
+    print("\n--- ClawSoul ---")
+    print(f"Provider: {provider_name}{cfg_source}")
+    print(f"Session: {store._path(session_id)}")
+    print("Commands: 'exit' to quit | '/compact [hint]' | '/status' | '/clear'")
+
+    while True:
+        try:
+            user_input = input("You: ").strip()
+            if not user_input:
+                continue
+            if user_input.lower() in ("exit", "quit"):
+                break
+
+            if user_input.startswith("/compact"):
+                hint = user_input[len("/compact"):].strip() or None
+                result = agent.compact(instruction=hint)
+                print(f"Bot: {result}")
+                continue
+
+            if user_input == "/status":
+                memory_count = len(agent.memory.list_all())
+                print(
+                    f"Bot: Session Status\n"
+                    f"  Provider     : {type(agent.provider).__name__}\n"
+                    f"  Skills       : {len(agent.loaded_skill_names)} loaded\n"
+                    f"  Memories     : {memory_count} entries\n"
+                    f"  History      : {len(agent.messages)} messages\n"
+                    f"  Compactions  : {agent.compaction_count}\n"
+                    f"  Session File : {store._path(session_id)}"
+                )
+                continue
+
+            if user_input == "/clear":
+                store.delete(session_id)
+                agent.clear_history()
+                print("Bot: Chat history cleared. Agent is still active with all skills and memory intact.")
+                continue
+
+            response = agent.chat(user_input)
+            print(f"Bot: {response}")
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            break
+
+
+# ── Argument parser ──────────────────────────────────────────────────────────
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="claw_soul",
+        description="ClawSoul — Your Virtual AI Girlfriend on Telegram",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Quick start:\n"
+            "  claw_soul onboard       Set up your LLM provider\n"
+            "  claw_soul start         Start the agent daemon\n"
+            "  claw_soul chat          Interactive CLI chat\n"
+            "\n"
+            "Docs: https://github.com/ericwang915/ClawSoul"
+        ),
+    )
+    parser.add_argument(
+        "--config",
+        metavar="PATH",
+        default=None,
+        help="Path to claw_soul.json config file.",
+    )
+
+    sub = parser.add_subparsers(dest="command")
+
+    # onboard
+    sub.add_parser("onboard", help="Interactive first-time setup wizard")
+
+    # start
+    sp_start = sub.add_parser("start", help="Start the agent daemon")
+    sp_start.add_argument(
+        "--foreground", "-f", action="store_true",
+        help="Run in foreground (don't daemonize)",
+    )
+
+    # stop
+    sub.add_parser("stop", help="Stop the running daemon")
+
+    # status
+    sub.add_parser("status", help="Show daemon status")
+
+    # chat
+    sub.add_parser("chat", help="Interactive CLI chat (foreground)")
+
+    return parser
+
+
+# ── Entry point ──────────────────────────────────────────────────────────────
+
+def main():
+    config.load()
+
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    if args.config:
+        config.load(args.config, force=True)
+
+    dispatch = {
+        "onboard": _cmd_onboard,
+        "start": _cmd_start,
+        "stop": _cmd_stop,
+        "status": _cmd_status,
+        "chat": _cmd_chat,
+    }
+
+    handler = dispatch.get(args.command)
+    if handler:
+        handler(args)
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
