@@ -125,6 +125,7 @@ def _resolve_in_sandbox(path: str) -> str:
 
 def _sanitize_filename(name: str) -> str:
     """Strip path separators and '..' segments from a filename."""
+    name = os.path.basename(name)
     name = name.replace("..", "").replace("/", "").replace("\\", "")
     if not name:
         raise ValueError("Empty or invalid filename after sanitization.")

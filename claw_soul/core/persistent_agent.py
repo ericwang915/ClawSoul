@@ -133,3 +133,8 @@ class PersistentAgent(Agent):
         result = super().compact(instruction)
         self._save()
         return result
+
+    def chat_stream(self, user_input: str | list, on_token=None) -> str:
+        response = super().chat_stream(user_input, on_token=on_token)
+        self._save()
+        return response

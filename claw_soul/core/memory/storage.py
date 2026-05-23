@@ -49,6 +49,9 @@ class MemoryStorage:
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def _load(self) -> None:
+        self._index_cache: str | None = None
+        self._daily_cache: str = ""
+        self._daily_cache_ts: float = 0.0
         """Parse MEMORY.md into self.data."""
         if not os.path.exists(self._memory_file):
             self.data = {}
@@ -168,8 +171,6 @@ class MemoryStorage:
 
     # ── INDEX.md — curated system info (cached) ────────────────────────────
 
-    _index_cache: str | None = None
-
     def read_index(self) -> str:
         """Read INDEX.md content (cached). Returns empty string if not found."""
         if self._index_cache is not None:
@@ -193,9 +194,6 @@ class MemoryStorage:
         return self._index_file
 
     # ── Daily logs (cached with 60s TTL) ──────────────────────────────────
-
-    _daily_cache: str = ""
-    _daily_cache_ts: float = 0.0
 
     def read_recent_daily_logs(self, days: int = 2) -> str:
         """Read the last *days* daily logs, with 60s in-memory cache."""

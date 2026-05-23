@@ -139,7 +139,7 @@ def memory_flush(
             key = str(fact.get("key", "")).strip()
             value = str(fact.get("value", "")).strip()
             if key and value:
-                memory.remember(value, key)
+                memory.remember(key=key, content=value)
                 saved += 1
         logger.info("[Compaction] Memory flush saved %d fact(s).", saved)
         return saved

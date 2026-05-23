@@ -222,9 +222,6 @@ class TelegramBot:
         sid = self._session_id(update.effective_chat.id)
         agent = self._sm.get_or_create(sid)
 
-        if self._sm.is_locked(sid):
-            await update.message.reply_text("\u23f3 Processing previous message\u2026")
-
         try:
             await update.message.set_reaction([ReactionTypeEmoji("\U0001f440")])
         except Exception:
@@ -398,12 +395,19 @@ class TelegramBot:
         data = await file.download_as_bytearray()
         b64 = base64.b64encode(bytes(data)).decode()
 
+        # Determine MIME type from the photo's file path extension
+        mime_type = "image/jpeg"
+        mime_map = {".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}
+        ext = os.path.splitext(file.file_path or "")[1].lower()
+        if ext in mime_map:
+            mime_type = mime_map[ext]
+
         return [
             {"type": "text", "text": caption},
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": f"data:image/jpeg;base64,{b64}",
+                    "url": f"data:{mime_type};base64,{b64}",
                 },
             },
         ]
