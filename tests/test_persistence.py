@@ -140,9 +140,13 @@ class TestPersistentAgent:
         a1.chat("hello")
 
         a2 = make_minimal_agent(tmp_path, store=store, session_id="test:1")
-        # messages[0] should be the freshly rebuilt system prompt (same content since nothing changed)
+        # messages[0] should be the freshly rebuilt system prompt
+        # (content may differ slightly due to Soul Mate affect context updates
+        #  — milestone dates, relationship state — but the structure matches)
         assert a2.messages[0]["role"] == "system"
-        assert a2.messages[0]["content"] == old_system
+        assert "ClawSoul agent" in a2.messages[0]["content"]
+        assert "### Tools" in a2.messages[0]["content"]
+        assert "### Response Guidelines" in a2.messages[0]["content"]
 
     def test_reset_clears_history(self, tmp_path):
         from claw_soul.core.session_store import SessionStore

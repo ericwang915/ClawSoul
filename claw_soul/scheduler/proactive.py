@@ -1,10 +1,16 @@
 """
-Probabilistic proactive messaging for ClawSoul.
+Probabilistic proactive messaging for ClawSoul — with Soul Mate emotional gating.
 
 Instead of fixed time slots, a cron job fires every 5 minutes (288 ticks/day).
 Each tick rolls a probability of 2/288 – 5/288 to decide whether to send a
 message.  Quiet hours (default 0:00–8:00) are skipped entirely.
 Daily cap (default 6) prevents over-messaging.
+
+Soul Mate Phase 1 upgrades:
+  - Sentiment-aware gating: higher probability when user seems down
+  - Template differentiation based on emotional context
+  - Unfinished topic follow-up
+  - Long-silence detection
 
 The single session "proactive:main" gives the agent continuity across all
 proactive messages, while shared Memory lets it reference past user
@@ -16,8 +22,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from datetime import date, datetime
-from typing import TYPE_CHECKING
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -42,6 +48,16 @@ _TIME_HINTS: dict[str, str] = {
     "evening":       "晚上了，你在放松休息",
     "late_evening":  "夜深了，你还在熬夜",
     "night":         "很晚了，你准备去睡觉",
+}
+
+# ── Soul Mate: sentiment-aware prompt templates ──────────────────────────────
+
+_SENTIMENT_PROMPTS: dict[str, str] = {
+    "negative": "对方今天心情不太好。温柔地关心一下，不用追问原因，表达陪伴。",
+    "positive": "对方今天心情不错。分享开心或者问问他在开心什么。",
+    "neutral": "日常随意聊聊。",
+    "long_silence": "已经很久没联系了。发一条简短温馨的消息。",
+    "unfinished": "上次聊到{topic}还没聊完，主动提起来。",
 }
 
 
@@ -77,8 +93,89 @@ _ENRICHMENTS = [
     "关心一下对方的身体状况或工作状态，撒个娇。",
 ]
 
+# ── Soul Mate: sentiment gating threshold ────────────────────────────────────
 
-def _build_prompt(now: datetime) -> str:
+# When recent sentiment is negative, multiply base probability by this factor
+_NEGATIVE_SENTIMENT_BOOST = 2.5
+# Hours of silence before triggering long-silence mode
+_LONG_SILENCE_HOURS = 12
+
+
+def _get_sentiment_context(agent: Any) -> dict[str, Any]:
+    """Get the user's recent emotional context from the Soul Mate affect system.
+
+    Returns a dict with keys: 'sentiment', 'topics', 'has_unfinished', 'summary'.
+    Returns defaults if affect data is unavailable.
+    """
+    result: dict[str, Any] = {
+        "sentiment": "neutral",
+        "topics": [],
+        "has_unfinished": False,
+        "summary": "",
+        "hours_since_last": 999,
+    }
+    try:
+        if not hasattr(agent, "memory") or not hasattr(agent.memory, "emotional_graph"):
+            return result
+
+        # Recent emotional summary
+        recent_events = agent.memory.emotional_graph.get_recent(days=1)
+        if recent_events:
+            # Most recent event sentiment
+            latest = recent_events[-1]
+            result["sentiment"] = latest.get("sentiment", "neutral")
+            result["summary"] = latest.get("context_summary", "")
+
+        # Topics from timeline
+        if hasattr(agent.memory, "timeline"):
+            topics = agent.memory.timeline.get_topics()
+            result["topics"] = topics[:5] if topics else []
+
+        # Check for unfinished topics from last chat
+        if hasattr(agent.memory, "emotional_graph"):
+            all_today = agent.memory.emotional_graph.get_recent(days=1)
+            result["has_unfinished"] = any(
+                e.get("sentiment") == "negative" and e.get("intensity", 0) > 0.6
+                for e in all_today
+            )
+
+        # Hours since last message (rough estimation from last timeline event)
+        if hasattr(agent.memory, "timeline"):
+            recent_tl = agent.memory.timeline.get_timeline(
+                (datetime.now() - timedelta(days=7)).isoformat(),
+                datetime.now().isoformat(),
+            )
+            if recent_tl:
+                last_ts = recent_tl[-1].timestamp
+                try:
+                    last_dt = datetime.fromisoformat(last_ts)
+                    delta = datetime.now() - last_dt
+                    result["hours_since_last"] = delta.total_seconds() / 3600
+                except (ValueError, TypeError):
+                    pass
+
+    except Exception:
+        logger.debug("Failed to get sentiment context for proactive", exc_info=True)
+
+    return result
+
+
+def _get_unfinished_topics(agent: Any) -> list[str]:
+    """Get topics that may need follow-up."""
+    try:
+        if not hasattr(agent.memory, "timeline"):
+            return []
+        topics = agent.memory.timeline.get_topics()
+        # Prefer topics with recent negative sentiment
+        return topics[:3] if topics else []
+    except Exception:
+        return []
+
+
+def _build_prompt(
+    now: datetime,
+    sentiment_context: dict[str, Any] | None = None,
+) -> str:
     time_str = now.strftime("%H:%M")
     weekday = _WEEKDAYS_ZH[now.weekday()]
     slot = _time_slot(now.hour)
@@ -89,10 +186,31 @@ def _build_prompt(now: datetime) -> str:
     extras = random.sample(_ENRICHMENTS, k=min(k, len(_ENRICHMENTS)))
     extra_block = "\n".join(extras)
 
+    # ── Soul Mate: sentiment-aware prompt section ──────────────────────────────
+    sentiment_instruction = ""
+    if sentiment_context:
+        sentiment = sentiment_context.get("sentiment", "neutral")
+        hours_since = sentiment_context.get("hours_since_last", 999)
+        has_unfinished = sentiment_context.get("has_unfinished", False)
+        topics = sentiment_context.get("topics", [])
+
+        if hours_since > _LONG_SILENCE_HOURS:
+            sentiment_instruction = _SENTIMENT_PROMPTS["long_silence"]
+        elif has_unfinished or sentiment == "negative":
+            sentiment_instruction = _SENTIMENT_PROMPTS.get(sentiment, _SENTIMENT_PROMPTS["neutral"])
+        else:
+            sentiment_instruction = _SENTIMENT_PROMPTS.get(sentiment, _SENTIMENT_PROMPTS["neutral"])
+
+        # Add unfinished topic reference
+        if has_unfinished and topics:
+            sentiment_instruction += f"\n对方可能还在想上次聊的{topics[0]}。"
+
     parts = [
         f"现在是{weekday} {time_str}，{hint}。",
         "你想主动给男朋友发条消息来触发对话。",
     ]
+    if sentiment_instruction:
+        parts.append(sentiment_instruction)
     if extra_block:
         parts.append(extra_block)
     parts.append(
@@ -103,7 +221,7 @@ def _build_prompt(now: datetime) -> str:
 
 
 class ProactiveMessenger:
-    """Probabilistic proactive messaging via Telegram."""
+    """Probabilistic proactive messaging via Telegram, with Soul Mate emotional gating."""
 
     def __init__(
         self,
@@ -167,6 +285,30 @@ class ProactiveMessenger:
 
             lo, hi = self._prob_range()
             threshold = random.uniform(lo, hi)
+
+            # ── Soul Mate: emotional gating ──────────────────────────────────
+            # Get sentiment context to adjust probability
+            session_id = "proactive:main"
+            agent = self._sm.get(session_id)
+            sentiment_ctx = _get_sentiment_context(agent) if agent else {}
+
+            # Boost probability if user seems down
+            if sentiment_ctx.get("sentiment") == "negative":
+                threshold *= _NEGATIVE_SENTIMENT_BOOST
+                logger.debug(
+                    "[Proactive] Negative sentiment detected — boosting threshold to %.4f",
+                    threshold,
+                )
+
+            # Boost probability if long silence
+            hours_since = sentiment_ctx.get("hours_since_last", 999)
+            if hours_since > _LONG_SILENCE_HOURS:
+                threshold *= 1.5
+                logger.debug(
+                    "[Proactive] Long silence (%.1f h) — boosting threshold to %.4f",
+                    hours_since, threshold,
+                )
+
             roll = random.random()
             if roll > threshold:
                 return
@@ -175,17 +317,33 @@ class ProactiveMessenger:
                 "[Proactive] Tick hit! (roll=%.4f <= %.4f) — sending message #%d today.",
                 roll, threshold, self._today_count + 1,
             )
-            await self._generate_and_send(chat_id, now)
+            await self._generate_and_send(chat_id, now, sentiment_ctx)
         finally:
             self._running_tick = False
 
     # ── Message generation & delivery ────────────────────────────────────────
 
-    async def _generate_and_send(self, chat_id: int, now: datetime) -> None:
-        prompt = _build_prompt(now)
+    async def _generate_and_send(
+        self,
+        chat_id: int,
+        now: datetime,
+        sentiment_ctx: dict[str, Any] | None = None,
+    ) -> None:
+        prompt = _build_prompt(now, sentiment_ctx)
         session_id = "proactive:main"
         agent = self._sm.get_or_create(session_id)
         loop = asyncio.get_event_loop()
+
+        # ── Soul Mate: update proactive count for milestones ────────────────
+        try:
+            if hasattr(agent, "memory") and hasattr(agent.memory, "milestones"):
+                data = agent.memory.milestones.get_data()
+                current_pro = data.get("total_proactive_messages", 0)
+                agent.memory.milestones.check_milestones(
+                    proactive_count=current_pro + 1,
+                )
+        except Exception:
+            pass
 
         try:
             async with self._sm.acquire(session_id):

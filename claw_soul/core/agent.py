@@ -40,6 +40,8 @@ from .knowledge.rag import KnowledgeRAG
 from .llm.base import LLMProvider
 from .memory.manager import MemoryManager
 from .skill_loader import SkillRegistry
+from .memory.emotional_graph import SentimentAnalyzer
+from .memory.temporal_index import TimelineEvent
 from .tools import (
     AVAILABLE_TOOLS,
     CRON_TOOLS,
@@ -373,6 +375,18 @@ You decide which mode fits. Don't announce the mode name.
         boot_mem = self.memory.boot_context(max_chars=3000)
         if boot_mem:
             system_msg += f"\n\n## Loaded Memory (auto-injected at session start)\n{boot_mem}\n"
+
+        # ── Soul Mate: affect context (under 500 tokens) ───────────────────
+        # Injected as part of boot_context now, but we also add a small
+        # instruction block for emotional awareness.
+        system_msg += """
+### Emotional Awareness
+You have access to emotional context about the user through the memory system.
+- The boot context above includes recent mood, relationship status, and timeline.
+- Use this to tailor your tone and empathy level naturally.
+- If the user seems down, be gentle and supportive.
+- If there's a milestone or special day, acknowledge it warmly.
+"""
 
         if getattr(self, "_needs_onboarding", False):
             system_msg += """
@@ -871,6 +885,81 @@ Don't repeat this if `bot_name` already exists in memory.
         except Exception as exc:
             logger.debug("Proactive memory flush failed (non-fatal): %s", exc)
 
+    # ── Soul Mate: affect update ──────────────────────────────────────────────
+
+    def _update_affect(self, user_input: str, response: str) -> None:
+        """Run emotional analysis as a side-effect of chat().
+
+        Uses the existing provider to extract sentiment, topic, and summary
+        from the user's message and the assistant's response.  All errors
+        are silently caught — the affect modules are best-effort.
+        """
+        if not user_input or not isinstance(user_input, str):
+            return
+        try:
+            # Use the SentimentAnalyzer with a micro-prompt
+            affect_messages = [
+                {"role": "system", "content": SentimentAnalyzer.SYSTEM_PROMPT},
+                {"role": "user", "content": f"User: {user_input}\nAssistant: {response[:500]}"},
+            ]
+            analysis_raw = self.provider.chat(messages=affect_messages, tools=[])
+            analysis_text = analysis_raw.choices[0].message.content or ""
+            parsed = SentimentAnalyzer.parse(analysis_text)
+        except Exception:
+            logger.debug("Affect analysis failed (non-fatal)", exc_info=True)
+            return
+
+        try:
+            sentiment = parsed["sentiment"]
+            intensity = parsed["intensity"]
+            topic = parsed["topic"]
+            summary = parsed["summary"]
+            follow_up = parsed["follow_up"]
+
+            # Update emotional graph
+            self.memory.emotional_graph.add_event(
+                topic=topic,
+                sentiment=sentiment,
+                intensity=intensity,
+                context_summary=summary,
+            )
+
+            # Update relationship store
+            self.memory.relationship.update_from_sentiment(sentiment, intensity)
+
+            # Update timeline
+            sentiment_score = {"positive": 1.0, "neutral": 0.0, "negative": -1.0}.get(sentiment, 0.0)
+            event = TimelineEvent(
+                timestamp=datetime.now().isoformat(timespec="seconds"),
+                session_id=self.session_id or "default",
+                topic=topic,
+                summary=summary,
+                sentiment=sentiment_score * intensity,
+                keywords=[topic] if topic else [],
+            )
+            self.memory.timeline.add_event(event)
+
+            # Ensure first chat date is set
+            self.memory.milestones.ensure_first_chat_date()
+
+            # Check for deep emotion
+            if sentiment == "negative" and intensity > 0.7:
+                self.memory.milestones.set_deep_emotion_detected()
+
+            # Check milestones
+            memory_count = len(self.memory.list_all())
+            proactive_count = self.memory.milestones.get_data().get("total_proactive_messages", 0)
+            triggered = self.memory.milestones.check_milestones(
+                memory_entries=memory_count,
+                proactive_count=proactive_count,
+            )
+            if triggered and self.verbose:
+                for msg in triggered:
+                    logger.info("[SoulMate Milestone] %s", msg)
+
+        except Exception:
+            logger.debug("Affect persistence failed (non-fatal)", exc_info=True)
+
     # ── Session management ─────────────────────────────────────────────────
 
     def clear_history(self) -> None:
@@ -932,7 +1021,10 @@ Don't repeat this if `bot_name` already exists in memory.
                         "elapsed_ms": int((time.monotonic() - chat_start) * 1000),
                         "response_len": len(message.content or ""),
                     })
-                    return message.content
+                    response_text = message.content
+                    # Soul Mate: side-effect affect update
+                    self._update_affect(user_input, response_text)
+                    return response_text
 
                 tool_rounds += 1
                 if tool_rounds > self.MAX_TOOL_ROUNDS:
@@ -964,7 +1056,9 @@ Don't repeat this if `bot_name` already exists in memory.
                         )
                         final_msg = final.choices[0].message
                         self.messages.append(final_msg.model_dump())
-                        return final_msg.content
+                        response_text = final_msg.content
+                        self._update_affect(user_input, response_text)
+                        return response_text
                     except Exception as exc:
                         return f"Error (after hitting tool limit): {exc}"
 
@@ -1091,7 +1185,9 @@ Don't repeat this if `bot_name` already exists in memory.
                         ),
                         "response_len": len(message.content or ""),
                     })
-                    return message.content or ""
+                    response_text = message.content or ""
+                    self._update_affect(user_input, response_text)
+                    return response_text
 
                 tool_rounds += 1
                 if tool_rounds > self.MAX_TOOL_ROUNDS:
@@ -1117,7 +1213,9 @@ Don't repeat this if `bot_name` already exists in memory.
                     )
                     final_msg = final.choices[0].message
                     self.messages.append(final_msg.model_dump())
-                    return final_msg.content or ""
+                    response_text = final_msg.content or ""
+                    self._update_affect(user_input, response_text)
+                    return response_text
 
                 self.messages.append(message.model_dump())
                 self.pending_injections = []

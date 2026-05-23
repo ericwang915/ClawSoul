@@ -49,6 +49,14 @@ class PersistentAgent(Agent):
         super().__init__(*args, **kwargs)
         self._store = store
         self._session_id = session_id
+
+        # ── Soul Mate: ensure milestone first-chat date on restore ──────────
+        try:
+            if self.messages:
+                self.memory.milestones.ensure_first_chat_date()
+        except Exception:
+            pass
+
         self._restore()
 
     # ── Restore ──────────────────────────────────────────────────────────────

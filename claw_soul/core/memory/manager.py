@@ -1,11 +1,18 @@
 """
-MemoryManager — long-term key-value memory with hybrid RAG recall.
+MemoryManager — long-term key-value memory with hybrid RAG recall and Soul Mate features.
 
 Storage
 -------
 Memories are stored as Markdown files:
   - MEMORY.md        — curated long-term memory (latest value per key)
   - YYYY-MM-DD.md    — daily append-only log
+
+Soul Mate extensions
+--------------------
+  - EmotionalGraph      — time-series emotion memory (affect/emotional_graph.jsonl)
+  - TemporalMemoryIndex — timeline event index (memory/timeline.jsonl)
+  - MilestoneManager    — relationship milestones (relationship/milestones.json)
+  - RelationshipStore   — relationship dimensions (affect/relationship.json)
 
 When writing, both MEMORY.md and today's daily log are updated.
 When reading, MEMORY.md is the source of truth (holds latest per key).
@@ -31,9 +38,13 @@ are returned (full-dump mode, used by compaction and legacy callers).
 from __future__ import annotations
 
 import logging
+import os
 
 from ..retrieval.retriever import HybridRetriever
+from .emotional_graph import EmotionalGraph, RelationshipStore
+from .milestones import MilestoneManager
 from .storage import MemoryStorage
+from .temporal_index import TemporalMemoryIndex
 
 logger = logging.getLogger(__name__)
 
@@ -60,17 +71,29 @@ class MemoryManager:
         global_memory_dir: str | None = None,
         use_dense: bool = False,
     ) -> None:
-        import os
+        import os as _os
 
         if memory_dir is None:
             from ... import config as _cfg
-            memory_dir = os.path.join(str(_cfg.CLAWSOUL_HOME), "context", "memory")
+            memory_dir = _os.path.join(str(_cfg.CLAWSOUL_HOME), "context", "memory")
 
         self.storage = MemoryStorage(memory_dir)
         self._global_storage: MemoryStorage | None = None
-        if global_memory_dir and os.path.isdir(global_memory_dir):
+        if global_memory_dir and _os.path.isdir(global_memory_dir):
             self._global_storage = MemoryStorage(global_memory_dir)
         self._use_dense = use_dense
+
+        # ── Soul Mate extensions ──────────────────────────────────────────
+        from ... import config as _cfg
+        _home = str(_cfg.CLAWSOUL_HOME)
+        _affect_dir = _os.path.join(_home, "context", "affect")
+        _memory_dir = memory_dir or _os.path.join(_home, "context", "memory")
+        _rel_dir = _os.path.join(_home, "context", "relationship")
+
+        self.emotional_graph = EmotionalGraph(_affect_dir)
+        self.relationship = RelationshipStore(_affect_dir)
+        self.timeline = TemporalMemoryIndex(_memory_dir)
+        self.milestones = MilestoneManager(_rel_dir)
 
     # ── Merged memories (local + global) ─────────────────────────────────────
 
@@ -156,9 +179,7 @@ class MemoryManager:
         1. Curated long-term memory (MEMORY.md) — user profile entries first,
            then other entries, truncated to fit within the budget.
         2. Recent daily logs (today + yesterday) — trimmed to fit remaining budget.
-
-        This ensures the agent always starts with relevant context without
-        needing an explicit ``recall()`` call.
+        3. (Soul Mate) Emotional context summary, relationship state, milestone.
         """
         parts: list[str] = []
 
@@ -168,7 +189,7 @@ class MemoryManager:
 
         all_mem = self._merged_memories()
         used = sum(len(p) for p in parts)
-        mem_budget = int((max_chars - used) * 0.7)
+        mem_budget = int((max_chars - used) * 0.6)  # slightly less to make room for affect context
 
         if all_mem:
             profile_keys = {"bot_name", "user_name", "user_profile",
@@ -194,6 +215,30 @@ class MemoryManager:
                 total_len += len(line)
 
             parts.append("### Long-Term Memory\n" + "\n".join(lines))
+
+        # ── Soul Mate: affect context ──────────────────────────────────────
+        try:
+            affect_lines: list[str] = []
+            eg_summary = self.emotional_graph.get_summary(max_events=3)
+            if eg_summary and "No recent" not in eg_summary:
+                affect_lines.append(eg_summary)
+
+            rel_summary = self.relationship.get_summary()
+            if rel_summary:
+                affect_lines.append(f"**关系状态**: {rel_summary}")
+
+            days = self.milestones.get_relationship_age_str()
+            affect_lines.append(f"**认识时间**: {days}")
+
+            # Check special day
+            is_special, label = self.milestones.is_special_day()
+            if is_special:
+                affect_lines.append(f"✨ **{label}** ✨")
+
+            if affect_lines:
+                parts.append("### 情感上下文\n" + "\n".join(affect_lines))
+        except Exception:
+            logger.debug("Soul Mate affect context injection failed (non-fatal)", exc_info=True)
 
         daily_budget = max(500, max_chars - sum(len(p) for p in parts))
         daily = self.storage.read_recent_daily_logs(days=2)
