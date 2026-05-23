@@ -5,7 +5,7 @@
 <h1 align="center">ClawSoul 🐾💕</h1>
 
 <p align="center">
-  <strong>你的虚拟 AI 女友 — 基于 Telegram，拥有记忆、RAG、技能系统</strong>
+  <strong>Your virtual AI girlfriend — with memory, feelings, and selfies. Runs on Telegram and in the browser.</strong>
 </p>
 
 <p align="center">
@@ -17,57 +17,82 @@
 
 ---
 
-## ✨ 特点
+## ✨ Features
 
 | | Feature | Details |
 |---|---------|---------|
-| 💕 | **虚拟女友人设** | 温柔体贴、俏皮可爱的 AI 女友 |
-| 🧠 | **多模型支持** | DeepSeek, Grok, Claude, Gemini, Kimi, GLM |
-| 💾 | **持久记忆** | Markdown 长期记忆 + 每日日志 |
-| 🔍 | **混合 RAG** | BM25 + 向量检索 + RRF 融合 + LLM 重排 |
-| 🌐 | **Web 仪表盘** | 浏览器 UI 可聊天、配置、管理技能 |
-| 📱 | **Telegram** | Telegram Bot 接入，随时聊天 |
-| ⏰ | **定时任务** | 定时问候、提醒、主动关心 |
-| 🔄 | **后台守护** | PID 管理，`start` / `stop` / `status` |
+| 💕 | **Three-layer identity** | Soul (core personality) + Persona (current role) + Profile (life background) — each independently customizable |
+| 🧠 | **Multi-model support** | DeepSeek, Grok, Claude, Gemini, Kimi, GLM |
+| 💖 | **Emotional memory (Soulmate)** | Emotional graph + relationship milestones + temporal memory — she remembers, and she cares |
+| 📷 | **AI selfies (Seedream)** | Generated from today's schedule + current mood. Scheduled, proactive, or on demand |
+| 📅 | **Daily planner** | A realistic 24-hour schedule auto-generated each morning, shaping what she says all day |
+| ⏰ | **Sentiment-aware proactive messaging** | Probabilistic triggers; tone and frequency adapt to recent emotional state |
+| 💾 | **Persistent long-term memory** | Markdown-based memory + per-day conversation logs |
+| 🔍 | **Hybrid RAG** | BM25 + dense vectors + RRF fusion + LLM reranker |
+| 🌊 | **Streaming + multimodal** | Token-by-token output; voice and image input supported |
+| 🎙️ | **Voice input** | Deepgram STT with automatic language fallback |
+| 🌐 | **Web dashboard** | `http://localhost:7788` — chat, configure, manage skills, inspect memory |
+| 📱 | **Telegram bot** | Text, voice, images, files — all supported |
+| 🛠️ | **Extensible skills** | Three-tier progressive loading; the LLM can author new skills itself |
+| 🔄 | **Background daemon** | PID-managed lifecycle: `start` / `stop` / `status` |
 
 ---
 
-## 🚀 快速开始
+## 🚀 Quick start
 
 ```bash
 pip install -e .
 
-# 首次配置 — 选择 LLM 和输入 API Key
+# First-time setup (pick an LLM provider, drop in API keys)
 claw_soul onboard
 
-# 启动守护进程（Web 仪表盘 http://localhost:7788）
+# Start the daemon (web dashboard at http://localhost:7788)
 claw_soul start
 
-# CLI 交互聊天
+# Or chat in the terminal
 claw_soul chat
 
-# 停止
+# Stop the daemon
 claw_soul stop
 ```
 
 ---
 
-## 📋 CLI 命令
+## 📋 CLI commands
 
-| 命令 | 说明 |
-|------|------|
-| `claw_soul onboard` | 交互式配置向导 |
-| `claw_soul start` | 后台启动（Web + Telegram） |
-| `claw_soul start -f` | 前台启动 |
-| `claw_soul stop` | 停止守护进程 |
-| `claw_soul status` | 查看运行状态 |
-| `claw_soul chat` | CLI 交互聊天 |
+| Command | Description |
+|---------|-------------|
+| `claw_soul onboard` | Interactive setup wizard |
+| `claw_soul start` | Start the daemon (web + Telegram) |
+| `claw_soul start -f` | Run in foreground |
+| `claw_soul stop` | Stop the daemon |
+| `claw_soul status` | Show daemon status |
+| `claw_soul chat` | Interactive CLI chat |
 
 ---
 
-## ⚙️ 配置
+## ⚙️ Configuration
 
-配置文件 `claw_soul.json`（由 `claw_soul onboard` 自动创建）：
+All runtime data lives under `~/.claw_soul/`:
+
+```
+~/.claw_soul/
+├── claw_soul.json           # config
+├── claw_soul.pid            # daemon PID
+├── daemon.log               # daemon log
+└── context/
+    ├── soul/SOUL.md         # core personality
+    ├── persona/             # active persona + appearance.md (selfie look)
+    ├── profile/PROFILE.md   # life background
+    ├── calendar/today_plan.md   # today's 24-hour schedule
+    ├── memory/              # long-term memory (Markdown)
+    ├── knowledge/           # knowledge base (RAG)
+    ├── photos/              # selfie album + reference/ portraits
+    ├── skills/              # user-defined skills
+    └── logs/                # per-day conversation logs
+```
+
+`claw_soul.json` is created by `claw_soul onboard`. See [`claw_soul.example.json`](claw_soul.example.json) for the full schema:
 
 ```jsonc
 {
@@ -76,20 +101,39 @@ claw_soul stop
     "deepseek": { "apiKey": "...", "model": "deepseek-chat" }
   },
   "channels": {
-    "telegram": { "token": "your-bot-token", "allowedUsers": [] }
+    "telegram": { "token": "your-bot-token", "allowedUsers": [12345678] }
   },
+  "skills": {
+    "seedream": {                          // AI selfies
+      "apiKey": "<ARK_API_KEY>",
+      "model": "seedream-5-0-lite-260128"
+    }
+  },
+  "selfie": {
+    "enabled": true,
+    "schedule": ["10:00", "16:00", "20:00"],
+    "chatId": 12345678,
+    "maxDaily": 3,
+    "proactiveProbability": 0.15           // chance of attaching a selfie to a proactive msg
+  },
+  "proactive": {
+    "enabled": true,
+    "chatId": 12345678,
+    "maxDaily": 6,
+    "quietStart": 0, "quietEnd": 8
+  },
+  "deepgram": { "apiKey": "" },            // voice input (optional)
+  "tavily":   { "apiKey": "" },            // web search (optional)
   "web": { "host": "0.0.0.0", "port": 7788 }
 }
 ```
 
-详见 [`claw_soul.example.json`](claw_soul.example.json)。
-
 ---
 
-## 🧠 支持的 LLM
+## 🧠 Supported LLMs
 
-| Provider | 默认模型 |
-|----------|----------|
+| Provider | Default model |
+|----------|---------------|
 | **DeepSeek** | `deepseek-chat` (V4) |
 | **Grok (xAI)** | `grok-3` |
 | **Claude (Anthropic)** | `claude-sonnet-4-20250514` |
@@ -99,36 +143,66 @@ claw_soul stop
 
 ---
 
-## 📁 项目结构
+## 📷 AI selfies (Seedream)
+
+Powered by ByteDance / Volcano Engine's Seedream model. **Three trigger paths:**
+
+- **Scheduled** — fires at the times in `selfie.schedule` (default 10:00 / 16:00 / 20:00)
+- **Proactive** — attached to a proactive message with `proactiveProbability` chance
+- **On demand** — when the user says something like "send me a selfie", the LLM invokes the `selfie` skill
+
+**Scene-driven.** Each selfie's content is derived from the activity scheduled for the
+current time in `today_plan.md`. If the plan says *"10:00 coffee on the balcony"*, the
+10:00 selfie will be exactly that.
+
+**Visual consistency.**
+- Edit `~/.claw_soul/context/persona/appearance.md` to lock the character's look
+- Drop reference portraits into `~/.claw_soul/context/photos/reference/` for face anchoring
+- A stable seed derived from the appearance description keeps the face consistent across shots
+
+Photos are stored under `~/.claw_soul/context/photos/` and pruned automatically after 30 days.
+
+---
+
+## 📁 Project layout
 
 ```
 ClawSoul/
 ├── claw_soul/
-│   ├── main.py                # CLI 入口
-│   ├── onboard.py             # 配置向导
-│   ├── daemon.py              # 守护进程管理
-│   ├── server.py              # Telegram 启动
+│   ├── main.py                  # CLI entry point
+│   ├── onboard.py               # setup wizard
+│   ├── daemon.py                # daemon process manager
+│   ├── server.py                # Telegram + scheduler bootstrap
 │   ├── core/
-│   │   ├── agent.py           # 核心推理循环
-│   │   ├── tools.py           # 工具调用
-│   │   ├── skill_loader.py    # 三级技能加载
-│   │   ├── compaction.py      # 上下文压缩
-│   │   ├── llm/               # LLM 适配器
-│   │   ├── memory/            # Markdown 记忆
-│   │   └── retrieval/         # BM25 + 向量 + 融合
+│   │   ├── agent.py             # core reasoning loop
+│   │   ├── persistent_agent.py  # session persistence
+│   │   ├── tools.py             # tool dispatch
+│   │   ├── skill_loader.py      # three-tier progressive skill loading
+│   │   ├── compaction.py        # context compaction
+│   │   ├── stt.py               # speech-to-text (Deepgram)
+│   │   ├── llm/                 # provider adapters (6)
+│   │   ├── memory/              # Markdown memory + emotional graph + milestones + temporal index
+│   │   ├── retrieval/           # BM25 + dense + RRF + LLM reranker
+│   │   ├── knowledge/           # knowledge-base RAG
+│   │   └── image_gen/           # Seedream selfie pipeline
 │   ├── channels/
-│   │   └── telegram_bot.py    # Telegram Bot
-│   ├── scheduler/             # 定时任务
-│   ├── web/                   # Web 仪表盘
-│   └── templates/             # 内置技能模板
-├── claw_soul.json             # 配置文件
+│   │   └── telegram_bot.py      # Telegram bot (streaming / voice / images)
+│   ├── scheduler/
+│   │   ├── cron.py              # generic cron jobs
+│   │   ├── planner.py           # daily 24-hour plan generator
+│   │   ├── proactive.py         # sentiment-aware proactive messages
+│   │   ├── selfie_task.py       # scheduled selfies
+│   │   └── heartbeat.py         # heartbeat monitor
+│   ├── web/                     # FastAPI dashboard + WebSocket chat
+│   └── templates/               # built-in persona / soul / skills
+├── tests/                       # 176+ tests
 ├── pyproject.toml
 └── LICENSE
 ```
 
 ---
 
-## 🛠️ 开发
+## 🛠️ Development
 
 ```bash
 git clone https://github.com/ericwang915/ClawSoul.git
@@ -136,6 +210,7 @@ cd ClawSoul
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 pytest tests/ -v
+ruff check claw_soul tests
 ```
 
 ---
