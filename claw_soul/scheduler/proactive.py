@@ -114,6 +114,7 @@ class ProactiveMessenger:
         self._telegram_bot = telegram_bot
         self._today: date | None = None
         self._today_count: int = 0
+        self._running_tick: bool = False
 
     # ── Configuration helpers ────────────────────────────────────────────────
 
@@ -150,26 +151,33 @@ class ProactiveMessenger:
 
     async def _tick(self, chat_id: int) -> None:
         """Called every 5 minutes by APScheduler."""
-        now = datetime.now()
-        self._reset_if_new_day(now.date())
-
-        if self._today_count >= self._max_daily():
+        if self._running_tick:
+            logger.debug("[Proactive] Previous tick still running — skipping.")
             return
+        self._running_tick = True
+        try:
+            now = datetime.now()
+            self._reset_if_new_day(now.date())
 
-        if self._in_quiet_hours(now.hour):
-            return
+            if self._today_count >= self._max_daily():
+                return
 
-        lo, hi = self._prob_range()
-        threshold = random.uniform(lo, hi)
-        roll = random.random()
-        if roll > threshold:
-            return
+            if self._in_quiet_hours(now.hour):
+                return
 
-        logger.info(
-            "[Proactive] Tick hit! (roll=%.4f <= %.4f) — sending message #%d today.",
-            roll, threshold, self._today_count + 1,
-        )
-        await self._generate_and_send(chat_id, now)
+            lo, hi = self._prob_range()
+            threshold = random.uniform(lo, hi)
+            roll = random.random()
+            if roll > threshold:
+                return
+
+            logger.info(
+                "[Proactive] Tick hit! (roll=%.4f <= %.4f) — sending message #%d today.",
+                roll, threshold, self._today_count + 1,
+            )
+            await self._generate_and_send(chat_id, now)
+        finally:
+            self._running_tick = False
 
     # ── Message generation & delivery ────────────────────────────────────────
 
@@ -180,7 +188,11 @@ class ProactiveMessenger:
         loop = asyncio.get_event_loop()
 
         try:
-            response = await loop.run_in_executor(None, agent.chat, prompt)
+            async with self._sm.acquire(session_id):
+                response = await asyncio.wait_for(
+                    loop.run_in_executor(None, agent.chat, prompt),
+                    timeout=300.0,
+                )
         except Exception as exc:
             logger.exception("[Proactive] Generation failed: %s", exc)
             return

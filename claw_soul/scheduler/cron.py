@@ -79,11 +79,17 @@ class CronScheduler:
         session_manager: "SessionManager",
         jobs_path: str | None = None,
         telegram_bot: "TelegramBot | None" = None,
+        timezone: str | None = None,
     ) -> None:
         self._sm = session_manager
         self._jobs_path = jobs_path or _default_jobs_path()
         self._telegram_bot = telegram_bot
-        self._scheduler = AsyncIOScheduler()
+        self._timezone = timezone or "UTC"
+        self._scheduler = AsyncIOScheduler(timezone=self._timezone)
+
+    def set_telegram_bot(self, bot: "TelegramBot") -> None:
+        """Late-bind the Telegram bot (used when bot is created after CronScheduler)."""
+        self._telegram_bot = bot
 
     # ── YAML loading ─────────────────────────────────────────────────────────
 
@@ -110,7 +116,11 @@ class CronScheduler:
         agent = self._sm.get_or_create(session_id)
         loop = asyncio.get_event_loop()
         try:
-            response = await loop.run_in_executor(None, agent.chat, prompt)
+            async with self._sm.acquire(session_id):
+                response = await asyncio.wait_for(
+                    loop.run_in_executor(None, agent.chat, prompt),
+                    timeout=300.0,
+                )
             logger.info("[CronScheduler] Job '%s' completed.", job_id)
         except Exception as exc:
             logger.exception("[CronScheduler] Job '%s' failed: %s", job_id, exc)
@@ -190,7 +200,9 @@ class CronScheduler:
     def reload_jobs(self) -> int:
         """Hot-reload static jobs from the YAML file without stopping the scheduler."""
         self._scheduler.remove_all_jobs()
-        return self.load_and_register_jobs()
+        static_count = self.load_and_register_jobs()
+        dynamic_count = self._register_dynamic_jobs()
+        return static_count + dynamic_count
 
     # ── Dynamic job management (called by Agent cron tools) ──────────────────
 
@@ -217,6 +229,13 @@ class CronScheduler:
         jobs = self._load_dynamic_jobs()
         registered = 0
         for job_id, job in jobs.items():
+            # Skip if a static job with the same ID exists
+            if self._scheduler.get_job(job_id):
+                logger.warning(
+                    "[CronScheduler] Skipping dynamic job '%s' — a static job with the same ID exists.",
+                    job_id,
+                )
+                continue
             try:
                 self._scheduler.add_job(
                     self._run_job,
@@ -280,7 +299,9 @@ class CronScheduler:
     def remove_dynamic_job(self, job_id: str) -> str:
         """Remove a dynamic job (called from the Agent cron_remove tool)."""
         jobs = self._load_dynamic_jobs()
-        if job_id not in jobs and not self._scheduler.get_job(job_id):
+        if job_id not in jobs:
+            if self._scheduler.get_job(job_id):
+                return f"Job '{job_id}' is a static job and cannot be removed via cron_remove."
             return f"Job '{job_id}' not found."
         try:
             self._scheduler.remove_job(job_id)

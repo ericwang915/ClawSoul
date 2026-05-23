@@ -58,7 +58,7 @@ async def start_telegram(
     try:
         from .channels.telegram_bot import create_bot_from_env
         bot = create_bot_from_env(session_manager)
-        scheduler._telegram_bot = bot
+        scheduler.set_telegram_bot(bot)
         await bot.start_async()
         active_bots.append(bot)
         logger.info("[ClawSoul] Telegram bot started.")
@@ -154,4 +154,8 @@ async def run_server(
         for bot in active_bots:
             if hasattr(bot, 'stop_async'):
                 await bot.stop_async()
+        if 'scheduler' in locals():
+            scheduler.stop()
+        if 'hb' in locals():
+            await hb.stop()
         logger.info("[ClawSoul] Shutdown complete.")
