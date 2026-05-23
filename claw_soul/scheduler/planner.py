@@ -346,9 +346,9 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
         with open(plan_file, "w", encoding="utf-8") as f:
             f.write(header + content)
 
-        logger.info("[Planner] Successfully generated today's schedule.")
+        logger.info("[Planner] Successfully generated today's schedule → %s (%d chars)", plan_file, len(content))
     except Exception as exc:
-        logger.error("[Planner] Failed to generate daily plan: %s", exc)
+        logger.error("[Planner] Failed to generate daily plan: %s", exc, exc_info=True)
 
 
 # ── Scheduler registration ───────────────────────────────────────────────────
@@ -357,7 +357,7 @@ def register_daily_planner(
     scheduler: AsyncIOScheduler,
     provider: LLMProvider,
 ) -> None:
-    """Register the daily planner cron job (runs at 00:01)."""
+    """Register the daily planner cron job (runs at 00:01 local time)."""
     trigger = CronTrigger(hour=0, minute=1)
     scheduler.add_job(
         generate_daily_plan,
@@ -366,4 +366,5 @@ def register_daily_planner(
         args=[provider],
         replace_existing=True,
     )
-    logger.info("[Planner] Daily planner registered (runs at 00:01).")
+    tz_label = scheduler.timezone if hasattr(scheduler, 'timezone') else "default"
+    logger.info("[Planner] Daily planner registered (runs at 00:01 %s).", tz_label)

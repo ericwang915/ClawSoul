@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
+import time as _time
 
 from .core.llm.base import LLMProvider
 from .core.persistent_agent import PersistentAgent
@@ -20,6 +22,41 @@ from .scheduler.proactive import ProactiveMessenger, get_proactive_chat_id
 from .session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
+
+
+def _detect_local_timezone() -> str:
+    """Detect the local IANA timezone for cron scheduling.
+
+    Check order:
+    1. TZ environment variable
+    2. /etc/localtime symlink (Linux/macOS)
+    3. time.timezone offset → Etc/GMT±N
+    """
+    # 1. Explicit TZ env var
+    tz = os.environ.get("TZ")
+    if tz:
+        return tz
+
+    # 2. /etc/localtime symlink (Linux/macOS)
+    try:
+        if os.path.islink("/etc/localtime"):
+            link = os.readlink("/etc/localtime")
+            # Usually: /usr/share/zoneinfo/Asia/Shanghai
+            parts = link.split("/")
+            # Take the last two parts (region/city)
+            if len(parts) >= 2:
+                candidate = "/".join(parts[-2:])
+                if candidate not in ("zoneinfo",):
+                    return candidate
+    except Exception:
+        pass
+
+    # 3. Fallback: offset-based Etc/GMT
+    # time.timezone is seconds west of UTC (negative for east)
+    offset_hours = -_time.timezone // 3600
+    if offset_hours == 0:
+        return "UTC"
+    return f"Etc/GMT{'-' if offset_hours > 0 else '+'}{abs(offset_hours)}"
 
 
 async def start_telegram(
@@ -38,8 +75,13 @@ async def start_telegram(
     store = SessionStore()
     session_manager = SessionManager(agent_factory=lambda sid: None, store=store)
 
+    # Detect local timezone for cron scheduling
+    _tz = _detect_local_timezone()
+    logger.info("[ClawSoul] Using timezone: %s", _tz)
+
     scheduler = CronScheduler(
         session_manager=session_manager,
+        timezone=_tz,
     )
 
     def agent_factory(session_id: str) -> PersistentAgent:
@@ -55,6 +97,7 @@ async def start_telegram(
 
     active_bots: list = []
 
+    # ── 1. Start Telegram bot (best-effort) ──────────────────────────────────
     try:
         from .channels.telegram_bot import create_bot_from_env
         bot = create_bot_from_env(session_manager)
@@ -62,42 +105,45 @@ async def start_telegram(
         await bot.start_async()
         active_bots.append(bot)
         logger.info("[ClawSoul] Telegram bot started.")
+    except Exception as exc:
+        logger.warning("[ClawSoul] Telegram bot failed to start: %s", exc)
 
-        # Register Daily Planner
-        register_daily_planner(scheduler._scheduler, provider)
+    # ── 2. Register Daily Planner (always, regardless of Telegram status) ────
+    register_daily_planner(scheduler._scheduler, provider)
 
-        # Generate today's plan if missing or stale (from a previous day)
+    # ── 3. Generate today's plan immediately if stale ───────────────────────
+    if plan_is_stale():
+        logger.info("[ClawSoul] Plan is stale or missing — generating now.")
+        asyncio.create_task(generate_daily_plan(provider))
+
+    # ── 4. Start the scheduler ──────────────────────────────────────────────
+    scheduler.start()
+
+    # ── 5. Register Proactive Messaging (only if Telegram available) ────────
+    try:
         from . import config as _cfg
-        if plan_is_stale():
-            logger.info("[ClawSoul] Plan is stale or missing — generating now.")
-            asyncio.create_task(generate_daily_plan(provider))
-
-        # Register Proactive Messaging
         proactive_enabled = _cfg.get_bool("proactive", "enabled", default=True)
         proactive_chat_id = get_proactive_chat_id()
-        if proactive_enabled and proactive_chat_id:
+        if proactive_enabled and proactive_chat_id and active_bots:
             proactive = ProactiveMessenger(
                 session_manager=session_manager,
-                telegram_bot=bot,
+                telegram_bot=active_bots[0],
             )
             proactive.register(scheduler._scheduler, proactive_chat_id)
-        elif proactive_enabled:
+        elif proactive_enabled and not proactive_chat_id:
             logger.warning("[ClawSoul] Proactive messaging enabled but no chat_id found. Set proactive.chatId or channels.telegram.allowedUsers.")
-
     except Exception as exc:
-        logger.warning("[ClawSoul] Telegram failed to start: %s", exc)
+        logger.warning("[ClawSoul] Proactive messaging setup failed: %s", exc)
 
+    # ── 6. Start heartbeat monitor ───────────────────────────────────────────
     if active_bots:
-        scheduler.start()
-
-        # Start heartbeat monitor
         try:
-            hb = create_heartbeat(provider, telegram_bot=active_bots[0] if active_bots else None)
+            hb = create_heartbeat(provider, telegram_bot=active_bots[0])
             await hb.start()
         except Exception as exc:
             logger.warning("[ClawSoul] Heartbeat monitor failed to start: %s", exc)
     else:
-        logger.warning("[ClawSoul] Telegram bot not started — check token in claw_soul.json.")
+        logger.info("[ClawSoul] No Telegram bot active — heartbeat skipped.")
 
     return active_bots
 
