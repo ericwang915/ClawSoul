@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "claw_soul"
 version = "1.0.0"
-description = "ClawSoul — your virtual AI girlfriend on Telegram, powered by LLM with memory, RAG, and skills."
+description = "ClawSoul — your virtual AI partner (boyfriend or girlfriend) on Telegram, powered by LLM with memory, RAG, and skills."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "Eric Wang", email = "wangchen2007915@gmail.com"},
 ]
-keywords = ["llm", "agent", "ai", "telegram", "chatbot", "virtual-girlfriend", "memory", "rag"]
+keywords = ["llm", "agent", "ai", "telegram", "chatbot", "ai-companion", "virtual-girlfriend", "virtual-boyfriend", "memory", "rag"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

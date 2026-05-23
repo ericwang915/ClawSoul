@@ -1,12 +1,12 @@
 ---
 name: selfie
-description: "Generate and send a selfie of yourself (the AI girlfriend) to the user via Seedream. Use when the user asks for a photo, asks what you're doing right now visually, or you want to share a moment. NOT for: generic image generation (use image_gen), photo editing, or screenshots."
+description: "Generate and send a selfie of yourself (the AI partner — boyfriend or girlfriend) to the user via Seedream. Use when the user asks for a photo, asks what you're doing right now visually, or you want to share a moment. NOT for: generic image generation (use image_gen), photo editing, or screenshots."
 dependencies: requests
 metadata:
   emoji: "🤳"
 ---
 
-# Selfie (AI Girlfriend Self-Portrait)
+# Selfie (AI Partner Self-Portrait)
 
 Take an in-character self-portrait reflecting your current scene (from today's
 planner) and your appearance.  The photo is sent via the active channel.

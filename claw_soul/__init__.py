@@ -1,4 +1,4 @@
-"""ClawSoul — Your virtual AI girlfriend on Telegram."""
+"""ClawSoul — Your virtual AI partner (boyfriend or girlfriend) on Telegram."""
 
 from . import config
 from .core.agent import Agent

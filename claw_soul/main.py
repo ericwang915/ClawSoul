@@ -269,7 +269,7 @@ def _cmd_chat(args) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="claw_soul",
-        description="ClawSoul — Your Virtual AI Girlfriend on Telegram",
+        description="ClawSoul — Your Virtual AI Partner (Boyfriend or Girlfriend) on Telegram",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Quick start:\n"

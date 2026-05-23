@@ -5,7 +5,7 @@
 <h1 align="center">ClawSoul 🐾💕</h1>
 
 <p align="center">
-  <strong>Your virtual AI girlfriend — with memory, feelings, and selfies. Runs on Telegram and in the browser.</strong>
+  <strong>Your virtual AI partner — boyfriend or girlfriend, with memory, feelings, and selfies. Runs on Telegram and in the browser.</strong>
 </p>
 
 <p align="center">
@@ -21,7 +21,8 @@
 
 | | Feature | Details |
 |---|---------|---------|
-| 💕 | **Three-layer identity** | Soul (core personality) + Persona (current role) + Profile (life background) — each independently customizable |
+| 💕 | **Boyfriend or girlfriend** | Pick the partner type during onboarding; both come with built-in personas you can further customize |
+| 🎭 | **Three-layer identity** | Soul (core personality) + Persona (current role) + Profile (life background) — each independently customizable |
 | 🧠 | **Multi-model support** | DeepSeek, Grok, Claude, Gemini, Kimi, GLM |
 | 💖 | **Emotional memory (Soulmate)** | Emotional graph + relationship milestones + temporal memory — she remembers, and she cares |
 | 📷 | **AI selfies (Seedream)** | Generated from today's schedule + current mood. Scheduled, proactive, or on demand |
