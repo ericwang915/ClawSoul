@@ -10,9 +10,6 @@ Tests for the hybrid RAG pipeline:
   - MemoryManager.recall (smart retrieval)
 """
 
-import json
-import os
-import pytest
 from unittest.mock import MagicMock
 
 

@@ -18,10 +18,10 @@ import json
 import logging
 import os
 import re
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,7 @@ class TemporalMemoryIndex:
         self._path = os.path.join(self._memory_dir, "timeline.jsonl")
         self._events: list[TimelineEvent] = []
         self._add_counter = 0  # tracks events since last prune check
+        self._lock = threading.Lock()
         # Load only the most recent events into memory
         self._load_recent(max_events=MAX_MEMORY_EVENTS)
 
@@ -228,18 +229,19 @@ class TemporalMemoryIndex:
 
     def add_event(self, event: TimelineEvent) -> None:
         """Add a new timeline event and persist it."""
-        self._events.append(event)
-        self._atomic_append(event)
-        self._add_counter += 1
+        with self._lock:
+            self._events.append(event)
+            self._atomic_append(event)
+            self._add_counter += 1
 
-        # Limit memory size
-        if len(self._events) > MAX_MEMORY_EVENTS:
-            self._events = self._events[-MAX_MEMORY_EVENTS:]
+            # Limit memory size
+            if len(self._events) > MAX_MEMORY_EVENTS:
+                self._events = self._events[-MAX_MEMORY_EVENTS:]
 
-        # Periodic file pruning
-        if self._add_counter >= PRUNE_AFTER:
-            self._prune_file()
-            self._add_counter = 0
+            # Periodic file pruning
+            if self._add_counter >= PRUNE_AFTER:
+                self._prune_file()
+                self._add_counter = 0
 
     def search(self, query: str, time_range: tuple[str, str] | None = None) -> list[TimelineEvent]:
         """Search timeline events by keyword/summary/topic, optionally within a time range.

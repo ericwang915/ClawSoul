@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import signal
 import time as _time
 
 from .core.llm.base import LLMProvider
@@ -135,7 +134,21 @@ async def start_telegram(
     except Exception as exc:
         logger.warning("[ClawSoul] Proactive messaging setup failed: %s", exc)
 
-    # ── 6. Start heartbeat monitor ───────────────────────────────────────────
+    # ── 6. Register scheduled selfies (only if Seedream + Telegram available) ─
+    if active_bots:
+        try:
+            from .scheduler.selfie_task import SelfieScheduler
+            selfie_sched = SelfieScheduler(
+                telegram_bot=active_bots[0],
+                scheduler=scheduler._scheduler,
+            )
+            registered = selfie_sched.register()
+            if registered:
+                logger.info("[ClawSoul] Selfie scheduler registered (%d slot(s))", registered)
+        except Exception as exc:
+            logger.warning("[ClawSoul] Selfie scheduler setup failed: %s", exc)
+
+    # ── 7. Start heartbeat monitor ───────────────────────────────────────────
     if active_bots:
         try:
             hb = create_heartbeat(provider, telegram_bot=active_bots[0])
@@ -162,46 +175,3 @@ async def start_channels(
     if "telegram" in channels:
         bots = await start_telegram(provider, fastapi_app=fastapi_app)
     return bots
-
-
-async def run_server(
-    provider: LLMProvider,
-) -> None:
-    """Standalone server entry point (Telegram only, no web).
-
-    Kept for backward compatibility. Prefer using ``start_telegram``
-    together with the web dashboard in ``_run_foreground``.
-    """
-    active_bots = await start_telegram(provider)
-
-    if not active_bots:
-        logger.error("[ClawSoul] Telegram bot not started. Exiting.")
-        return
-
-    stop_event = asyncio.Event()
-
-    def _signal_handler() -> None:
-        logger.info("[ClawSoul] Shutdown signal received.")
-        stop_event.set()
-
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, _signal_handler)
-        except (NotImplementedError, OSError):
-            pass
-
-    try:
-        await stop_event.wait()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        pass
-    finally:
-        logger.info("[ClawSoul] Shutting down...")
-        for bot in active_bots:
-            if hasattr(bot, 'stop_async'):
-                await bot.stop_async()
-        if 'scheduler' in locals():
-            scheduler.stop()
-        if 'hb' in locals():
-            await hb.stop()
-        logger.info("[ClawSoul] Shutdown complete.")

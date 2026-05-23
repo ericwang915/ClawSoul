@@ -1,13 +1,9 @@
 """
 Tests for EmotionalGraph and TemporalMemoryIndex pruning/capping logic.
 """
-import json
-import os
-import tempfile
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from claw_soul.core.memory.emotional_graph import (
     EmotionalGraph,

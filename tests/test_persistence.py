@@ -4,7 +4,6 @@ and Agent-controlled cron tools.
 """
 import json
 import os
-import pytest
 from unittest.mock import MagicMock
 
 
@@ -136,7 +135,6 @@ class TestPersistentAgent:
         store = SessionStore(str(tmp_path / "sessions"))
 
         a1 = make_minimal_agent(tmp_path, store=store, session_id="test:1")
-        old_system = a1.messages[0]["content"]
         a1.chat("hello")
 
         a2 = make_minimal_agent(tmp_path, store=store, session_id="test:1")

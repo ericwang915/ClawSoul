@@ -893,9 +893,17 @@ Don't repeat this if `bot_name` already exists in memory.
         Uses the existing provider to extract sentiment, topic, and summary
         from the user's message and the assistant's response.  All errors
         are silently caught — the affect modules are best-effort.
+
+        Runs asynchronously on the background executor to avoid blocking
+        the response path with a second LLM call.
         """
         if not user_input or not isinstance(user_input, str):
             return
+
+        self._bg_executor.submit(self._do_affect_analysis, user_input, response)
+
+    def _do_affect_analysis(self, user_input: str, response: str) -> None:
+        """Actually perform the affect analysis (runs in background thread)."""
         try:
             # Use the SentimentAnalyzer with a micro-prompt
             affect_messages = [
@@ -903,7 +911,8 @@ Don't repeat this if `bot_name` already exists in memory.
                 {"role": "user", "content": f"User: {user_input}\nAssistant: {response[:500]}"},
             ]
             analysis_raw = self.provider.chat(messages=affect_messages, tools=[])
-            analysis_text = analysis_raw.choices[0].message.content or ""
+            msg = analysis_raw.choices[0].message
+            analysis_text = (msg.content or "") if msg else ""
             parsed = SentimentAnalyzer.parse(analysis_text)
         except Exception:
             logger.debug("Affect analysis failed (non-fatal)", exc_info=True)
@@ -914,7 +923,6 @@ Don't repeat this if `bot_name` already exists in memory.
             intensity = parsed["intensity"]
             topic = parsed["topic"]
             summary = parsed["summary"]
-            follow_up = parsed["follow_up"]
 
             # Update emotional graph
             self.memory.emotional_graph.add_event(
@@ -939,15 +947,16 @@ Don't repeat this if `bot_name` already exists in memory.
             )
             self.memory.timeline.add_event(event)
 
-            # Ensure first chat date is set
-            self.memory.milestones.ensure_first_chat_date()
+            # Milestone checks (only if first_chat_date is already set, else set it once)
+            if not self.memory.milestones.get_data().get("first_chat_date"):
+                self.memory.milestones.ensure_first_chat_date()
 
             # Check for deep emotion
             if sentiment == "negative" and intensity > 0.7:
                 self.memory.milestones.set_deep_emotion_detected()
 
-            # Check milestones
-            memory_count = len(self.memory.list_all())
+            # Check milestones — use a cache-friendly count (len of storage data dict, not file)
+            memory_count = len(self.memory.storage.data)
             proactive_count = self.memory.milestones.get_data().get("total_proactive_messages", 0)
             triggered = self.memory.milestones.check_milestones(
                 memory_entries=memory_count,

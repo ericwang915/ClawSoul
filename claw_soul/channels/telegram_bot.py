@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import os
 import queue as _queue
 import re
 import time
@@ -90,6 +91,18 @@ class TelegramBot:
             logger.warning("[Telegram] send_message called before bot is running")
             return
         await self._app.bot.send_message(chat_id=chat_id, text=text)
+
+    async def send_photo(self, chat_id: int, path: str, caption: str = "") -> None:
+        """Send a photo with inline preview (used by selfie scheduler)."""
+        if self._app is None:
+            logger.warning("[Telegram] send_photo called before bot is running")
+            return
+        with open(path, "rb") as f:
+            await self._app.bot.send_photo(
+                chat_id=chat_id,
+                photo=f,
+                caption=caption[:1024] if caption else None,
+            )
 
     # ── Access control ────────────────────────────────────────────────────────
 
@@ -366,12 +379,12 @@ class TelegramBot:
                 await update.message.reply_text(chunk)
 
     def _register_file_sender(self, loop: asyncio.AbstractEventLoop, chat_id: int) -> None:
-        """Register a sync callback so the Agent can send files via Telegram."""
-        from ..core.tools import set_file_sender
+        """Register sync callbacks so the Agent can send files / photos via Telegram."""
+        from ..core.tools import set_file_sender, set_photo_sender
 
         bot_app = self._app
 
-        def _sender(path: str, caption: str = "") -> None:
+        def _file_sender(path: str, caption: str = "") -> None:
             async def _do_send():
                 try:
                     with open(path, "rb") as f:
@@ -386,7 +399,23 @@ class TelegramBot:
             future = asyncio.run_coroutine_threadsafe(_do_send(), loop)
             future.result(timeout=60)
 
-        set_file_sender(_sender)
+        def _photo_sender(path: str, caption: str = "") -> None:
+            async def _do_send():
+                try:
+                    with open(path, "rb") as f:
+                        await bot_app.bot.send_photo(
+                            chat_id=chat_id,
+                            photo=f,
+                            caption=caption[:1024] if caption else None,
+                        )
+                except Exception as exc:
+                    logger.warning("[Telegram] send_photo failed: %s", exc)
+
+            future = asyncio.run_coroutine_threadsafe(_do_send(), loop)
+            future.result(timeout=60)
+
+        set_file_sender(_file_sender)
+        set_photo_sender(_photo_sender)
 
     async def _build_image_input(self, update: Update, caption: str) -> list:
         """Download photo and build a multimodal content array."""

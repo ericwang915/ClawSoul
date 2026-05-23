@@ -16,8 +16,9 @@ import json
 import logging
 import os
 import tempfile
+import threading
 from collections import defaultdict
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,7 @@ class EmotionalGraph:
         self._path = os.path.join(self._affect_dir, "emotional_graph.jsonl")
         self._write_counter = 0  # tracks writes since last prune check
         self._event_count = self._count_lines()
+        self._lock = threading.Lock()
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
@@ -165,7 +167,7 @@ class EmotionalGraph:
         """Delete events older than *before_days* days and trim to MAX_EVENTS_KEEP."""
         if not os.path.isfile(self._path):
             return
-        cutoff = (datetime.now() - timedelta(days=before_days)).isoformat()
+        cutoff = (datetime.now() - timedelta(days=before_days)).isoformat(timespec="seconds")
         lines_to_keep: list[str] = []
         try:
             with open(self._path, "r", encoding="utf-8") as f:
@@ -221,19 +223,20 @@ class EmotionalGraph:
         context_summary: str = "",
     ) -> None:
         """Record one emotional event with the current timestamp."""
-        event = {
-            "ts": datetime.now().isoformat(timespec="seconds"),
-            "topic": topic,
-            "sentiment": sentiment,
-            "intensity": round(intensity, 3),
-            "context_summary": context_summary,
-        }
-        self._atomic_append(event)
-        self._event_count += 1
-        self._write_counter += 1
-        # Periodic pruning check
-        if self._write_counter >= PRUNE_CHECK_INTERVAL:
-            self._prune_old_events()
+        with self._lock:
+            event = {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "topic": topic,
+                "sentiment": sentiment,
+                "intensity": round(intensity, 3),
+                "context_summary": context_summary,
+            }
+            self._atomic_append(event)
+            self._event_count += 1
+            self._write_counter += 1
+            # Periodic pruning check
+            if self._write_counter >= PRUNE_CHECK_INTERVAL:
+                self._prune_old_events()
 
     def get_recent(self, days: int = 7) -> list[dict]:
         """Return events from the last *days* days."""

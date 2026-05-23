@@ -74,51 +74,6 @@ def _headers(key: str, content_type: str) -> dict[str, str]:
     }
 
 
-# ── Sync ──────────────────────────────────────────────────────────────────────
-
-def transcribe_bytes(audio: bytes, content_type: str = "audio/ogg") -> str | None:
-    """Blocking transcription with automatic fallback for short clips.
-
-    Returns the transcript text, or ``None`` if no Deepgram key is set.
-    """
-    key = _get_key()
-    if not key:
-        return None
-
-    cfg_lang = _get_config_language()
-
-    if cfg_lang != "auto":
-        return _call_sync(key, audio, content_type, language=cfg_lang)
-
-    transcript = _call_sync(key, audio, content_type, language=None)
-    if transcript:
-        return transcript
-
-    for lang in _FALLBACK_LANGUAGES:
-        transcript = _call_sync(key, audio, content_type, language=lang)
-        if transcript:
-            logger.info("[STT] Fallback to language=%s succeeded", lang)
-            return transcript
-
-    logger.warning("[STT] All fallback languages returned empty (bytes=%d)", len(audio))
-    return ""
-
-
-def _call_sync(
-    key: str, audio: bytes, content_type: str, language: str | None
-) -> str:
-    import httpx
-
-    url = _build_url(language=language or "auto")
-    resp = httpx.post(
-        url, content=audio,
-        headers=_headers(key, content_type),
-        timeout=30.0,
-    )
-    resp.raise_for_status()
-    return _extract_transcript(resp.json())
-
-
 # ── Async ─────────────────────────────────────────────────────────────────────
 
 async def transcribe_bytes_async(

@@ -63,7 +63,21 @@
   "memory": {
     "dir": null
   },
-  "skills": {},
+  "skills": {
+    "seedream": {
+      "apiKey": "",
+      "model": "seedream-5-0-lite-260128",
+      "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/v3"
+    }
+  },
+  "selfie": {
+    "enabled": true,
+    "schedule": ["10:00", "16:00", "20:00"],
+    "chatId": null,
+    "model": null,
+    "maxDaily": 3,
+    "proactiveProbability": 0.15
+  },
   "proactive": {
     "enabled": true,
     "chatId": null,

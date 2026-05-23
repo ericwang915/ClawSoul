@@ -219,7 +219,7 @@ class TestTelegramBot:
         return SessionManager(lambda sid: MagicMock())
 
     def test_import(self):
-        from claw_soul.channels.telegram_bot import TelegramBot, create_bot_from_env
+        from claw_soul.channels.telegram_bot import TelegramBot
         assert TelegramBot is not None
 
     def test_allowlist_empty_allows_all(self):
@@ -246,7 +246,7 @@ class TestTelegramBot:
             calls.append(1)
             return MagicMock()
         sm = SessionManager(factory)
-        bot = TelegramBot(session_manager=sm, token="dummy")
+        TelegramBot(session_manager=sm, token="dummy")
         # Simulate two messages from the same chat_id
         sm.get_or_create("telegram:42")
         sm.get_or_create("telegram:42")
@@ -257,7 +257,7 @@ class TestTelegramBot:
         from claw_soul.channels.telegram_bot import TelegramBot
         calls = []
         sm = SessionManager(lambda sid: (calls.append(1), MagicMock())[1])
-        bot = TelegramBot(session_manager=sm, token="dummy")
+        TelegramBot(session_manager=sm, token="dummy")
         a1 = sm.get_or_create("telegram:42")
         a2 = sm.reset("telegram:42")
         assert a1 is not a2
@@ -284,7 +284,7 @@ class TestCronScheduler:
         return SessionManager(lambda sid: MagicMock())
 
     def test_import(self):
-        from claw_soul.scheduler.cron import CronScheduler, _parse_cron
+        from claw_soul.scheduler.cron import CronScheduler
         assert CronScheduler is not None
 
     def test_parse_cron_valid(self):
@@ -377,7 +377,7 @@ class TestCronScheduler:
 
 class TestHeartbeatMonitor:
     def test_import(self):
-        from claw_soul.scheduler.heartbeat import HeartbeatMonitor, create_heartbeat_from_env
+        from claw_soul.scheduler.heartbeat import HeartbeatMonitor
         assert HeartbeatMonitor is not None
 
     def test_create_from_env_defaults(self, monkeypatch):

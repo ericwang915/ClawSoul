@@ -1,0 +1,159 @@
+"""
+High-level selfie facade — assembles persona + scene → prompt → image.
+
+This is the single entry point everything else calls (skill, scheduler,
+proactive integration).  It hides the assembly logic so callers don't
+need to know about persona_render / scene_builder / generator / album.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime
+
+from ... import config
+from .generator import DEFAULT_SIZE, SeedreamError, SeedreamGenerator
+from .persona_render import load_appearance
+from .photo_album import PhotoAlbum
+from .scene_builder import Scene, build_scene
+
+logger = logging.getLogger(__name__)
+
+
+# ── Prompt template ────────────────────────────────────────────────────────
+
+_BASE_STYLE = (
+    "写实自拍风格，自然光线，画面温馨真实，"
+    "表情自然，像是在用手机随手记录生活分享给男朋友。"
+    "不要 NSFW，不要暴露，不要血腥。"
+)
+
+
+def _build_prompt(appearance: str, scene: Scene, extra_hint: str | None) -> str:
+    """Assemble the final Chinese prompt sent to Seedream."""
+    chunks: list[str] = [appearance.strip()]
+    scene_block = scene.as_prompt_block()
+    if scene_block:
+        chunks.append(scene_block)
+    if extra_hint:
+        chunks.append(extra_hint.strip())
+    chunks.append(_BASE_STYLE)
+    return "\n\n".join(c for c in chunks if c)
+
+
+def _stable_seed(appearance: str) -> int:
+    """Deterministic seed derived from the appearance description.
+
+    Same character description → same seed → more consistent face across
+    photos even when no reference image is provided.
+    """
+    digest = hashlib.sha256(appearance.encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "big") & 0x7FFFFFFF
+
+
+# ── Result dataclass ───────────────────────────────────────────────────────
+
+@dataclass
+class SelfieResult:
+    path: str
+    prompt: str
+    model: str
+    seed: int
+    used_reference: bool
+    scene: Scene
+
+    def caption(self) -> str:
+        """Short human-readable caption suitable for Telegram."""
+        if self.scene.activity:
+            return f"{self.scene.time or '现在'} · {self.scene.activity}"
+        return self.scene.activity or ""
+
+
+# ── Main entry point ───────────────────────────────────────────────────────
+
+def take_selfie(
+    *,
+    scene_hint: str | None = None,
+    use_reference: bool = True,
+    seed: int | None = None,
+    model: str | None = None,
+    size: str = DEFAULT_SIZE,
+    generator: SeedreamGenerator | None = None,
+    album: PhotoAlbum | None = None,
+    now: datetime | None = None,
+) -> SelfieResult:
+    """Generate one selfie reflecting the character + her current moment.
+
+    ``scene_hint`` overrides or adds to the auto-built scene (e.g. when the
+    LLM has a specific situation in mind).  ``use_reference`` toggles
+    pulling the primary reference image from the album.
+    """
+    appearance = load_appearance()
+    scene = build_scene(now)
+
+    prompt = _build_prompt(appearance, scene, scene_hint)
+    actual_seed = seed if seed is not None else _stable_seed(appearance)
+
+    album = album or PhotoAlbum()
+    reference_path = album.primary_reference() if use_reference else None
+
+    generator = generator or SeedreamGenerator(model=model)
+
+    with tempfile.TemporaryDirectory(prefix="selfie_") as tmp:
+        paths = generator.generate_and_download(
+            prompt,
+            output_dir=tmp,
+            filename_prefix="selfie",
+            size=size,
+            n=1,
+            seed=actual_seed,
+            reference_image=reference_path,
+            model=model,
+        )
+        if not paths:
+            raise SeedreamError("Generator returned no images.")
+        src = paths[0]
+        saved = album.add(
+            src,
+            kind="selfie",
+            prompt=prompt,
+            metadata={
+                "model": generator.model,
+                "seed": actual_seed,
+                "size": size,
+                "scene": {
+                    "time": scene.time,
+                    "activity": scene.activity,
+                    "mood": scene.mood,
+                    "weather": scene.weather,
+                },
+                "used_reference": bool(reference_path),
+            },
+        )
+
+    # Background cleanup of old entries — cheap, no-op if nothing to prune
+    try:
+        album.cleanup()
+    except Exception as exc:
+        logger.debug("[selfie] album cleanup skipped: %s", exc)
+
+    return SelfieResult(
+        path=saved,
+        prompt=prompt,
+        model=generator.model,
+        seed=actual_seed,
+        used_reference=bool(reference_path),
+        scene=scene,
+    )
+
+
+# ── Config helpers ─────────────────────────────────────────────────────────
+
+def is_enabled() -> bool:
+    """Selfie feature is enabled when both Seedream key and feature flag are on."""
+    if not config.get_bool("selfie", "enabled", default=True):
+        return False
+    return bool(config.get_str("skills", "seedream", "apiKey", env="ARK_API_KEY"))

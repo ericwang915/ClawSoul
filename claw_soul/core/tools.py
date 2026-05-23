@@ -200,12 +200,37 @@ _MAX_SEND_FILE_BYTES = 100 * 1024 * 1024  # 100 MB
 
 # Channel-provided callback: send_file_fn(path, caption) → None
 _file_sender: callable | None = None
+# Channel-provided callback: send_photo_fn(path, caption) → None
+_photo_sender: callable | None = None
 
 
 def set_file_sender(fn: callable | None) -> None:
     """Register a callback for sending files to the current channel."""
     global _file_sender
     _file_sender = fn
+
+
+def set_photo_sender(fn: callable | None) -> None:
+    """Register a callback for sending images with inline preview (vs. as a file)."""
+    global _photo_sender
+    _photo_sender = fn
+
+
+def send_photo(path: str, caption: str = "") -> str:
+    """Send an image with native inline preview.  Falls back to send_file if no
+    photo-capable channel is registered."""
+    resolved = os.path.realpath(os.path.abspath(path))
+    if not os.path.isfile(resolved):
+        return f"Error: file not found: {path}"
+
+    if _photo_sender is not None:
+        try:
+            _photo_sender(resolved, caption)
+            return f"Photo '{os.path.basename(resolved)}' sent."
+        except Exception as exc:
+            logger.warning("[send_photo] photo_sender failed, falling back: %s", exc)
+
+    return send_file(resolved, caption)
 
 
 def send_file(path: str, caption: str = "") -> str:

@@ -32,13 +32,12 @@ Recall
 When a specific query is given, the manager converts every memory entry into a
 short "chunk"  ("{key}: {value}")  and runs hybrid sparse + dense retrieval to
 return the most relevant ones.  When the query is empty or "*", ALL memories
-are returned (full-dump mode, used by compaction and legacy callers).
+are returned (full-dump mode, used by compaction).
 """
 
 from __future__ import annotations
 
 import logging
-import os
 
 from ..retrieval.retriever import HybridRetriever
 from .emotional_graph import EmotionalGraph, RelationshipStore

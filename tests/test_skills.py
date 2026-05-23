@@ -7,12 +7,10 @@ Level 3: Resource discovery (bundled files)
 """
 
 import os
-import tempfile
 
 import pytest
 
 from claw_soul.core.skill_loader import (
-    SkillMetadata,
     SkillRegistry,
     load_skill_by_name,
     search_skills,

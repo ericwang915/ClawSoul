@@ -50,9 +50,9 @@ class PersistentAgent(Agent):
         self._store = store
         self._session_id = session_id
 
-        # ── Soul Mate: ensure milestone first-chat date on restore ──────────
+        # ── Soul Mate: ensure milestone first-chat date on init ────────────
         try:
-            if self.messages:
+            if hasattr(self, "memory") and hasattr(self.memory, "milestones"):
                 self.memory.milestones.ensure_first_chat_date()
         except Exception:
             pass

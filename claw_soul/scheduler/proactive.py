@@ -118,7 +118,7 @@ def _get_sentiment_context(agent: Any) -> dict[str, Any]:
         if not hasattr(agent, "memory") or not hasattr(agent.memory, "emotional_graph"):
             return result
 
-        # Recent emotional summary
+        # Recent emotional summary — query once, reuse
         recent_events = agent.memory.emotional_graph.get_recent(days=1)
         if recent_events:
             # Most recent event sentiment
@@ -126,18 +126,17 @@ def _get_sentiment_context(agent: Any) -> dict[str, Any]:
             result["sentiment"] = latest.get("sentiment", "neutral")
             result["summary"] = latest.get("context_summary", "")
 
+        # Check for unfinished topics from last chat
+        if recent_events:
+            result["has_unfinished"] = any(
+                e.get("sentiment") == "negative" and e.get("intensity", 0) > 0.6
+                for e in recent_events
+            )
+
         # Topics from timeline
         if hasattr(agent.memory, "timeline"):
             topics = agent.memory.timeline.get_topics()
             result["topics"] = topics[:5] if topics else []
-
-        # Check for unfinished topics from last chat
-        if hasattr(agent.memory, "emotional_graph"):
-            all_today = agent.memory.emotional_graph.get_recent(days=1)
-            result["has_unfinished"] = any(
-                e.get("sentiment") == "negative" and e.get("intensity", 0) > 0.6
-                for e in all_today
-            )
 
         # Hours since last message (rough estimation from last timeline event)
         if hasattr(agent.memory, "timeline"):
@@ -368,6 +367,33 @@ class ProactiveMessenger:
             )
         except Exception as exc:
             logger.error("[Proactive] Telegram delivery failed: %s", exc)
+            return
+
+        # Optionally attach a selfie — gated by config probability and Seedream key.
+        await self._maybe_send_selfie(chat_id)
+
+    async def _maybe_send_selfie(self, chat_id: int) -> None:
+        """Roll the dice on attaching a selfie after a proactive message."""
+        try:
+            from ..core.image_gen import take_selfie
+            from ..core.image_gen.selfie import is_enabled
+        except ImportError:
+            return
+        if not is_enabled():
+            return
+        probability = float(config.get("selfie", "proactiveProbability", default=0.15) or 0)
+        if probability <= 0 or random.random() > probability:
+            return
+
+        loop = asyncio.get_event_loop()
+        try:
+            result = await loop.run_in_executor(None, take_selfie)
+            await self._telegram_bot.send_photo(
+                chat_id, result.path, caption=result.caption(),
+            )
+            logger.info("[Proactive] attached selfie %s", result.path)
+        except Exception as exc:
+            logger.warning("[Proactive] selfie attach failed: %s", exc)
 
     # ── Registration ─────────────────────────────────────────────────────────
 

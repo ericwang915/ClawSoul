@@ -3,9 +3,7 @@ Tests for the compaction module and its integration in Agent.
 """
 import json
 import os
-import tempfile
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from claw_soul.core.compaction import (
     estimate_tokens,
