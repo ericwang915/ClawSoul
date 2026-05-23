@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_AFFECT_DIR = "affect"
 
+# EmotionalGraph pruning thresholds
+MAX_DAYS_KEEP = 90           # Events older than this are pruned
+MAX_EVENTS_KEEP = 10000      # Maximum events kept in file
+PRUNE_CHECK_INTERVAL = 1000  # Check pruning every N writes
+
 _SENTIMENT_SYSTEM_PROMPT = """\
 You are an emotion-analysis sidecar. Given the user message and assistant response,
 extract structured emotional metadata in JSON only. No explanation.
@@ -110,11 +115,17 @@ class EmotionalGraph:
         self._affect_dir = affect_dir
         os.makedirs(self._affect_dir, exist_ok=True)
         self._path = os.path.join(self._affect_dir, "emotional_graph.jsonl")
+        self._write_counter = 0  # tracks writes since last prune check
+        self._event_count = self._count_lines()
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def _read_all(self) -> list[dict]:
-        """Read all events from the JSONL file (oldest first)."""
+        """Read all events from the JSONL file (oldest first).
+
+        Note: With pruning enabled, the file is kept at a manageable size
+        (at most MAX_EVENTS_KEEP entries covering up to MAX_DAYS_KEEP days).
+        """
         if not os.path.isfile(self._path):
             return []
         events: list[dict] = []
@@ -140,6 +151,66 @@ class EmotionalGraph:
         except OSError as exc:
             logger.warning("Failed to write emotional_graph event: %s", exc)
 
+    def _count_lines(self) -> int:
+        """Fast count of lines in the JSONL file (does not parse JSON)."""
+        if not os.path.isfile(self._path):
+            return 0
+        try:
+            with open(self._path, "rb") as f:
+                return sum(1 for _ in f)
+        except OSError:
+            return 0
+
+    def _prune_old_events(self, before_days: int = MAX_DAYS_KEEP) -> None:
+        """Delete events older than *before_days* days and trim to MAX_EVENTS_KEEP."""
+        if not os.path.isfile(self._path):
+            return
+        cutoff = (datetime.now() - timedelta(days=before_days)).isoformat()
+        lines_to_keep: list[str] = []
+        try:
+            with open(self._path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                        if ev.get("ts", "") >= cutoff:
+                            lines_to_keep.append(json.dumps(ev, ensure_ascii=False) + "\n")
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            return
+
+        # If still over the max, keep only the most recent MAX_EVENTS_KEEP
+        if len(lines_to_keep) > MAX_EVENTS_KEEP:
+            lines_to_keep = lines_to_keep[-MAX_EVENTS_KEEP:]
+
+        # If nothing changed, reset counter and return early
+        if len(lines_to_keep) == self._event_count:
+            self._write_counter = 0
+            return
+
+        # Atomic rewrite via temp file
+        tmp_path = self._path + ".tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.writelines(lines_to_keep)
+            os.replace(tmp_path, self._path)
+            self._event_count = len(lines_to_keep)
+            self._write_counter = 0
+            logger.info(
+                "[EmotionalGraph] Pruned to %d events (keeping last %d days).",
+                self._event_count, before_days,
+            )
+        except OSError as exc:
+            logger.warning("Failed to prune emotional_graph: %s", exc)
+            try:
+                if os.path.isfile(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     def add_event(
@@ -158,6 +229,11 @@ class EmotionalGraph:
             "context_summary": context_summary,
         }
         self._atomic_append(event)
+        self._event_count += 1
+        self._write_counter += 1
+        # Periodic pruning check
+        if self._write_counter >= PRUNE_CHECK_INTERVAL:
+            self._prune_old_events()
 
     def get_recent(self, days: int = 7) -> list[dict]:
         """Return events from the last *days* days."""
@@ -169,7 +245,11 @@ class EmotionalGraph:
         ]
 
     def get_topic_sentiment(self, topic: str) -> dict[str, Any]:
-        """Return aggregate sentiment stats for a topic."""
+        """Return aggregate sentiment stats for a topic.
+
+        Scans at most MAX_EVENTS_KEEP events (which covers up to
+        MAX_DAYS_KEEP days of history after pruning).
+        """
         all_events = self._read_all()
         matching = [e for e in all_events if e.get("topic", "").lower() == topic.lower()]
         if not matching:
@@ -216,7 +296,7 @@ class EmotionalGraph:
         # Build trend for last 14 days
         trend: list[dict] = []
         for i in range(13, -1, -1):
-            day = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%day")
+            day = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
             scores = daily.get(day, [])
             if scores:
                 avg = sum(scores) / len(scores)
