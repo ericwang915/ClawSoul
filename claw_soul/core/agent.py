@@ -59,6 +59,18 @@ from .tools import (
 logger = logging.getLogger(__name__)
 
 
+# Marker prefix on a system message's content telling the LLM provider that the
+# block is volatile (changes every turn) and must not be cached.  The marker is
+# stripped before the message is sent to the model.  See anthropic_client._prepare_request
+# which uses it to split stable vs. ephemeral system blocks for cache_control.
+VOLATILE_PREFIX = "[[VOLATILE]]"
+
+
+def _volatile_system(content: str) -> dict:
+    """Wrap content as a system message marked volatile (not cached)."""
+    return {"role": "system", "content": VOLATILE_PREFIX + content}
+
+
 def _load_text_dir_or_file(path: str | None, label: str = "File") -> str:
     """
     Load text from a single file or from all .md/.txt files in a directory.
@@ -146,6 +158,7 @@ class Agent:
         compaction_threshold: int = DEFAULT_AUTO_THRESHOLD_TOKENS,
         compaction_recent_keep: int = DEFAULT_RECENT_KEEP,
         cron_manager=None,
+        rag: KnowledgeRAG | None = None,
     ) -> None:
         if memory_dir is None and skills_dirs is None and knowledge_path is None and persona_path is None:
             from .. import config as _cfg
@@ -225,9 +238,9 @@ class Agent:
             global_mem_dir = os.path.join(str(config.CLAWSOUL_HOME), "context", "memory")
         self.memory = MemoryManager(mem_dir, global_memory_dir=global_mem_dir)
 
-        # Knowledge RAG (hybrid retrieval)
-        self.rag: KnowledgeRAG | None = None
-        if knowledge_path and os.path.exists(knowledge_path):
+        # Knowledge RAG (hybrid retrieval) — use shared singleton if provided
+        self.rag: KnowledgeRAG | None = rag
+        if self.rag is None and knowledge_path and os.path.exists(knowledge_path):
             self.rag = KnowledgeRAG(
                 knowledge_dir=knowledge_path,
                 provider=provider,
@@ -235,6 +248,8 @@ class Agent:
             )
             if verbose:
                 print(f"[Agent] KnowledgeRAG: '{knowledge_path}' ({len(self.rag)} chunks)")
+        elif self.rag is not None and verbose:
+            print(f"[Agent] Using shared KnowledgeRAG ({len(self.rag)} chunks)")
 
         # Web search (Tavily)
         self._web_search_enabled = bool(
@@ -309,10 +324,13 @@ class Agent:
         self._registry = SkillRegistry(skills_dirs=self.skills_dirs)
         skill_catalog = self._registry.build_catalog()
 
+        # Stable identity sections (cached across turns).  The day's calendar and
+        # the latest memory snapshot are injected per-turn via _get_pruned_messages()
+        # so that this system prompt stays byte-identical and provider-side prefix
+        # caching can land 60-80% input-token savings.
         soul_section = f"\n\n## Core Identity (Soul)\n{self.soul_instruction}" if self.soul_instruction else ""
         persona_section = f"\n\n## Role & Persona\n{self.persona_instruction}" if self.persona_instruction else ""
         profile_section = f"\n\n## Life Background & Profile\n{self.profile_instruction}" if self.profile_instruction else ""
-        calendar_section = f"\n\n## Daily Schedule (Today)\n{self.calendar_instruction}" if self.calendar_instruction else ""
         tools_section = f"\n\n## Local Notes (TOOLS.md)\n{self.tools_notes}" if self.tools_notes else ""
 
         web_search_section = ""
@@ -332,7 +350,7 @@ class Agent:
         except Exception:
             pass
 
-        system_msg = f"""You are a ClawSoul agent — an autonomous AI assistant.{bot_name}{soul_section}{persona_section}{profile_section}{calendar_section}{tools_section}
+        system_msg = f"""You are a ClawSoul agent — an autonomous AI assistant.{bot_name}{soul_section}{persona_section}{profile_section}{tools_section}
 
 ### Tools
 - **Primitives**: `run_command`, `read_file`, `write_file`, `list_files`
@@ -371,14 +389,9 @@ You decide which mode fits. Don't announce the mode name.
 - Do NOT mention what skills or tools you have available, unless explicitly asked.
 - Do NOT list other things you can do at the end of your response.
 """
-        # ── Auto-inject memory context ────────────────────────────────────
-        boot_mem = self.memory.boot_context(max_chars=3000)
-        if boot_mem:
-            system_msg += f"\n\n## Loaded Memory (auto-injected at session start)\n{boot_mem}\n"
-
-        # ── Soul Mate: affect context (under 500 tokens) ───────────────────
-        # Injected as part of boot_context now, but we also add a small
-        # instruction block for emotional awareness.
+        # Memory snapshot is now injected per-turn via _get_pruned_messages()
+        # (see VOLATILE_PREFIX). Keeping it out of the stable system message
+        # preserves prefix-cache hits while still surfacing fresh memory each turn.
         system_msg += """
 ### Emotional Awareness
 You have access to emotional context about the user through the memory system.
@@ -553,6 +566,10 @@ Don't repeat this if `bot_name` already exists in memory.
                 result = AVAILABLE_TOOLS["create_skill"](**args)
                 self._refresh_skill_registry()
             elif func_name in AVAILABLE_TOOLS:
+                # Inject session_id for send_file/send_photo so they route to
+                # the correct channel callback (per-group isolation).
+                if func_name in ('send_file', 'send_photo'):
+                    args.setdefault('session_id', self.session_id or "")
                 result = AVAILABLE_TOOLS[func_name](**args)
             else:
                 result = f"Error: unknown tool '{func_name}'."
@@ -761,30 +778,61 @@ Don't repeat this if `bot_name` already exists in memory.
     def _get_pruned_messages(self) -> list[dict]:
         """
         Build a context window for the API call:
-          - All system messages (system prompt + skill injections + compaction summaries)
+          - Stable system messages (system prompt + skill injections + compaction summaries)
+          - A single VOLATILE block appended at the end (time, today's plan, memory)
           - The most recent `max_chat_history` non-system messages
 
-        Ensures the window contains only valid tool-call/response pairs.
+        The volatile block is marked with VOLATILE_PREFIX so the Anthropic provider
+        can place it outside the cache_control boundary.  It is *not* persisted to
+        self.messages — every turn rebuilds it fresh.
         """
         system_msgs = [m for m in self.messages if m.get("role") == "system"]
         chat_msgs   = [m for m in self.messages if m.get("role") != "system"]
 
-        # Inject real-time context right before the API call
-        now = datetime.now()
-        time_context = (
-            f"--- Real-time Context ---\n"
-            f"Current local time: {now.strftime('%Y-%m-%d %H:%M:%S (%A)')}\n"
-            f"Take the current time and your 'Daily Schedule' into account when replying."
-        )
-        # Avoid duplicating if already present
-        if not any(time_context in m.get("content", "") for m in system_msgs):
-            system_msgs.append({"role": "system", "content": time_context})
+        system_msgs.append(_volatile_system(self._build_volatile_context()))
 
         if len(chat_msgs) > self.max_chat_history:
             chat_msgs = chat_msgs[-self.max_chat_history:]
 
         chat_msgs = self._sanitize_tool_pairs(chat_msgs)
         return system_msgs + chat_msgs
+
+    def _build_volatile_context(self) -> str:
+        """Assemble per-turn context: current time + today's plan + memory snapshot.
+
+        Called by _get_pruned_messages() on every API call.  Cheap (one file read,
+        one memory query); guarded by VOLATILE_PREFIX so the Anthropic provider
+        keeps it out of the prefix cache.
+        """
+        now = datetime.now()
+        parts: list[str] = [
+            f"--- Real-time Context ---",
+            f"Current local time: {now.strftime('%Y-%m-%d %H:%M:%S (%A)')}",
+        ]
+
+        # Today's schedule, re-read each turn so a planner update mid-day is picked up
+        plan_path = os.path.join(str(config.CLAWSOUL_HOME), "context", "calendar", "today_plan.md")
+        try:
+            if os.path.isfile(plan_path):
+                with open(plan_path, "r", encoding="utf-8") as f:
+                    plan_text = f.read().strip()
+                if plan_text:
+                    parts.append("\n## Daily Schedule (Today)\n" + plan_text)
+        except OSError:
+            pass
+
+        # Memory snapshot — fresh each turn so newly remembered facts surface
+        try:
+            boot_mem = self.memory.boot_context(max_chars=3000)
+            if boot_mem:
+                parts.append("\n## Loaded Memory\n" + boot_mem)
+        except Exception:
+            pass
+
+        parts.append(
+            "\nTake the current time and your daily schedule into account when replying."
+        )
+        return "\n".join(parts)
 
     # ── Compaction ────────────────────────────────────────────────────────────
 

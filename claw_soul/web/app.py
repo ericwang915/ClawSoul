@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .. import config
@@ -27,6 +28,7 @@ from ..core.llm.base import LLMProvider
 from ..core.persistent_agent import PersistentAgent
 from ..core.session_store import SessionStore
 from ..core.skill_loader import SkillRegistry
+from . import auth as auth_mod
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +72,26 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app = FastAPI(title="ClawSoul Dashboard", docs_url=None, redoc_url=None)
     _fastapi_app = app
 
+    # CORS must come BEFORE AuthMiddleware so preflight OPTIONS aren't gated.
+    origins = auth_mod.allowed_origins()
+    if origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
+
+    app.add_middleware(auth_mod.AuthMiddleware)
+
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     app.add_api_route("/", _serve_index, methods=["GET"], response_class=HTMLResponse)
+    app.add_api_route("/login", _serve_login, methods=["GET"], response_class=HTMLResponse)
+    app.add_api_route("/api/auth/config", _api_auth_config, methods=["GET"])
+    app.add_api_route("/api/auth/session", _api_auth_session, methods=["POST"])
+    app.add_api_route("/api/auth/logout", _api_auth_logout, methods=["POST"])
     app.add_api_route("/api/config", _api_config_get, methods=["GET"])
     app.add_api_route("/api/config", _api_config_save, methods=["POST"])
     app.add_api_route("/api/skills", _api_skills, methods=["GET"])
@@ -98,7 +117,7 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app.add_api_route("/api/channels/restart", _api_channels_restart, methods=["POST"])
     app.add_api_route("/api/files/clear", _api_clear_files, methods=["POST"])
     app.add_api_route("/api/files", _api_list_files, methods=["GET"])
-    app.add_websocket_route("/ws/chat", _ws_chat)
+    app.add_api_websocket_route("/ws/chat", _ws_chat)
 
     return app
 
@@ -135,6 +154,56 @@ def _reset_agent() -> None:
 async def _serve_index():
     index_path = STATIC_DIR / "index.html"
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
+
+
+async def _serve_login():
+    login_path = STATIC_DIR / "login.html"
+    return HTMLResponse(login_path.read_text(encoding="utf-8"))
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+async def _api_auth_config():
+    """Tell the login page how to talk to Supabase."""
+    return JSONResponse({
+        "url":     auth_mod.supabase_url(),
+        "anonKey": auth_mod.supabase_anon_key(),
+        "enabled": auth_mod.auth_enabled(),
+    })
+
+
+async def _api_auth_session(request: Request):
+    """Set the HttpOnly session cookie from a client-side Supabase JWT."""
+    if not auth_mod.auth_enabled():
+        return JSONResponse({"error": "auth disabled"}, status_code=400)
+
+    body = await request.json()
+    token = (body or {}).get("access_token", "").strip()
+    payload = auth_mod.decode_jwt(token)
+    if not payload:
+        return JSONResponse({"error": "invalid token"}, status_code=401)
+
+    resp = JSONResponse({"ok": True, "email": payload.get("email")})
+    is_https = request.url.scheme == "https"
+    resp.set_cookie(
+        auth_mod.COOKIE_NAME,
+        token,
+        max_age=auth_mod.COOKIE_MAX_AGE,
+        httponly=True,
+        # SameSite=none is required for cross-origin cookie set (login from
+        # herandhim.ai posting JWT to clawsoul.fly.dev). Browsers only accept
+        # SameSite=none with Secure, so fall back to Lax on local http.
+        samesite="none" if is_https else "lax",
+        secure=is_https,
+        path="/",
+    )
+    return resp
+
+
+async def _api_auth_logout(request: Request):
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(auth_mod.COOKIE_NAME, path="/")
+    return resp
 
 
 # ── REST API ──────────────────────────────────────────────────────────────────
@@ -795,12 +864,20 @@ def _register_web_file_sender(loop: asyncio.AbstractEventLoop, ws: WebSocket) ->
         future = asyncio.run_coroutine_threadsafe(_push(), loop)
         future.result(timeout=60)
 
-    set_file_sender(_sender)
+    set_file_sender(WEB_SESSION_ID, _sender)
 
 
 # ── WebSocket Chat ────────────────────────────────────────────────────────────
 
 async def _ws_chat(websocket: WebSocket):
+    # Auth: cookies are sent on same-origin WS upgrade; fall back to ?token=
+    if auth_mod.auth_enabled():
+        token = websocket.cookies.get(auth_mod.COOKIE_NAME) or \
+                websocket.query_params.get("token")
+        if not auth_mod.authorize_websocket(token):
+            await websocket.close(code=4401, reason="unauthorized")
+            return
+
     await websocket.accept()
     logger.info("[Web] WebSocket client connected")
 

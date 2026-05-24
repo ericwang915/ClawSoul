@@ -1,0 +1,94 @@
+---
+const steps = [
+  {
+    n: '01',
+    title: 'Pick your partner',
+    body: 'Boyfriend or girlfriend. Choose a built-in persona, or write your own SOUL.md, PERSONA.md and PROFILE.md to define exactly who they are.',
+  },
+  {
+    n: '02',
+    title: 'Hook up the LLM',
+    body: 'DeepSeek, Grok, Claude, Gemini, Kimi, or GLM — drop in your API key. Optional: Deepgram for voice, Tavily for web search, Seedream for selfies.',
+  },
+  {
+    n: '03',
+    title: 'They wake up with a day',
+    body: 'Every morning a 24-hour plan generates. Their messages, mood, and selfies all reference what they\'re "doing" right now.',
+  },
+  {
+    n: '04',
+    title: 'You start a relationship',
+    body: 'Conversations build emotional memory. Milestones get remembered. They check in on you when they sense something\'s off.',
+  },
+];
+---
+
+<section id="how">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">How it works</span>
+      <h2>From <span class="gradient-text">first install</span> to first "miss you"</h2>
+    </div>
+
+    <ol class="steps">
+      {steps.map(s => (
+        <li class="step">
+          <div class="step__num">{s.n}</div>
+          <div class="step__body">
+            <h3>{s.title}</h3>
+            <p>{s.body}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<style>
+  .section-head {
+    text-align: center;
+    max-width: 720px;
+    margin: 0 auto 64px;
+  }
+  .section-head .eyebrow { margin-bottom: 20px; }
+  .steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 22px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .step {
+    display: flex;
+    gap: 24px;
+    padding: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .step:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-strong);
+  }
+  .step__num {
+    font-size: 1.8rem;
+    font-weight: 800;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    min-width: 56px;
+    line-height: 1;
+  }
+  .step__body h3 {
+    margin-bottom: 6px;
+    font-size: 1.15rem;
+  }
+  .step__body p {
+    margin: 0;
+    color: var(--text-soft);
+  }
+</style>

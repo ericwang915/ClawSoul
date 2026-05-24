@@ -1,0 +1,79 @@
+---
+---
+<nav class="nav">
+  <div class="container nav__inner">
+    <a href="/" class="nav__brand">
+      <img src="/logo.png" alt="ClawSoul" width="32" height="32" />
+      <span>ClawSoul</span>
+    </a>
+    <div class="nav__links">
+      <a href="/#features">Features</a>
+      <a href="/#selfies">Selfies</a>
+      <a href="/#how">How it works</a>
+      <a href="https://github.com/ericwang915/ClawSoul" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <div class="nav__actions">
+      <a href="/login" class="nav__signin">Sign in</a>
+      <a href="/#waitlist" class="btn btn-secondary nav__cta">Join waitlist</a>
+    </div>
+  </div>
+</nav>
+
+<style>
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 18px 0;
+    backdrop-filter: blur(14px);
+    background: rgba(11, 7, 16, 0.55);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .nav__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .nav__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+  .nav__brand img {
+    border-radius: 8px;
+  }
+  .nav__links {
+    display: flex;
+    gap: 28px;
+    font-size: 0.92rem;
+    color: var(--text-soft);
+  }
+  .nav__cta {
+    padding: 10px 18px;
+    font-size: 0.88rem;
+  }
+  .nav__actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .nav__signin {
+    font-size: 0.92rem;
+    color: var(--text-soft);
+    transition: color 0.15s ease;
+  }
+  .nav__signin:hover {
+    color: var(--text);
+    opacity: 1;
+  }
+  @media (max-width: 820px) {
+    .nav__links { display: none; }
+  }
+  @media (max-width: 480px) {
+    .nav__cta { display: none; }
+  }
+</style>

@@ -83,12 +83,28 @@ async def start_telegram(
         timezone=_tz,
     )
 
+    # Create a shared KnowledgeRAG singleton for all agents
+    _shared_rag = None
+    _knowledge_path = os.path.join(str(config.CLAWSOUL_HOME), "context", "knowledge")
+    if os.path.exists(_knowledge_path):
+        try:
+            from .core.knowledge.rag import KnowledgeRAG
+            _shared_rag = KnowledgeRAG(
+                knowledge_dir=_knowledge_path,
+                provider=provider,
+                use_reranker=True,
+            )
+            logger.info("[ClawSoul] Shared KnowledgeRAG created (%d chunks)", len(_shared_rag))
+        except Exception as exc:
+            logger.warning("[ClawSoul] Failed to create shared KnowledgeRAG: %s", exc)
+
     def agent_factory(session_id: str) -> PersistentAgent:
         return PersistentAgent(
             provider=provider,
             store=store,
             session_id=session_id,
             cron_manager=scheduler,
+            rag=_shared_rag,
             verbose=False,
         )
 

@@ -198,43 +198,61 @@ def list_files(path: str = ".") -> str:
 
 _MAX_SEND_FILE_BYTES = 100 * 1024 * 1024  # 100 MB
 
-# Channel-provided callback: send_file_fn(path, caption) → None
-_file_sender: callable | None = None
-# Channel-provided callback: send_photo_fn(path, caption) → None
-_photo_sender: callable | None = None
+# Channel-provided callbacks, keyed by session_id
+# {session_id: callable(path, caption) → None}
+_file_senders: dict[str, callable] = {}
+_photo_senders: dict[str, callable] = {}
 
 
-def set_file_sender(fn: callable | None) -> None:
-    """Register a callback for sending files to the current channel."""
-    global _file_sender
-    _file_sender = fn
+def set_file_sender(session_id: str | None, fn: callable | None) -> None:
+    """Register a callback for sending files for a specific session.
+    
+    When *session_id* is None (legacy), uses the empty-string key.
+    When *fn* is None, removes the callback for that session.
+    """
+    key = session_id or ""
+    if fn is None:
+        _file_senders.pop(key, None)
+    else:
+        _file_senders[key] = fn
 
 
-def set_photo_sender(fn: callable | None) -> None:
-    """Register a callback for sending images with inline preview (vs. as a file)."""
-    global _photo_sender
-    _photo_sender = fn
+def set_photo_sender(session_id: str | None, fn: callable | None) -> None:
+    """Register a callback for sending images with inline preview for a specific session.
+    
+    When *session_id* is None (legacy), uses the empty-string key.
+    When *fn* is None, removes the callback for that session.
+    """
+    key = session_id or ""
+    if fn is None:
+        _photo_senders.pop(key, None)
+    else:
+        _photo_senders[key] = fn
 
 
-def send_photo(path: str, caption: str = "") -> str:
+def send_photo(path: str, caption: str = "", session_id: str = "") -> str:
     """Send an image with native inline preview.  Falls back to send_file if no
     photo-capable channel is registered."""
     resolved = os.path.realpath(os.path.abspath(path))
     if not os.path.isfile(resolved):
         return f"Error: file not found: {path}"
 
-    if _photo_sender is not None:
+    sender = _photo_senders.get(session_id)
+    if sender is not None:
         try:
-            _photo_sender(resolved, caption)
+            sender(resolved, caption)
             return f"Photo '{os.path.basename(resolved)}' sent."
         except Exception as exc:
             logger.warning("[send_photo] photo_sender failed, falling back: %s", exc)
 
-    return send_file(resolved, caption)
+    return send_file(resolved, caption, session_id=session_id)
 
 
-def send_file(path: str, caption: str = "") -> str:
-    """Send a file to the user via the active channel (Telegram/Discord/WhatsApp/Web)."""
+def send_file(path: str, caption: str = "", session_id: str = "") -> str:
+    """Send a file to the user via the active channel (Telegram/Discord/WhatsApp/Web).
+    
+    *session_id* identifies which channel/session to send through.
+    """
     resolved = os.path.realpath(os.path.abspath(path))
     if not os.path.isfile(resolved):
         return f"Error: file not found: {path}"
@@ -244,14 +262,15 @@ def send_file(path: str, caption: str = "") -> str:
         size_mb = size / (1024 * 1024)
         return f"Error: file too large ({size_mb:.1f} MB). Maximum allowed is 100 MB."
 
-    if _file_sender is None:
+    sender = _file_senders.get(session_id)
+    if sender is None:
         return (
             f"File ready at: {resolved} ({size / 1024:.1f} KB). "
             "No active channel to send through — user can download it directly."
         )
 
     try:
-        _file_sender(resolved, caption)
+        sender(resolved, caption)
         name = os.path.basename(resolved)
         return f"File '{name}' ({size / 1024:.1f} KB) sent successfully."
     except Exception as exc:

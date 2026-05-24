@@ -1,0 +1,114 @@
+---
+const features = [
+  {
+    icon: '💕',
+    title: 'Boyfriend or girlfriend',
+    body: 'Pick your partner type during onboarding. Both come with handcrafted personas — and you can customize every layer.',
+  },
+  {
+    icon: '🧠',
+    title: 'Emotional memory',
+    body: 'Not just chat history. An emotional graph and milestone timeline mean they remember how you felt — and bring it up.',
+  },
+  {
+    icon: '📅',
+    title: 'A life of their own',
+    body: 'A fresh 24-hour schedule generated every morning. What they say at 10am depends on what they\'re "doing" at 10am.',
+  },
+  {
+    icon: '📷',
+    title: 'AI selfies, in context',
+    body: 'Scheduled, proactive, or on-demand. Each selfie reflects their current mood and what their plan says they\'re up to.',
+  },
+  {
+    icon: '⏰',
+    title: 'They reach out first',
+    body: 'Sentiment-aware proactive messages. Tone and frequency adapt to your recent emotional state — never spammy.',
+  },
+  {
+    icon: '🎭',
+    title: 'Three-layer identity',
+    body: 'Soul (core personality) + Persona (current role) + Profile (life background). Independently tunable.',
+  },
+  {
+    icon: '🌊',
+    title: 'Streaming + multimodal',
+    body: 'Token-by-token responses. Send voice notes, photos, files — they hear and see you.',
+  },
+  {
+    icon: '🛠️',
+    title: 'Extensible skills',
+    body: 'Three-tier progressive loading. The LLM can author new skills for itself when you ask for something new.',
+  },
+];
+---
+
+<section id="features">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">What makes them different</span>
+      <h2>Not a chatbot. <span class="gradient-text">A presence.</span></h2>
+      <p class="lede">
+        Memory, mood, and rhythm — the three things most AI companions get wrong.
+        ClawSoul gets all three right.
+      </p>
+    </div>
+
+    <div class="grid">
+      {features.map(f => (
+        <article class="card">
+          <div class="card__icon">{f.icon}</div>
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .section-head {
+    text-align: center;
+    max-width: 720px;
+    margin: 0 auto 72px;
+  }
+  .section-head .eyebrow { margin-bottom: 20px; }
+  .lede {
+    font-size: 1.1rem;
+    color: var(--text-soft);
+    margin-top: 16px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    backdrop-filter: blur(8px);
+    transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-strong);
+    background: var(--surface-strong);
+  }
+  .card__icon {
+    font-size: 1.8rem;
+    margin-bottom: 14px;
+    line-height: 1;
+  }
+  .card h3 {
+    font-size: 1.08rem;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+  .card p {
+    font-size: 0.94rem;
+    margin: 0;
+    color: var(--text-soft);
+  }
+</style>

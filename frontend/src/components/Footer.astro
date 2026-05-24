@@ -1,0 +1,50 @@
+---
+const year = new Date().getFullYear();
+---
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <img src="/logo.png" alt="ClawSoul" width="28" height="28" />
+      <span>ClawSoul</span>
+    </div>
+    <nav class="footer__links">
+      <a href="https://github.com/ericwang915/ClawSoul" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/ericwang915/ClawSoul#readme" target="_blank" rel="noopener">Docs</a>
+      <a href="https://github.com/ericwang915/ClawSoul/issues" target="_blank" rel="noopener">Issues</a>
+    </nav>
+    <p class="footer__copy">© {year} ClawSoul · Built with 💕 · MIT licensed</p>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    padding: 48px 0 40px;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+  .footer__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    text-align: center;
+  }
+  .footer__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+  }
+  .footer__brand img { border-radius: 6px; }
+  .footer__links {
+    display: flex;
+    gap: 28px;
+    color: var(--text-soft);
+    font-size: 0.92rem;
+  }
+  .footer__copy {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+</style>

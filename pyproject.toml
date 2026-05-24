@@ -36,6 +36,7 @@ dependencies = [
     "fastapi>=0.100",
     "uvicorn[standard]>=0.20",
     "httpx>=0.24",
+    "pyjwt>=2.8",
     "tavily-python",
     "rank-bm25>=0.2",
     "numpy>=1.24",

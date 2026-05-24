@@ -83,11 +83,13 @@ class MemoryManager:
         self._use_dense = use_dense
 
         # ── Soul Mate extensions ──────────────────────────────────────────
-        from ... import config as _cfg
-        _home = str(_cfg.CLAWSOUL_HOME)
-        _affect_dir = _os.path.join(_home, "context", "affect")
-        _memory_dir = memory_dir or _os.path.join(_home, "context", "memory")
-        _rel_dir = _os.path.join(_home, "context", "relationship")
+        # Derive affect/relationship dirs from memory_dir so they follow
+        # per-group isolation when memory_dir is under groups/<session>/.
+        # memory_dir is already per-group when per_group_isolation is enabled.
+        _memory_dir = memory_dir
+        _parent = _os.path.dirname(_memory_dir.rstrip(_os.sep))
+        _affect_dir = _os.path.join(_parent, "affect")
+        _rel_dir = _os.path.join(_parent, "relationship")
 
         self.emotional_graph = EmotionalGraph(_affect_dir)
         self.relationship = RelationshipStore(_affect_dir)

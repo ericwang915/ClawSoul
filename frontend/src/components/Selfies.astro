@@ -1,0 +1,143 @@
+---
+const scenes = [
+  { time: '08:30', mood: 'sleepy ☕', text: '"morning…just made coffee. you up?"' },
+  { time: '12:15', mood: 'cheerful 🌿', text: '"lunch in the park today, it\'s gorgeous out"' },
+  { time: '20:40', mood: 'cozy 🕯️', text: '"reading on the couch. wish you were here."' },
+];
+---
+
+<section id="selfies" class="selfies">
+  <div class="container">
+    <div class="selfies__head">
+      <span class="eyebrow">📷 AI selfies (Seedream)</span>
+      <h2>A photo from <span class="gradient-text">their day</span>,<br />not a stock asset.</h2>
+      <p class="lede">
+        Every selfie is generated from <em>what their plan says they're doing right now</em>
+        and <em>what mood they're in</em>. Same face, same outfit aesthetic — different scene,
+        different feeling, every time.
+      </p>
+    </div>
+
+    <div class="scenes">
+      {scenes.map(scene => (
+        <div class="scene">
+          <div class="scene__photo">
+            <div class="scene__placeholder">
+              <span class="scene__time">{scene.time}</span>
+              <span class="scene__mood">{scene.mood}</span>
+            </div>
+          </div>
+          <p class="scene__caption">{scene.text}</p>
+        </div>
+      ))}
+    </div>
+
+    <div class="selfies__triggers">
+      <div>
+        <strong>Scheduled</strong>
+        <span>Fires at 10:00, 16:00, 20:00 by default</span>
+      </div>
+      <div class="divider" aria-hidden="true"></div>
+      <div>
+        <strong>Proactive</strong>
+        <span>Attached when they message you first</span>
+      </div>
+      <div class="divider" aria-hidden="true"></div>
+      <div>
+        <strong>On demand</strong>
+        <span>"send me a selfie" — and they will</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .selfies { background: linear-gradient(180deg, transparent, rgba(255, 107, 157, 0.04), transparent); }
+  .selfies__head {
+    text-align: center;
+    max-width: 720px;
+    margin: 0 auto 64px;
+  }
+  .selfies__head .eyebrow { margin-bottom: 20px; }
+  .lede {
+    font-size: 1.1rem;
+    color: var(--text-soft);
+    margin-top: 16px;
+  }
+  .scenes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 22px;
+    margin-bottom: 72px;
+  }
+  .scene {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .scene__photo {
+    aspect-ratio: 3 / 4;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border-strong);
+    background: var(--gradient-soft);
+    position: relative;
+    transition: transform 0.3s ease;
+  }
+  .scene__photo:hover { transform: translateY(-4px) rotate(-0.5deg); }
+  .scene__placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 20px;
+    background:
+      radial-gradient(circle at 30% 30%, rgba(255, 107, 157, 0.35), transparent 60%),
+      radial-gradient(circle at 70% 70%, rgba(192, 132, 252, 0.30), transparent 60%);
+  }
+  .scene__time {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  .scene__mood {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 6px;
+  }
+  .scene__caption {
+    font-style: italic;
+    color: var(--text-soft);
+    margin: 0;
+    padding-left: 12px;
+    border-left: 2px solid var(--accent);
+  }
+  .selfies__triggers {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 32px;
+    padding: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    flex-wrap: wrap;
+    text-align: center;
+  }
+  .selfies__triggers > div:not(.divider) {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 180px;
+  }
+  .selfies__triggers strong { color: var(--text); font-size: 1rem; }
+  .selfies__triggers span { color: var(--text-muted); font-size: 0.88rem; }
+  .divider { width: 1px; background: var(--border); align-self: stretch; }
+  @media (max-width: 720px) {
+    .divider { display: none; }
+  }
+</style>

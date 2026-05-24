@@ -196,7 +196,7 @@ def get_bool(*keys: str, env: str | None = None, default: bool = False) -> bool:
 
 def per_group_isolation() -> bool:
     """Return True if per-group context isolation is enabled."""
-    return get_bool("isolation", "perGroup", default=False)
+    return get_bool("isolation", "perGroup", default=True)
 
 
 def group_context_dir(session_id: str) -> Path:

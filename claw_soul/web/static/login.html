@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in · ClawSoul</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0b0710;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.12);
+      --text: #f3eef7;
+      --text-soft: #b9b1c8;
+      --accent: #ff6b9d;
+      --gradient: linear-gradient(120deg, #ff6b9d 0%, #c084fc 50%, #fb923c 100%);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(800px 500px at 70% 10%, rgba(192,132,252,0.18), transparent 60%),
+        radial-gradient(800px 500px at 10% 90%, rgba(255,107,157,0.15), transparent 60%),
+        var(--bg);
+    }
+    .card {
+      width: min(90vw, 420px);
+      padding: 40px 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      backdrop-filter: blur(12px);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .logo img { width: 28px; height: 28px; border-radius: 7px; }
+    h1 {
+      font-size: 1.6rem;
+      margin: 8px 0 6px;
+      letter-spacing: -0.02em;
+    }
+    .sub { color: var(--text-soft); margin: 0 0 28px; font-size: 0.92rem; }
+    form { display: flex; flex-direction: column; gap: 12px; }
+    label { display: block; font-size: 0.82rem; color: var(--text-soft); margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    input:focus { border-color: var(--accent); }
+    button {
+      margin-top: 8px;
+      padding: 13px 16px;
+      background: var(--gradient);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform 0.15s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .status {
+      margin-top: 14px;
+      font-size: 0.88rem;
+      min-height: 1.3em;
+      text-align: center;
+    }
+    .status.error { color: #fca5a5; }
+    .status.ok { color: #86efac; }
+    .toggle {
+      margin-top: 18px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-soft);
+    }
+    .toggle a { color: var(--accent); cursor: pointer; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <img src="/static/logo.png" alt="" />
+      <span>ClawSoul</span>
+    </div>
+    <h1>Welcome back</h1>
+    <p class="sub">Sign in to your dashboard.</p>
+
+    <form id="login-form" autocomplete="on">
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="email" />
+      </div>
+      <div>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password" />
+      </div>
+      <button type="submit" id="submit-btn">Sign in</button>
+    </form>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <p class="toggle">
+      No account yet? <a id="signup-toggle">Create one</a>
+    </p>
+  </div>
+
+  <script>
+    (async () => {
+      const statusEl = document.getElementById('status');
+      const setStatus = (msg, kind = '') => {
+        statusEl.textContent = msg;
+        statusEl.className = 'status ' + kind;
+      };
+
+      const cfgResp = await fetch('/api/auth/config');
+      if (!cfgResp.ok) {
+        setStatus('Auth is not configured on this server.', 'error');
+        return;
+      }
+      const { url: SUPABASE_URL, anonKey: SUPABASE_ANON } = await cfgResp.json();
+
+      if (!SUPABASE_URL || !SUPABASE_ANON) {
+        setStatus('Auth is not configured on this server.', 'error');
+        return;
+      }
+
+      const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+      let mode = 'signin';
+      const toggle = document.getElementById('signup-toggle');
+      const btn = document.getElementById('submit-btn');
+      toggle.addEventListener('click', () => {
+        mode = mode === 'signin' ? 'signup' : 'signin';
+        btn.textContent = mode === 'signin' ? 'Sign in' : 'Create account';
+        toggle.textContent = mode === 'signin' ? 'Create one' : 'Have an account? Sign in';
+        document.querySelector('.toggle').firstChild.textContent =
+          mode === 'signin' ? 'No account yet? ' : '';
+        setStatus('');
+      });
+
+      document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        btn.disabled = true;
+        setStatus('');
+
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        const { data, error } = mode === 'signin'
+          ? await sb.auth.signInWithPassword({ email, password })
+          : await sb.auth.signUp({ email, password });
+
+        if (error) {
+          setStatus(error.message, 'error');
+          btn.disabled = false;
+          return;
+        }
+
+        if (!data.session) {
+          setStatus('Check your email to confirm your account.', 'ok');
+          btn.disabled = false;
+          return;
+        }
+
+        const sessResp = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: data.session.access_token }),
+        });
+
+        if (!sessResp.ok) {
+          const body = await sessResp.json().catch(() => ({}));
+          setStatus(body.error || 'Authentication failed.', 'error');
+          btn.disabled = false;
+          return;
+        }
+
+        setStatus('Signed in. Redirecting…', 'ok');
+        window.location.href = '/';
+      });
+    })();
+  </script>
+</body>
+</html>

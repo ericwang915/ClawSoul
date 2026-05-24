@@ -1,0 +1,121 @@
+---
+---
+<section class="hero">
+  <div class="container hero__inner">
+    <span class="eyebrow">
+      <span class="dot"></span> Beta · Telegram + Web
+    </span>
+
+    <h1>
+      An AI partner who <span class="gradient-text">remembers you</span>,
+      <br />feels you, and sends you selfies.
+    </h1>
+
+    <p class="hero__sub">
+      ClawSoul is your virtual boyfriend or girlfriend — with emotional memory,
+      a daily life of their own, and AI-generated selfies that match their mood.
+      Available on Telegram and in your browser.
+    </p>
+
+    <div class="hero__cta">
+      <a href="#waitlist" class="btn btn-primary">Join the waitlist →</a>
+      <a href="https://github.com/ericwang915/ClawSoul" target="_blank" rel="noopener" class="btn btn-secondary">
+        ⭐ Star on GitHub
+      </a>
+    </div>
+
+    <div class="hero__meta">
+      <div>
+        <strong>6</strong>
+        <span>LLM providers</span>
+      </div>
+      <div>
+        <strong>176+</strong>
+        <span>Tests passing</span>
+      </div>
+      <div>
+        <strong>MIT</strong>
+        <span>Open source</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero__glow"></div>
+</section>
+
+<style>
+  .hero {
+    padding: 80px 0 60px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero__inner {
+    position: relative;
+    z-index: 1;
+    max-width: 880px;
+  }
+  .hero__sub {
+    max-width: 640px;
+    margin: 24px auto 36px;
+    font-size: 1.12rem;
+    color: var(--text-soft);
+  }
+  .hero__cta {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 64px;
+  }
+  .hero__meta {
+    display: flex;
+    justify-content: center;
+    gap: 56px;
+    flex-wrap: wrap;
+    color: var(--text-soft);
+  }
+  .hero__meta div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .hero__meta strong {
+    font-size: 1.6rem;
+    font-weight: 700;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero__meta span {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(1.25); }
+  }
+  .hero__glow {
+    position: absolute;
+    width: 700px;
+    height: 700px;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(circle, rgba(255, 107, 157, 0.25), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+</style>

@@ -414,8 +414,8 @@ class TelegramBot:
             future = asyncio.run_coroutine_threadsafe(_do_send(), loop)
             future.result(timeout=60)
 
-        set_file_sender(_file_sender)
-        set_photo_sender(_photo_sender)
+        set_file_sender(self._session_id(chat_id), _file_sender)
+        set_photo_sender(self._session_id(chat_id), _photo_sender)
 
     async def _build_image_input(self, update: Update, caption: str) -> list:
         """Download photo and build a multimodal content array."""

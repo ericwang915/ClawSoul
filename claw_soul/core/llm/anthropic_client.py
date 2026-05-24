@@ -38,6 +38,11 @@ class AnthropicProvider(LLMProvider):
 
     # ── shared helpers ────────────────────────────────────────────────────
 
+    # Marker that agent.py prepends to system messages that change every turn.
+    # Kept here as a string literal to avoid a cyclic import; must match
+    # claw_soul.core.agent.VOLATILE_PREFIX.
+    _VOLATILE_PREFIX = "[[VOLATILE]]"
+
     def _prepare_request(
         self,
         messages: List[Dict[str, Any]],
@@ -45,13 +50,25 @@ class AnthropicProvider(LLMProvider):
         tool_choice: Any,
         **kwargs: Any,
     ) -> dict:
-        """Build the kwargs dict for ``messages.create`` / ``stream``."""
-        system_prompt = ""
+        """Build the kwargs dict for ``messages.create`` / ``stream``.
+
+        Stable system messages are concatenated into one cached block;
+        ones marked with VOLATILE_PREFIX go into a second block that is
+        not cached.  ``cache_control: ephemeral`` is placed on the stable
+        block and on the last tool definition so subsequent turns hit
+        Anthropic's prefix cache for ~80%+ of the input tokens.
+        """
+        stable_system = ""
+        volatile_system = ""
         filtered_messages: list[dict] = []
 
         for msg in messages:
             if msg["role"] == "system":
-                system_prompt += msg["content"] + "\n"
+                content = msg["content"]
+                if isinstance(content, str) and content.startswith(self._VOLATILE_PREFIX):
+                    volatile_system += content[len(self._VOLATILE_PREFIX):] + "\n"
+                else:
+                    stable_system += content + "\n"
 
             elif msg["role"] == "tool":
                 filtered_messages.append({
@@ -109,9 +126,22 @@ class AnthropicProvider(LLMProvider):
             "messages": filtered_messages,
             "max_tokens": max_tokens,
         }
-        if system_prompt:
-            api_kwargs["system"] = system_prompt
+
+        sys_blocks: list[dict] = []
+        if stable_system.strip():
+            sys_blocks.append({
+                "type": "text",
+                "text": stable_system,
+                "cache_control": {"type": "ephemeral"},
+            })
+        if volatile_system.strip():
+            sys_blocks.append({"type": "text", "text": volatile_system})
+        if sys_blocks:
+            api_kwargs["system"] = sys_blocks
+
         if anthropic_tools:
+            # Cache the tools array too — tool definitions are stable per agent
+            anthropic_tools[-1]["cache_control"] = {"type": "ephemeral"}
             api_kwargs["tools"] = anthropic_tools
             if tool_choice == "required":
                 api_kwargs["tool_choice"] = {"type": "any"}

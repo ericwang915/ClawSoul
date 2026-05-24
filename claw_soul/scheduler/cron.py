@@ -41,6 +41,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 from typing import TYPE_CHECKING
 
 import yaml
@@ -86,6 +87,7 @@ class CronScheduler:
         self._telegram_bot = telegram_bot
         self._timezone = timezone or "UTC"
         self._scheduler = AsyncIOScheduler(timezone=self._timezone)
+        self._dynamic_jobs_lock = threading.Lock()
 
     def set_telegram_bot(self, bot: "TelegramBot") -> None:
         """Late-bind the Telegram bot (used when bot is created after CronScheduler)."""
@@ -219,6 +221,7 @@ class CronScheduler:
             return {}
 
     def _save_dynamic_jobs(self, jobs: dict[str, dict]) -> None:
+        """Save dynamic jobs to disk. Caller must hold _dynamic_jobs_lock."""
         djf = _dynamic_jobs_file()
         os.makedirs(os.path.dirname(djf), exist_ok=True)
         with open(djf, "w", encoding="utf-8") as f:
@@ -285,30 +288,32 @@ class CronScheduler:
             replace_existing=True,
         )
 
-        jobs = self._load_dynamic_jobs()
-        jobs[job_id] = {
-            "cron": cron_expr,
-            "prompt": prompt,
-            "deliver_to": deliver_to,
-            "chat_id": chat_id,
-        }
-        self._save_dynamic_jobs(jobs)
+        with self._dynamic_jobs_lock:
+            jobs = self._load_dynamic_jobs()
+            jobs[job_id] = {
+                "cron": cron_expr,
+                "prompt": prompt,
+                "deliver_to": deliver_to,
+                "chat_id": chat_id,
+            }
+            self._save_dynamic_jobs(jobs)
         logger.info("[CronScheduler] Added dynamic job '%s' (cron='%s')", job_id, cron_expr)
         return f"Job '{job_id}' scheduled: runs '{cron_expr}'. Session: cron:{job_id}."
 
     def remove_dynamic_job(self, job_id: str) -> str:
         """Remove a dynamic job (called from the Agent cron_remove tool)."""
-        jobs = self._load_dynamic_jobs()
-        if job_id not in jobs:
-            if self._scheduler.get_job(job_id):
-                return f"Job '{job_id}' is a static job and cannot be removed via cron_remove."
-            return f"Job '{job_id}' not found."
-        try:
-            self._scheduler.remove_job(job_id)
-        except Exception:
-            pass
-        jobs.pop(job_id, None)
-        self._save_dynamic_jobs(jobs)
+        with self._dynamic_jobs_lock:
+            jobs = self._load_dynamic_jobs()
+            if job_id not in jobs:
+                if self._scheduler.get_job(job_id):
+                    return f"Job '{job_id}' is a static job and cannot be removed via cron_remove."
+                return f"Job '{job_id}' not found."
+            try:
+                self._scheduler.remove_job(job_id)
+            except Exception:
+                pass
+            jobs.pop(job_id, None)
+            self._save_dynamic_jobs(jobs)
         logger.info("[CronScheduler] Removed dynamic job '%s'", job_id)
         return f"Job '{job_id}' removed."
 
