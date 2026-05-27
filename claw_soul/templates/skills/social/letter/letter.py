@@ -120,9 +120,9 @@ def cmd_save(args) -> int:
         print(f"Warning: letter is only {len(content)} chars — too short for long-form.",
               file=sys.stderr)
     if len(content) > 4000:
-        print(f"Error: letter is {len(content)} chars — exceeds 4000 char cap.",
+        print(f"Warning: letter is {len(content)} chars — truncating to 4000.",
               file=sys.stderr)
-        return 1
+        content = content[:4000].rstrip() + "…"
 
     ts = datetime.now().strftime("%Y-%m-%d_%H%M")
     fname = f"{ts}_{occasion}.md"

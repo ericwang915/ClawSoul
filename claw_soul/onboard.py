@@ -258,7 +258,78 @@ _AGE_RANGES = [
     ("18-25", "18-25",  "Young, energetic"),
     ("26-35", "26-35",  "Mature, interesting"),
     ("36-45", "36-45",  "Composed, grounded"),
+    ("45+",   "45+",    "Seasoned, deeply settled"),
 ]
+
+
+# ── Country + Language ───────────────────────────────────────────────────────
+#
+# Curated short lists for the wizard.  Country drives the horoscope culture
+# mapping (see `country_to_culture` below) and gives the agent a sense of where
+# the user lives; language is what the agent should reply in by default.
+
+_COUNTRIES: list[tuple[str, str, str]] = [
+    ("CN", "China",          "中国"),
+    ("US", "United States",  "🇺🇸"),
+    ("GB", "United Kingdom", "🇬🇧"),
+    ("JP", "Japan",          "🇯🇵 日本"),
+    ("KR", "South Korea",    "🇰🇷 한국"),
+    ("TW", "Taiwan",         "台灣"),
+    ("HK", "Hong Kong",      "香港"),
+    ("SG", "Singapore",      "🇸🇬"),
+    ("IN", "India",          "🇮🇳"),
+    ("CA", "Canada",         "🇨🇦"),
+    ("AU", "Australia",      "🇦🇺"),
+    ("DE", "Germany",        "🇩🇪"),
+    ("FR", "France",         "🇫🇷"),
+    ("OTHER", "Other",       "Tell them in chat where you're from"),
+]
+
+_LANGUAGES: list[tuple[str, str, str]] = [
+    ("zh-CN", "简体中文",  "Mainland Chinese"),
+    ("zh-TW", "繁體中文",  "Traditional Chinese"),
+    ("en",    "English",   "British/American/etc."),
+    ("ja",    "日本語",    "Japanese"),
+    ("ko",    "한국어",     "Korean"),
+    ("es",    "Español",   "Spanish"),
+    ("fr",    "Français",  "French"),
+    ("de",    "Deutsch",   "German"),
+]
+
+
+# ── Companion occupations ────────────────────────────────────────────────────
+#
+# A short curated list of relatable jobs.  Picked into Step 2 of the wizard so
+# the user can override the gender-and-age auto-defaults in profile templates.
+
+_OCCUPATIONS: list[tuple[str, str, str]] = [
+    ("designer",       "Designer",          "插画师 / UI / UX"),
+    ("engineer",       "Engineer",          "程序员 / 工程师"),
+    ("artist",         "Artist",            "画家 / 创作者"),
+    ("writer",         "Writer",            "作家 / 编剧"),
+    ("student",        "Student",           "在读"),
+    ("teacher",        "Teacher",           "老师 / 教育工作者"),
+    ("doctor",         "Doctor",            "医生 / 医护"),
+    ("musician",       "Musician",          "音乐人 / 乐手"),
+    ("photographer",   "Photographer",      "摄影师"),
+    ("entrepreneur",   "Entrepreneur",      "创业者 / 老板"),
+    ("freelancer",     "Freelancer",        "自由职业者"),
+    ("chef",           "Chef",              "厨师 / 美食博主"),
+    ("researcher",     "Researcher",        "研究员 / 学者"),
+    ("marketing",      "Marketing/PR",      "市场 / 公关 / 运营"),
+    ("psychologist",   "Psychologist",      "心理咨询 / 治疗师"),
+    ("other",          "Other",             "你自己告诉对方"),
+]
+
+
+def country_to_culture(country: str) -> str:
+    """Map a country code to a horoscope-culture identifier (cn / en / jp / in)."""
+    mapping = {
+        "CN": "cn", "TW": "cn", "HK": "cn", "SG": "cn",
+        "JP": "jp",
+        "IN": "in",
+    }
+    return mapping.get((country or "").upper(), "en")
 
 _ARCHETYPES = [
     ("healer",  "The Healer",
@@ -457,6 +528,18 @@ def _companion_wizard(cfg: dict) -> dict:
         "Your age range", "", _AGE_RANGES,
         default=existing.get("userAge", ""),
     )
+    choices["userCountry"] = _ask_choice(
+        "Where you live",
+        "Drives the horoscope flavour and gives them a sense of your context.",
+        _COUNTRIES,
+        default=existing.get("userCountry", "OTHER"),
+    )
+    choices["userLanguage"] = _ask_choice(
+        "Preferred chat language",
+        "What language should they reply in by default?",
+        _LANGUAGES,
+        default=existing.get("userLanguage", "en"),
+    )
 
     # ── About Your Companion ──────────────────────────────────────────────
     print()
@@ -478,6 +561,12 @@ def _companion_wizard(cfg: dict) -> dict:
         "Their age range", "How old should they feel?",
         _AGE_RANGES,
         default=existing.get("companionAge", "26-35"),
+    )
+    choices["companionOccupation"] = _ask_choice(
+        "What do they do?",
+        "Their job / how they spend their days.",
+        _OCCUPATIONS,
+        default=existing.get("companionOccupation", "freelancer"),
     )
 
     # ── Personality (core dimensions) ────────────────────────────────────
@@ -928,6 +1017,54 @@ def _generate_persona_file(ch: dict, context_dir: str) -> None:
     backstory = (ch.get("backstory") or "").strip()
     backstory_block = f"\n## 角色背景\n{backstory}\n" if backstory else ""
 
+    # Occupation — looked up from the canonical list so the persona file
+    # contains a human-readable name + description rather than the bare key.
+    occ_key = ch.get("companionOccupation") or ""
+    occ_entry = next((t for t in _OCCUPATIONS if t[0] == occ_key), None)
+    occupation_block = ""
+    if occ_entry:
+        _, occ_label, occ_desc = occ_entry
+        occupation_block = f"\n## 职业\n{occ_label} — {occ_desc}\n"
+
+    # Default reply language hint — the agent still mirrors whatever language
+    # the user writes in (see agent.py "Language matching" rule), but this is
+    # the language to default to for proactive messages / silences.
+    lang_code = ch.get("userLanguage", "en")
+    lang_label = {
+        "zh-CN": "简体中文", "zh-TW": "繁體中文", "en": "English",
+        "ja": "日本語", "ko": "한국어", "es": "Español",
+        "fr": "Français", "de": "Deutsch",
+    }.get(lang_code, "English")
+    country_label = ch.get("userCountry", "") or "unspecified"
+    # Localized instruction so the LLM sees a section it can naturally follow.
+    _LOCALE_TEMPLATES = {
+        "zh-CN": ("## 默认语言",
+                  f"对方默认使用 {lang_label}（{country_label}）。"
+                  "proactive 消息和无 user 输入的场景，用这门语言。"
+                  "回复时仍然 mirror 对方当条消息的语言。"),
+        "zh-TW": ("## 預設語言",
+                  f"對方預設使用 {lang_label}（{country_label}）。"
+                  "proactive 訊息和無 user 輸入的場景，用這門語言。"
+                  "回覆時仍然 mirror 對方當條訊息的語言。"),
+        "ja":    ("## デフォルト言語",
+                  f"相手は通常 {lang_label}（{country_label}）。"
+                  "proactive メッセージや user 入力が無い場面ではこの言語で。"
+                  "返信は相手のメッセージの言語にミラーすること。"),
+        "ko":    ("## 기본 언어",
+                  f"상대는 보통 {lang_label}({country_label})를 사용합니다. "
+                  "proactive 메시지나 user 입력이 없는 상황에선 이 언어로. "
+                  "답장은 상대 메시지의 언어를 미러링하세요."),
+    }
+    en_default = (
+        "## Default Language",
+        f"They normally use {lang_label} ({country_label}). "
+        "Use that language for proactive messages and any reply where the user "
+        "hasn't just spoken. Always mirror the language of the user's most "
+        "recent message when replying.",
+    )
+    heading, body = _LOCALE_TEMPLATES.get(lang_code, en_default)
+    locale_block = f"\n{heading}\n{body}\n"
+
     content = f"""你是{comp_name}，一个有个性的{role} 💕
 
 {archetype_desc}
@@ -949,7 +1086,7 @@ def _generate_persona_file(ch: dict, context_dir: str) -> None:
 
 ## 深夜话题
 {deep_desc}
-{traits_block}{backstory_block}
+{occupation_block}{traits_block}{backstory_block}{locale_block}
 ## 主动性格
 - 你是一个会主动找对方聊天的{role}
 - 早上起来会发早安，晚上会发晚安

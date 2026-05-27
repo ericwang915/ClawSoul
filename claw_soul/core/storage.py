@@ -68,41 +68,45 @@ class TurnHit:
 
 
 class StorageManager:
-    """Unified SQLite store.  Thread-safe (one connection per thread)."""
+    """Unified SQLite store.  Thread-safe (one connection per thread).
 
-    _instance: "StorageManager | None" = None
+    Multi-tenant: ``instance()`` resolves the *current tenant's* DB path each
+    call and returns a per-path manager.  Two tenants get two separate
+    managers backed by two separate DB files; within a tenant, all callers
+    share one manager (with thread-local sqlite connections).
+    """
+
+    _by_path: "dict[str, StorageManager]" = {}
     _lock = threading.Lock()
-    _tlocal = threading.local()
 
     def __init__(self, path: str | None = None) -> None:
         self.path = path or _db_path()
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        self._tlocal = threading.local()
         self._init_schema()
 
-    # ── Singleton accessor (preferred) ──────────────────────────────────
+    # ── Per-tenant accessor (preferred) ────────────────────────────────
 
     @classmethod
     def instance(cls) -> "StorageManager":
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = StorageManager()
-        return cls._instance
+        path = _db_path()  # resolves per-tenant via config.CLAWSOUL_HOME
+        existing = cls._by_path.get(path)
+        if existing is not None:
+            return existing
+        with cls._lock:
+            existing = cls._by_path.get(path)
+            if existing is None:
+                existing = cls(path)
+                cls._by_path[path] = existing
+        return existing
 
     @classmethod
     def reset_for_tests(cls) -> None:
-        """Drop the cached singleton (so tests can switch CLAWSOUL_HOME)."""
+        """Drop the cached per-path managers (so tests can switch CLAWSOUL_HOME)."""
         with cls._lock:
-            if cls._instance is not None:
-                cls._instance.close()
-            cls._instance = None
-            # Drop any thread-local connections too
-            if hasattr(cls._tlocal, "conn"):
-                try:
-                    cls._tlocal.conn.close()
-                except Exception:
-                    pass
-                cls._tlocal.conn = None
+            for mgr in list(cls._by_path.values()):
+                mgr.close()
+            cls._by_path.clear()
 
     # ── Connections ─────────────────────────────────────────────────────
 

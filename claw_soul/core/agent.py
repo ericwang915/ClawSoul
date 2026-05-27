@@ -613,11 +613,18 @@ Don't repeat this if `bot_name` already exists in memory.
         return kept
 
     def _build_tools(self) -> list[dict]:
-        """Assemble the full tool schema list for the current session."""
-        tools = (
-            PRIMITIVE_TOOLS + SKILL_TOOLS + META_SKILL_TOOLS
-            + MEMORY_TOOLS + WISHLIST_TOOLS + BUCKET_LIST_TOOLS
-        )
+        """Assemble the full tool schema list for the current session.
+
+        Companion-flavoured tool sets (wishlist, bucket list) add ~1.2k tokens
+        per turn.  They are on by default but can be turned off via config:
+            "agent": { "wishlistEnabled": false, "bucketListEnabled": false }
+        Anthropic's prompt cache absorbs the cost, but other providers don't.
+        """
+        tools = PRIMITIVE_TOOLS + SKILL_TOOLS + META_SKILL_TOOLS + MEMORY_TOOLS
+        if config.get_bool("agent", "wishlistEnabled", default=True):
+            tools = tools + WISHLIST_TOOLS
+        if config.get_bool("agent", "bucketListEnabled", default=True):
+            tools = tools + BUCKET_LIST_TOOLS
         if self._web_search_enabled:
             tools = tools + [WEB_SEARCH_TOOL, MULTI_SEARCH_TOOL]
         if self.rag:
@@ -679,10 +686,17 @@ Don't repeat this if `bot_name` already exists in memory.
                     since = None
                     if isinstance(days, int) and days > 0:
                         since = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+                    # Default scope = current session only (privacy-safe);
+                    # the LLM can explicitly pass scope="all" to widen.
+                    scope = args.get("scope") or "session"
+                    sid_filter = None
+                    if scope == "session":
+                        sid_filter = getattr(self, "_session_id", None) or self.session_id
                     hits = idx.search_turns(
                         args.get("query", ""),
                         k=int(args.get("k") or 5),
                         since=since,
+                        session_id=sid_filter,
                     )
                     if not hits:
                         result = "(no past turns matched)"

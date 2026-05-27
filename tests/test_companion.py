@@ -55,9 +55,17 @@ def test_validate_rejects_unknown_archetype():
 
 
 def test_validate_applies_defaults_for_blank_names():
-    cleaned = companion.validate({**_CHOICES, "userName": "", "companionName": "   "})
+    """Blank names should fall back to language-appropriate defaults."""
+    # Chinese user → Chinese defaults
+    cleaned = companion.validate({**_CHOICES, "userLanguage": "zh-CN",
+                                  "userName": "", "companionName": "   "})
     assert cleaned["userName"] == "主人"
     assert cleaned["companionName"] == "小爪"
+
+    # English user (or no language preference) → English defaults
+    cleaned = companion.validate({**_CHOICES, "userName": "", "companionName": "   "})
+    assert cleaned["userName"] == "You"
+    assert cleaned["companionName"] == "Claw"
 
 
 def test_apply_choices_writes_files_to_active_tenant(tmp_path):

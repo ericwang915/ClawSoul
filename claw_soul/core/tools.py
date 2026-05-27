@@ -60,7 +60,13 @@ def _venv_python() -> str:
 
 
 def _venv_env() -> dict[str, str]:
-    """Build an env dict that activates the project venv for subprocesses."""
+    """Build an env dict that activates the project venv for subprocesses.
+
+    Also resolves the per-tenant ``CLAWSOUL_HOME`` (via config) and injects it
+    into the env so skill subprocesses read/write under the right tenant's
+    directory.  Without this, a child process would inherit the *base* env
+    var and clobber tenant A's files while running for tenant B.
+    """
     env = os.environ.copy()
     venv = _venv_dir or _detect_venv()
     if venv:
@@ -71,6 +77,15 @@ def _venv_env() -> dict[str, str]:
     else:
         python_dir = os.path.dirname(sys.executable)
         env["PATH"] = f"{python_dir}{os.pathsep}{env.get('PATH', '')}"
+
+    # Per-tenant home: read at call time so the contextvar binding is honored.
+    try:
+        from .. import config as _cfg
+        env["CLAWSOUL_HOME"] = str(_cfg.CLAWSOUL_HOME)
+    except Exception:
+        # If config can't be loaded, fall back to whatever was inherited.
+        pass
+
     return env
 
 
@@ -460,11 +475,13 @@ MEMORY_TOOLS: list[dict] = [
     _fn(
         "recall_conversation",
         (
-            "Full-text search across past conversation transcripts (all sessions, "
-            "all time).  Use when the user asks 'did I tell you about X', 'we "
-            "talked about Y last week', or you need to find what was literally "
-            "said.  Different from `recall` which searches curated long-term "
-            "memory — this searches verbatim chat history."
+            "Full-text search across past conversation transcripts.  Use when "
+            "the user asks 'did I tell you about X', 'we talked about Y last "
+            "week', or you need to find what was literally said.  Different "
+            "from `recall` which searches curated long-term memory — this "
+            "searches verbatim chat history.  Defaults to THIS session only; "
+            "pass `scope='all'` to search across every session belonging to "
+            "this user."
         ),
         {
             "query": {
@@ -478,6 +495,11 @@ MEMORY_TOOLS: list[dict] = [
             "days": {
                 "type": "integer",
                 "description": "Only search turns from the last N days (omit for all time).",
+            },
+            "scope": {
+                "type": "string",
+                "enum": ["session", "all"],
+                "description": "'session' (default) restricts to the current session; 'all' searches every session.",
             },
         },
         ["query"],

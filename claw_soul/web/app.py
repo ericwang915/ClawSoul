@@ -339,8 +339,10 @@ async def _api_setup_options():
     """Return the full option menu (labels + descriptions) for the wizard."""
     from .. import companion as comp
     return JSONResponse({
-        "options": comp.OPTIONS,
-        "fields":  list(comp.ALL_FIELDS),
+        "options":      comp.OPTIONS,
+        "fields":       list(comp.ALL_FIELDS),
+        "trait_groups": comp.TRAIT_GROUPS,
+        "traits_range": {"min": comp.TRAITS_MIN, "max": comp.TRAITS_MAX},
     })
 
 
