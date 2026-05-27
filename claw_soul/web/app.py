@@ -19,10 +19,11 @@ from typing import Any
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .. import config
+from .. import config, init as claw_init
+from ..core import tenancy
 from ..core.agent import Agent
 from ..core.llm.base import LLMProvider
 from ..core.persistent_agent import PersistentAgent
@@ -34,14 +35,18 @@ logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-_agent: Agent | None = None
+# Per-user agent cache. Key = user_id (or "_single" in non-multi-tenant mode).
+_agents: dict[str, Agent] = {}
 _provider: LLMProvider | None = None
-_store: SessionStore | None = None
 _start_time: float = 0.0
 _build_provider_fn = None
 _active_bots: list = []
 _chat_lock: asyncio.Lock | None = None
 _fastapi_app: FastAPI | None = None
+
+# Tracks which user homes have already been bootstrapped with templates this
+# process lifetime — avoids re-running init() on every request.
+_initialized_users: set[str] = set()
 
 WEB_SESSION_ID = "web:dashboard"
 
@@ -63,9 +68,8 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     build_provider_fn : callable that rebuilds the provider from config
                         (used after config save to hot-reload the provider)
     """
-    global _provider, _store, _start_time, _build_provider_fn, _fastapi_app
+    global _provider, _start_time, _build_provider_fn, _fastapi_app
     _provider = provider
-    _store = SessionStore()
     _start_time = time.time()
     _build_provider_fn = build_provider_fn
 
@@ -92,6 +96,15 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app.add_api_route("/api/auth/config", _api_auth_config, methods=["GET"])
     app.add_api_route("/api/auth/session", _api_auth_session, methods=["POST"])
     app.add_api_route("/api/auth/logout", _api_auth_logout, methods=["POST"])
+    app.add_api_route("/api/user/telegram", _api_user_telegram_get, methods=["GET"])
+    app.add_api_route("/api/user/telegram", _api_user_telegram_save, methods=["POST"])
+    app.add_api_route("/api/setup/options", _api_setup_options, methods=["GET"])
+    app.add_api_route("/api/setup/companion", _api_setup_companion_get, methods=["GET"])
+    app.add_api_route("/api/setup/companion", _api_setup_companion_save, methods=["POST"])
+    app.add_api_route("/api/chat/history", _api_chat_history, methods=["GET"])
+    app.add_api_route("/api/tools", _api_tools_list, methods=["GET"])
+    app.add_api_route("/api/tools/{name}/connect", _api_tool_connect, methods=["POST"])
+    app.add_api_route("/api/tools/{name}", _api_tool_disconnect, methods=["DELETE"])
     app.add_api_route("/api/config", _api_config_get, methods=["GET"])
     app.add_api_route("/api/config", _api_config_save, methods=["POST"])
     app.add_api_route("/api/skills", _api_skills, methods=["GET"])
@@ -122,31 +135,64 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     return app
 
 
+def _tenant_cache_key() -> str:
+    """Cache key for the agent dict — user_id, or "_single" in legacy mode."""
+    return tenancy.get_current_user() or "_single"
+
+
+def _session_id_for_current_user() -> str:
+    """Session id shared by web + Telegram for the same Supabase user."""
+    key = _tenant_cache_key()
+    return f"user:{key}" if key != "_single" else WEB_SESSION_ID
+
+
+def _ensure_user_initialized() -> None:
+    """First time we see a user, populate their /data/users/<uid>/ with
+    default soul / persona / profile templates."""
+    key = _tenant_cache_key()
+    if key in _initialized_users:
+        return
+    try:
+        # claw_init is the init() function (re-exported from claw_soul.init).
+        # It uses config.CLAWSOUL_HOME which is per-tenant — so this writes
+        # to /data/users/<uid>/context/ automatically.
+        claw_init()
+    except Exception as exc:
+        logger.warning("[Web] init() for tenant %s failed: %s", key, exc)
+    _initialized_users.add(key)
+
+
 def _get_agent() -> Agent | None:
-    """Lazy-init the shared web agent with persistent sessions."""
-    global _agent
-    if _agent is not None:
-        return _agent
+    """Return (or lazily build) the agent for the current request's tenant."""
+    key = _tenant_cache_key()
+    if key in _agents:
+        return _agents[key]
     if _provider is None:
         return None
+
+    _ensure_user_initialized()
+
     try:
         verbose = config.get("agent", "verbose", default=False)
-        _agent = PersistentAgent(
+        # Use a tenant-wide session id so the dashboard and Telegram share one
+        # conversation history per user. In single-tenant mode the key collapses
+        # to "_single" and everything is unified anyway.
+        agent = PersistentAgent(
             provider=_provider,
             verbose=bool(verbose),
-            store=_store,
-            session_id=WEB_SESSION_ID,
+            store=SessionStore(),       # SessionStore reads CLAWSOUL_HOME → per-tenant
+            session_id=_session_id_for_current_user(),
         )
     except Exception as exc:
-        logger.warning("[Web] Agent init failed: %s", exc)
+        logger.warning("[Web] Agent init for tenant %s failed: %s", key, exc)
         return None
-    return _agent
+    _agents[key] = agent
+    return agent
 
 
 def _reset_agent() -> None:
-    """Discard the current agent so the next call rebuilds it."""
-    global _agent
-    _agent = None
+    """Drop the current tenant's cached agent (forces rebuild on next call)."""
+    _agents.pop(_tenant_cache_key(), None)
 
 
 # ── HTML ──────────────────────────────────────────────────────────────────────
@@ -181,29 +227,248 @@ async def _api_auth_session(request: Request):
     token = (body or {}).get("access_token", "").strip()
     payload = auth_mod.decode_jwt(token)
     if not payload:
-        return JSONResponse({"error": "invalid token"}, status_code=401)
+        reason = getattr(auth_mod.decode_jwt, "last_error", None) or "invalid token"
+        logger.warning("[/api/auth/session] rejected: %s", reason)
+        return JSONResponse({"error": reason}, status_code=401)
 
     resp = JSONResponse({"ok": True, "email": payload.get("email")})
     is_https = request.url.scheme == "https"
-    resp.set_cookie(
-        auth_mod.COOKIE_NAME,
-        token,
+    cookie_kwargs = dict(
+        key=auth_mod.COOKIE_NAME,
+        value=token,
         max_age=auth_mod.COOKIE_MAX_AGE,
         httponly=True,
-        # SameSite=none is required for cross-origin cookie set (login from
-        # herandhim.ai posting JWT to clawsoul.fly.dev). Browsers only accept
-        # SameSite=none with Secure, so fall back to Lax on local http.
-        samesite="none" if is_https else "lax",
-        secure=is_https,
+        # If COOKIE_DOMAIN is set (e.g. .herandhim.ai), the login page and
+        # dashboard share the cookie via the parent domain — SameSite=Lax is
+        # enough and avoids Safari/ITP blocking third-party cookies. Otherwise
+        # we're cross-site and have to use SameSite=None+Secure (some browsers
+        # will still drop these).
         path="/",
+        secure=is_https,
     )
+    domain = auth_mod.cookie_domain()
+    if domain:
+        cookie_kwargs["domain"] = domain
+        cookie_kwargs["samesite"] = "lax"
+    else:
+        cookie_kwargs["samesite"] = "none" if is_https else "lax"
+
+    resp.set_cookie(**cookie_kwargs)
     return resp
 
 
 async def _api_auth_logout(request: Request):
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie(auth_mod.COOKIE_NAME, path="/")
+    domain = auth_mod.cookie_domain()
+    if domain:
+        resp.delete_cookie(auth_mod.COOKIE_NAME, path="/", domain=domain)
+    else:
+        resp.delete_cookie(auth_mod.COOKIE_NAME, path="/")
     return resp
+
+
+# ── User settings (proxy Supabase via service_role) ───────────────────────────
+
+async def _api_user_telegram_get(request: Request):
+    """Return whether the current user has a Telegram bot token saved.
+
+    We never echo the token back to the browser — only the presence flag and
+    the (non-sensitive) chat id.
+    """
+    from ..channels import telegram_multi
+
+    user_id = tenancy.get_current_user()
+    if not user_id:
+        return JSONResponse({"hasToken": False, "chatId": None})
+
+    row = await telegram_multi.get_user_settings(user_id)
+    return JSONResponse({
+        "hasToken": bool(row and row.get("telegram_bot_token")),
+        "chatId":   row.get("telegram_chat_id") if row else None,
+    })
+
+
+async def _api_user_telegram_save(request: Request):
+    """Save / clear the current user's Telegram bot token.
+
+    Pass ``{"token": "..."}`` to set, ``{"token": ""}`` (or omit) to clear.
+    Optional ``"chatId"`` integer for proactive messaging.
+    """
+    from ..channels import telegram_multi
+
+    user_id = tenancy.get_current_user()
+    if not user_id:
+        return JSONResponse({"error": "not authenticated"}, status_code=401)
+
+    body = await request.json() if await request.body() else {}
+    token_raw = (body or {}).get("token", "")
+    token = token_raw.strip() if isinstance(token_raw, str) else ""
+    chat_id_raw = (body or {}).get("chatId")
+
+    if token and not telegram_multi.BOT_TOKEN_RE.match(token):
+        return JSONResponse(
+            {"error": "Doesn't look like a bot token — format is 123456789:AA…"},
+            status_code=400,
+        )
+
+    chat_id: int | None = None
+    if chat_id_raw not in (None, ""):
+        try:
+            chat_id = int(chat_id_raw)
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "chatId must be an integer"}, status_code=400)
+
+    ok, err = await telegram_multi.upsert_user_settings(
+        user_id,
+        telegram_bot_token=token or None,
+        telegram_chat_id=chat_id,
+    )
+    if not ok:
+        return JSONResponse({"error": err or "save failed"}, status_code=500)
+
+    return JSONResponse({
+        "ok": True,
+        "hasToken": bool(token),
+        "note": "Bot will become active on the next daemon restart.",
+    })
+
+
+# ── Companion setup wizard ────────────────────────────────────────────────────
+
+async def _api_setup_options():
+    """Return the full option menu (labels + descriptions) for the wizard."""
+    from .. import companion as comp
+    return JSONResponse({
+        "options": comp.OPTIONS,
+        "fields":  list(comp.ALL_FIELDS),
+    })
+
+
+async def _api_setup_companion_get(request: Request):
+    """Return the current tenant's saved companion choices, or null."""
+    from .. import companion as comp
+    return JSONResponse({"choices": comp.load_choices()})
+
+
+async def _api_tools_list(request: Request):
+    """Return the full tool catalog with this user's connection status."""
+    from ..channels import telegram_multi
+    from . import tools_registry
+
+    user_id = tenancy.get_current_user()
+    integrations = await telegram_multi.get_user_integrations(user_id) if user_id else {}
+    return JSONResponse({
+        "tools": [tools_registry.serialize_tool(t, integrations) for t in tools_registry.CATALOG]
+    })
+
+
+async def _api_tool_connect(name: str, request: Request):
+    """Save credentials for an API-key tool. Returns 4xx for OAuth tools (those
+    flow through a separate /api/oauth/start endpoint, added in Phase 2)."""
+    from ..channels import telegram_multi
+    from . import tools_registry
+
+    user_id = tenancy.get_current_user()
+    if not user_id:
+        return JSONResponse({"error": "not authenticated"}, status_code=401)
+
+    tool = tools_registry.find(name)
+    if not tool:
+        return JSONResponse({"error": "unknown tool"}, status_code=404)
+    if tool.coming_soon:
+        return JSONResponse({"error": "this integration is not yet available"}, status_code=400)
+    if tool.auth_type != "api_key":
+        return JSONResponse({"error": "this tool does not accept an API key"}, status_code=400)
+
+    body = await request.json() if await request.body() else {}
+    api_key = ((body or {}).get("api_key") or "").strip()
+    if not api_key:
+        return JSONResponse({"error": "api_key required"}, status_code=400)
+    if len(api_key) < 8:
+        return JSONResponse({"error": "that key looks too short"}, status_code=400)
+
+    ok, err = await telegram_multi.set_user_integration(
+        user_id, tool.name, {"api_key": api_key},
+    )
+    if not ok:
+        return JSONResponse({"error": err or "save failed"}, status_code=500)
+    return JSONResponse({"ok": True, "name": tool.name, "status": "activated"})
+
+
+async def _api_tool_disconnect(name: str, request: Request):
+    from ..channels import telegram_multi
+    from . import tools_registry
+
+    user_id = tenancy.get_current_user()
+    if not user_id:
+        return JSONResponse({"error": "not authenticated"}, status_code=401)
+
+    tool = tools_registry.find(name)
+    if not tool:
+        return JSONResponse({"error": "unknown tool"}, status_code=404)
+
+    ok, err = await telegram_multi.set_user_integration(user_id, tool.name, None)
+    if not ok:
+        return JSONResponse({"error": err or "remove failed"}, status_code=500)
+    return JSONResponse({"ok": True, "name": tool.name, "status": "not_connected"})
+
+
+async def _api_chat_history(limit: int = 50):
+    """Return the user's recent user+assistant turns for the chat UI.
+
+    Reads the saved Markdown session file (the source of truth for chat
+    persistence) and returns it as message dicts. System / tool-call /
+    tool-result entries are filtered out — the UI only renders human-readable
+    turns.
+
+    To preserve history across the recent session_id refactor, if the unified
+    ``user:<uid>`` session is empty AND a legacy ``web:<uid>`` file exists,
+    we transparently fall back to the legacy file.
+    """
+    store = SessionStore()
+    primary = _session_id_for_current_user()
+    messages = store.load(primary)
+
+    # Fallback to legacy web-only session if the unified one is fresh
+    if not messages:
+        key = _tenant_cache_key()
+        legacy = f"web:{key}"
+        if legacy != primary:
+            messages = store.load(legacy)
+
+    # Strip system / tool messages; the UI only shows user + assistant
+    visible = [m for m in messages if m.get("role") in ("user", "assistant") and m.get("content")]
+
+    cap = max(1, min(int(limit), 200))
+    visible = visible[-cap:]
+
+    return JSONResponse({
+        "total": len(visible),
+        "messages": [
+            {"role": m["role"], "content": m["content"], "ts": m.get("_ts", "")}
+            for m in visible
+        ],
+    })
+
+
+async def _api_setup_companion_save(request: Request):
+    """Validate, persist, and regenerate identity files from wizard choices."""
+    from .. import companion as comp
+
+    body = await request.json()
+    choices = (body or {}).get("choices") or {}
+
+    try:
+        cleaned = comp.apply_choices(choices)
+    except comp.ChoiceError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    except Exception as exc:
+        logger.exception("[setup/companion] save failed")
+        return JSONResponse({"error": f"server error: {exc}"}, status_code=500)
+
+    # Drop the cached agent so subsequent chats see the new persona/soul
+    _reset_agent()
+    return JSONResponse({"ok": True, "choices": cleaned})
 
 
 # ── REST API ──────────────────────────────────────────────────────────────────
@@ -389,7 +654,9 @@ async def _api_status():
             "webSearchEnabled": False,
         }
 
-    session_file = _store._path(WEB_SESSION_ID) if _store else None
+    # Per-tenant session store: SessionStore() reads CLAWSOUL_HOME, which is
+    # already scoped to the current user via the tenancy contextvar.
+    session_file = SessionStore()._path(_session_id_for_current_user())
     return {
         "provider": type(agent.provider).__name__,
         "providerName": provider_name,
@@ -406,12 +673,29 @@ async def _api_status():
     }
 
 
-async def _api_memories():
+async def _api_memories(limit: int = 200):
+    """Return the most recent N memory entries with timestamps.
+
+    Each entry: ``{"key": str, "value": str, "updated": "YYYY-MM-DD HH:MM:SS"}``
+    Sorted by ``updated`` desc (newest first). Default cap = 200 to keep the
+    payload small.
+    """
     agent = _get_agent()
     if agent is None:
-        return {"total": 0, "memories": []}
-    memories = agent.memory.list_all()
-    return {"total": len(memories), "memories": memories}
+        return {"total": 0, "entries": []}
+
+    # MemoryStorage keeps the full {key: {value, updated}} dict — reach in
+    # directly so we can carry the timestamp through to the UI.
+    raw = getattr(agent.memory.storage, "data", {})
+    entries = [
+        {"key": k, "value": str(v.get("value", "")), "updated": v.get("updated", "")}
+        for k, v in raw.items()
+    ]
+    # Sort newest first; missing/empty timestamps sink to the bottom.
+    entries.sort(key=lambda e: e["updated"] or "", reverse=True)
+
+    capped = entries[: max(1, min(int(limit), 500))]
+    return {"total": len(entries), "shown": len(capped), "entries": capped}
 
 
 async def _api_identity():
@@ -864,7 +1148,7 @@ def _register_web_file_sender(loop: asyncio.AbstractEventLoop, ws: WebSocket) ->
         future = asyncio.run_coroutine_threadsafe(_push(), loop)
         future.result(timeout=60)
 
-    set_file_sender(WEB_SESSION_ID, _sender)
+    set_file_sender(_session_id_for_current_user(), _sender)
 
 
 # ── WebSocket Chat ────────────────────────────────────────────────────────────
@@ -888,11 +1172,34 @@ async def _ws_chat(websocket: WebSocket):
                 payload = json.loads(data)
                 message = payload.get("message", "").strip()
                 image_data = payload.get("image")  # data:image/...;base64,...
+                client_tz = payload.get("clientTimezone")  # IANA name, e.g. "Asia/Shanghai"
             except (json.JSONDecodeError, AttributeError):
                 message = data.strip()
                 image_data = None
+                client_tz = None
 
             if not message and not image_data:
+                continue
+
+            # Bind the user's timezone for this turn so the agent's volatile
+            # context shows their local time, not the server's UTC clock.
+            if client_tz:
+                tenancy.set_current_timezone(client_tz)
+
+            # Photo with no text: queue it and don't call the LLM yet. The
+            # next text turn will pop the queue and send everything together,
+            # so the agent answers in one shot once the user explains what
+            # they want done with the image.
+            if image_data and not message:
+                agent_for_queue = _get_agent()
+                if agent_for_queue is not None:
+                    n = agent_for_queue.queue_attachment(
+                        {"type": "image_url", "image_url": {"url": image_data}},
+                    )
+                    await websocket.send_json({
+                        "type": "pending",
+                        "content": f"📎 got it — {n} image(s) waiting. tell me what you'd like me to do with them.",
+                    })
                 continue
 
             agent = _get_agent()
@@ -915,8 +1222,7 @@ async def _ws_chat(websocket: WebSocket):
                 continue
 
             if message == "/clear":
-                if _store:
-                    _store.delete(WEB_SESSION_ID)
+                SessionStore().delete(_session_id_for_current_user())
                 if agent is not None:
                     agent.clear_history()
                 await websocket.send_json({"type": "response", "content": "Chat history cleared. Agent is still active with all skills and memory intact."})
@@ -950,13 +1256,22 @@ async def _ws_chat(websocket: WebSocket):
                         except Exception:
                             break
 
-                # Build multimodal input if image is attached
-                chat_input: str | list = message or ""
+                # Build multimodal input — combine any queued images (from
+                # earlier image-only turns) with the new turn's content.
+                queued = agent.consume_attachments()
+                attachments = list(queued)
                 if image_data:
+                    attachments.append(
+                        {"type": "image_url", "image_url": {"url": image_data}}
+                    )
+
+                if attachments:
                     chat_input = [
                         {"type": "text", "text": message or "What is in this image?"},
-                        {"type": "image_url", "image_url": {"url": image_data}},
+                        *attachments,
                     ]
+                else:
+                    chat_input = message or ""
 
                 async with lock:
                     stream_task = asyncio.create_task(_stream_tokens())

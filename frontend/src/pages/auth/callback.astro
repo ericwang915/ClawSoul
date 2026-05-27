@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import Nav from '../../components/Nav.astro';
 
-const DASHBOARD = 'https://clawsoul.fly.dev';
+const DASHBOARD = 'https://app.herandhim.ai';
 ---
 
 <Layout title="Signing in… · ClawSoul" description="Completing sign-in.">
@@ -77,11 +77,8 @@ const DASHBOARD = 'https://clawsoul.fly.dev';
 
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
-        return fail(
-          r.status === 401
-            ? `Your email (${session.user?.email}) is not on the allowlist for this dashboard.`
-            : (body.error || `Auth failed (HTTP ${r.status})`)
-        );
+        const detail = body.error || `Auth failed (HTTP ${r.status})`;
+        return fail(`${detail} (email: ${session.user?.email})`);
       }
 
       ok('Redirecting to your dashboard…');

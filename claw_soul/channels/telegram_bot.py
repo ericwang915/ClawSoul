@@ -48,6 +48,7 @@ from telegram.ext import (
 )
 
 from .. import config
+from ..core import tenancy
 
 if TYPE_CHECKING:
     from ..session_manager import SessionManager
@@ -69,18 +70,41 @@ class TelegramBot:
         token: str,
         allowed_users: list[int] | None = None,
         require_mention: bool = False,
+        tenant_user_id: str | None = None,
     ) -> None:
         self._sm = session_manager
         self._token = token
         self._allowed_users: set[int] = set(allowed_users) if allowed_users else set()
         self._require_mention = require_mention
+        # When set, every handler runs inside `tenancy.user_context(tenant_user_id)`
+        # so memory/config/agent lookups scope to this user's namespace.
+        self._tenant_user_id = tenant_user_id
         self._app: Application | None = None
         self._bot_username: str | None = None
+        # Once we've successfully recorded this tenant's chat_id to Supabase
+        # we don't try again, even across reconnects within this process.
+        self._chat_id_saved: bool = False
+        # Optional callback invoked the first time we capture this tenant's
+        # chat_id. The multi-tenant boot uses it to register a proactive
+        # scheduler job on the fly, so unprompted messages start flowing
+        # without needing a daemon restart.
+        self._on_chat_id_learned = None
 
     # ── Session ID convention ─────────────────────────────────────────────────
 
-    @staticmethod
-    def _session_id(chat_id: int) -> str:
+    def _session_id(self, chat_id: int) -> str:
+        """Return the session id for this chat.
+
+        In **multi-tenant mode** (each bot is pinned to one Supabase user via
+        ``tenant_user_id``), all channels for the same owner share a single
+        session — ``user:<uuid>`` — so what you say on the dashboard and what
+        you say to the bot become one conversation with one memory.
+
+        In single-tenant mode (legacy), we still partition by chat_id so the
+        bot can serve multiple Telegram chats independently.
+        """
+        if self._tenant_user_id:
+            return f"user:{self._tenant_user_id}"
         return f"telegram:{chat_id}"
 
     # ── Push message (called by cron / heartbeat) ─────────────────────────────
@@ -110,6 +134,46 @@ class TelegramBot:
         if not self._allowed_users:
             return True
         return user_id in self._allowed_users
+
+    async def _maybe_save_chat_id(self, chat_id: int) -> None:
+        """Persist the user's Telegram chat_id to Supabase if not already saved.
+
+        The chat_id is what the proactive scheduler uses to send unprompted
+        messages. We learn it the moment the user first messages the bot.
+        Idempotent — only writes if the row currently has NULL.
+        """
+        if self._chat_id_saved or not self._tenant_user_id:
+            return
+        try:
+            from . import telegram_multi
+            row = await telegram_multi.get_user_settings(self._tenant_user_id)
+            if row and row.get("telegram_chat_id"):
+                self._chat_id_saved = True
+                return
+            ok, err = await telegram_multi.upsert_user_settings(
+                self._tenant_user_id, telegram_chat_id=chat_id,
+            )
+            if ok:
+                self._chat_id_saved = True
+                logger.info(
+                    "[Telegram] Saved chat_id=%s for tenant=%s",
+                    chat_id, self._tenant_user_id[:8],
+                )
+                # Fire the late-bind hook so the daemon's scheduler can
+                # register this user's proactive job without restarting.
+                cb = self._on_chat_id_learned
+                if cb is not None:
+                    try:
+                        cb(chat_id)
+                    except Exception:
+                        logger.warning(
+                            "[Telegram] chat_id_learned callback failed",
+                            exc_info=True,
+                        )
+            else:
+                logger.warning("[Telegram] chat_id save failed: %s", err)
+        except Exception as exc:
+            logger.warning("[Telegram] chat_id save errored: %s", exc)
 
     async def _check_access(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         user = update.effective_user
@@ -162,11 +226,22 @@ class TelegramBot:
         )
 
     async def _cmd_reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Wipe the rolling chat transcript and start a fresh session.
+
+        Long-term memory (MEMORY.md), persona, soul, skills, and learned
+        facts are preserved — only this conversation's history is reset.
+        Also aliased as ``/clear``.
+        """
         if not await self._check_access(update, context):
             return
         sid = self._session_id(update.effective_chat.id)
         self._sm.reset(sid)
-        await update.message.reply_text("Session reset. Starting fresh! Send me a message.")
+        await update.message.reply_text(
+            "🧹 Chat history cleared — fresh session.\n"
+            "Long-term memory, persona, and what I know about you are kept.\n\n"
+            "🧹 已清空对话记录，重新开始。\n"
+            "你的资料、记忆和我们的关系还在。"
+        )
 
     async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._check_access(update, context):
@@ -217,6 +292,11 @@ class TelegramBot:
             if not self._is_mentioned(update):
                 return
 
+        # Multi-tenant: capture this user's Telegram chat_id once so the
+        # proactive scheduler knows where to message them. Best-effort —
+        # any failure just means we'll retry on the next inbound message.
+        await self._maybe_save_chat_id(update.effective_chat.id)
+
         user_text = (update.message.text or update.message.caption or "").strip()
         user_text = self._strip_mention(user_text)
 
@@ -235,16 +315,45 @@ class TelegramBot:
         sid = self._session_id(update.effective_chat.id)
         agent = self._sm.get_or_create(sid)
 
+        # Photo without caption → queue, don't generate. The next text from
+        # the user pops the queue and we answer once with all parts together.
+        if has_photo and not user_text:
+            try:
+                parts = await self._build_image_input(update, "")
+            except Exception:
+                parts = []
+            for p in parts:
+                if isinstance(p, dict) and p.get("type") == "image_url":
+                    agent.queue_attachment(p)
+            try:
+                await update.message.set_reaction(
+                    [ReactionTypeEmoji("\U0001f4ce")],  # 📎
+                )
+            except Exception:
+                pass
+            return
+
         try:
             await update.message.set_reaction([ReactionTypeEmoji("\U0001f440")])
         except Exception:
             pass
 
-        chat_input = user_text or ""
+        # Build the multimodal turn: queued images (from earlier photo-only
+        # turns) + this turn's new image (if any) + the caption / text.
+        queued = agent.consume_attachments()
+        new_parts: list[dict] = []
         if has_photo:
-            chat_input = await self._build_image_input(
-                update, user_text or "What's in this image?"
-            )
+            built = await self._build_image_input(update, "")
+            new_parts = [p for p in built if isinstance(p, dict) and p.get("type") == "image_url"]
+
+        all_attachments = queued + new_parts
+        if all_attachments:
+            chat_input = [
+                {"type": "text", "text": user_text or "What's in this image?"},
+                *all_attachments,
+            ]
+        else:
+            chat_input = user_text or ""
 
         token_queue: _queue.Queue[str] = _queue.Queue()
 
@@ -486,24 +595,39 @@ class TelegramBot:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     _BOT_COMMANDS = [
-        BotCommand("start", "Show welcome message"),
-        BotCommand("reset", "Start a fresh session"),
-        BotCommand("status", "Show session info"),
-        BotCommand("compact", "Compact conversation history"),
+        BotCommand("start",       "Show welcome message"),
+        BotCommand("clear",       "🧹 Clear chat history (keep memory & persona)"),
+        BotCommand("reset",       "Alias for /clear — same thing"),
+        BotCommand("status",      "Show session info"),
+        BotCommand("compact",     "Compact conversation history"),
         BotCommand("clear_files", "Delete all downloaded files"),
     ]
 
+    def _with_tenant(self, handler):
+        """Wrap a PTB callback so it runs inside this bot's tenant context."""
+        tenant = self._tenant_user_id
+        if not tenant:
+            return handler
+
+        async def _wrapped(update, context):
+            with tenancy.user_context(tenant):
+                return await handler(update, context)
+        # PTB calls the function by reference; preserve identity-ish naming for logs
+        _wrapped.__name__ = f"tenant({tenant})/{getattr(handler, '__name__', 'handler')}"
+        return _wrapped
+
     def build_application(self) -> Application:
         app = Application.builder().token(self._token).build()
-        app.add_handler(CommandHandler("start", self._cmd_start))
-        app.add_handler(CommandHandler("reset", self._cmd_reset))
-        app.add_handler(CommandHandler("status", self._cmd_status))
-        app.add_handler(CommandHandler("compact", self._cmd_compact))
-        app.add_handler(CommandHandler("clear_files", self._cmd_clear_files))
+        app.add_handler(CommandHandler("start", self._with_tenant(self._cmd_start)))
+        app.add_handler(CommandHandler("reset", self._with_tenant(self._cmd_reset)))
+        app.add_handler(CommandHandler("clear", self._with_tenant(self._cmd_reset)))  # alias
+        app.add_handler(CommandHandler("status", self._with_tenant(self._cmd_status)))
+        app.add_handler(CommandHandler("compact", self._with_tenant(self._cmd_compact)))
+        app.add_handler(CommandHandler("clear_files", self._with_tenant(self._cmd_clear_files)))
         app.add_handler(MessageHandler(
             (filters.TEXT | filters.PHOTO | filters.VOICE | filters.AUDIO)
             & ~filters.COMMAND,
-            self._handle_message,
+            self._with_tenant(self._handle_message),
         ))
         self._app = app
         return app

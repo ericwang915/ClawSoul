@@ -12,14 +12,55 @@ Subcommands
 
 import argparse
 import logging
+import os
 
 from . import config
+
+logger = logging.getLogger(__name__)
 from .core.persistent_agent import PersistentAgent
 from .core.session_store import SessionStore
 
 # ── Provider builder ─────────────────────────────────────────────────────────
 
 def _build_provider():
+    """Instantiate the LLM provider, wrapping with a vision fallback if needed.
+
+    If the configured primary can't see images AND a Gemini key is available,
+    we transparently wrap it with a ``RoutingProvider`` that dispatches each
+    chat turn to whichever model can handle it. Text → cheap primary;
+    image → Gemini.
+    """
+    primary = _build_primary_provider()
+    if getattr(primary, "supports_images", False):
+        return primary
+
+    # Vision fallback: only built if the user has a Gemini key. Failures
+    # here are non-fatal — we keep the primary and accept "no vision".
+    gemini_key = config.get_str("llm", "gemini", "apiKey", env="GEMINI_API_KEY")
+    if not gemini_key:
+        return primary
+
+    try:
+        from .core.llm.gemini_client import GeminiProvider
+        from .core.llm.routing import RoutingProvider
+        vision = GeminiProvider(
+            api_key=gemini_key,
+            model_name=config.get_str(
+                "llm", "gemini", "model", default="gemini-2.5-flash",
+            ),
+        )
+        logger.info(
+            "[Provider] Routing %s (text) + %s (vision fallback)",
+            getattr(primary, "model_name", "?"),
+            getattr(vision, "model_name", "?"),
+        )
+        return RoutingProvider(primary, vision)
+    except Exception as exc:
+        logger.warning("[Provider] Vision fallback unavailable: %s", exc)
+        return primary
+
+
+def _build_primary_provider():
     """Instantiate the LLM provider selected by config."""
     provider_name = config.get_str(
         "llm", "provider", env="LLM_PROVIDER", default="deepseek"
@@ -163,12 +204,15 @@ def _run_foreground(args) -> None:
 
     app = create_app(provider, build_provider_fn=_build_provider)
 
-    # Auto-start Telegram if token is configured
+    # Auto-start Telegram. In single-tenant mode, only fires when a token
+    # exists in the local config. In multi-tenant mode (SUPABASE_JWT_SECRET
+    # set), always fires — the dispatcher reads per-user tokens from Supabase.
     tg_token = config.get_str("channels", "telegram", "token", default="")
-    if tg_token:
+    multi_tenant = bool(os.environ.get("SUPABASE_JWT_SECRET"))
+    if tg_token or multi_tenant:
         from .server import start_telegram
         from .web import app as web_app_module
-        print("[ClawSoul] Telegram bot auto-detected, starting...")
+        print(f"[ClawSoul] Starting Telegram ({'multi-tenant' if multi_tenant else 'single-tenant'})…")
 
         @app.on_event("startup")
         async def _start_telegram():
@@ -187,6 +231,48 @@ def _cmd_stop(args) -> None:
 def _cmd_status(args) -> None:
     from .daemon import print_status
     print_status()
+
+
+def _cmd_storage(args) -> None:
+    """Inspect / prune the unified storage DB."""
+    from .core.storage import StorageManager
+
+    sm = StorageManager.instance()
+    sub = getattr(args, "storage_cmd", None) or "status"
+
+    def _fmt_size(n: int) -> str:
+        for unit in ("B", "KB", "MB", "GB"):
+            if n < 1024:
+                return f"{n:.1f} {unit}"
+            n /= 1024
+        return f"{n:.1f} TB"
+
+    if sub == "status":
+        s = sm.status()
+        print()
+        print(f"  DB:        {s['path']}")
+        print(f"  Disk use:  {_fmt_size(s['size_bytes'])}")
+        print()
+        for name in ("events", "turns"):
+            sec = s[name]
+            print(f"  {name.upper():<8}  count={sec['count']:,}  "
+                  f"retention={sec['retention_days']}d")
+            if sec["count"]:
+                print(f"            oldest={sec['oldest']}  newest={sec['newest']}")
+        print()
+        return
+
+    if sub == "prune":
+        res = sm.prune(dry_run=bool(getattr(args, "dry_run", False)))
+        print()
+        tag = "[DRY-RUN] would delete" if res["dry_run"] else "Deleted"
+        print(f"  {tag}: events={res['events_deleted']:,}  turns={res['turns_deleted']:,}")
+        if res["vacuumed"]:
+            print("  VACUUM completed.")
+        print()
+        return
+
+    print("  Usage: claw_soul storage {status|prune [--dry-run]}")
 
 
 def _cmd_chat(args) -> None:
@@ -308,6 +394,22 @@ def _build_parser() -> argparse.ArgumentParser:
     # chat
     sub.add_parser("chat", help="Interactive CLI chat (foreground)")
 
+    # storage status / prune
+    sp_storage = sub.add_parser(
+        "storage", help="Inspect or maintain the unified event/turn database.",
+    )
+    sp_storage_sub = sp_storage.add_subparsers(dest="storage_cmd")
+    sp_storage_sub.add_parser(
+        "status", help="Show size, row counts, oldest/newest entries, retention.",
+    )
+    sp_prune = sp_storage_sub.add_parser(
+        "prune", help="Delete rows past retention; VACUUM the DB.",
+    )
+    sp_prune.add_argument(
+        "--dry-run", action="store_true",
+        help="Report what would be deleted without actually deleting.",
+    )
+
     return parser
 
 
@@ -328,6 +430,7 @@ def main():
         "stop": _cmd_stop,
         "status": _cmd_status,
         "chat": _cmd_chat,
+        "storage": _cmd_storage,
     }
 
     handler = dispatch.get(args.command)

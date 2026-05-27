@@ -63,11 +63,22 @@
   "memory": {
     "dir": null
   },
+  "storage": {
+    "eventsRetentionDays": 90,
+    "turnsRetentionDays": 365,
+    "autoVacuumOnPrune": true
+  },
   "skills": {
     "seedream": {
       "apiKey": "",
       "model": "seedream-5-0-lite-260128",
       "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/v3"
+    },
+    "twitter": {
+      "consumerKey": "",
+      "consumerSecret": "",
+      "accessToken": "",
+      "accessTokenSecret": ""
     }
   },
   "selfie": {

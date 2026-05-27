@@ -217,9 +217,20 @@ def compact(
     persist_compaction(summary, len(to_summarise), log_path=log_path)
 
     # 4. Build new message list
+    #
+    # Don't stamp the summary with a wall-clock time. The agent's volatile
+    # block (added per-turn in _build_volatile_context) is the single source
+    # of truth for "what time is it"; a "UTC" or local stamp here just gives
+    # the LLM another number to anchor on and frequently desync from the
+    # real now (e.g. "Compaction Summary — 11:46 UTC" sitting next to the
+    # volatile "20:11 Shanghai" line makes the model split the difference).
+    from . import tenancy
     summary_system_msg = {
         "role": "system",
-        "content": f"[Compaction Summary — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}]\n{summary}",
+        "content": (
+            f"[Compaction Summary — {tenancy.now_in_bot_tz().strftime('%Y-%m-%d')}]\n"
+            f"{summary}"
+        ),
     }
     new_messages = system_msgs + [summary_system_msg] + to_keep
 

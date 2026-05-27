@@ -77,9 +77,31 @@ class SessionStore:
 
     @staticmethod
     def _msg_to_markdown(msg: dict) -> str:
-        """Convert a single message dict to a Markdown block."""
+        """Convert a single message dict to a Markdown block.
+
+        Handles both plain-string content and OpenAI multimodal content
+        (a list of ``{type:"text"|"image_url", …}`` parts). Image parts
+        are flattened to a short placeholder — we don't write the base64
+        bytes back to the session file, since they're already too big
+        for human-readable storage and the LLM doesn't need them for
+        replay (they were only relevant in the live turn).
+        """
         role = msg.get("role", "unknown")
-        content = msg.get("content", "") or ""
+        raw_content = msg.get("content", "")
+        if isinstance(raw_content, list):
+            chunks: list[str] = []
+            for part in raw_content:
+                if not isinstance(part, dict):
+                    chunks.append(str(part))
+                elif part.get("type") == "text":
+                    chunks.append(str(part.get("text", "")))
+                elif part.get("type") == "image_url":
+                    chunks.append("[image]")
+                else:
+                    chunks.append(f"[{part.get('type', 'part')}]")
+            content = "\n".join(c for c in chunks if c)
+        else:
+            content = raw_content or ""
         ts = msg.get("_ts") or datetime.now().isoformat(timespec="seconds")
 
         # Build metadata for round-trip parsing

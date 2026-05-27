@@ -35,7 +35,10 @@ def main() -> int:
     if args.no_send:
         return 0
 
-    send_result = send_photo(result.path, caption=result.caption())
+    # Send the photo WITHOUT a caption — the agent's text reply (which
+    # follows this tool call) becomes the single voiceover. Baking a caption
+    # in here produces two duplicated messages around the photo in chat.
+    send_result = send_photo(result.path, caption="")
     print(send_result)
     return 0
 

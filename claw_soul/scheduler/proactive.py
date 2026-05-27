@@ -171,6 +171,23 @@ def _get_unfinished_topics(agent: Any) -> list[str]:
         return []
 
 
+def _build_wish_prompt(wish_text: str, now: datetime) -> str:
+    """Prompt the agent to surface a previously recorded wish to the user.
+
+    Used by ProactiveMessenger._maybe_send_wish when a wish's score exceeds
+    threshold.  The agent should naturally bring up the topic in-persona,
+    not robotically read it back.
+    """
+    time_str = now.strftime("%H:%M")
+    weekday = _WEEKDAYS_ZH[now.weekday()]
+    return (
+        f"现在是{weekday} {time_str}。\n"
+        f"对方之前说过想做这件事：「{wish_text}」。\n"
+        f"主动跟对方提一下，看看现在要不要做、什么时候做、或者有没有什么想法。\n"
+        f"不要直接复述「你之前说过」，自然地把这事带起来，像是你也想到了一样。"
+    )
+
+
 def _build_prompt(
     now: datetime,
     sentiment_context: dict[str, Any] | None = None,
@@ -282,6 +299,12 @@ class ProactiveMessenger:
             if self._in_quiet_hours(now.hour):
                 return
 
+            # ── Wishlist preempt: if a wish is due, surface it instead of
+            #    rolling a random proactive. Wish-driven nudges consume the
+            #    same maxDaily budget as normal proactive messages.
+            if await self._maybe_send_wish(chat_id, now):
+                return
+
             lo, hi = self._prob_range()
             threshold = random.uniform(lo, hi)
 
@@ -371,6 +394,56 @@ class ProactiveMessenger:
 
         # Optionally attach a selfie — gated by config probability and Seedream key.
         await self._maybe_send_selfie(chat_id)
+
+    async def _maybe_send_wish(self, chat_id: int, now: datetime) -> bool:
+        """If a pending wish scores high enough, surface it and return True.
+
+        Wish-driven nudges preempt the random proactive roll, consume one of
+        the maxDaily slots, and reset the wish's last_surfaced_at so it
+        doesn't fire again within the cool-down window.
+        """
+        try:
+            from .wishlist import WishlistManager
+        except ImportError:
+            return False
+
+        wl = WishlistManager()
+        due = wl.due_now(now)
+        if not due:
+            return False
+        wish, score = due[0]
+        logger.info("[Proactive] Wish '%s' due (score=%.3f)", wish.text[:40], score)
+
+        prompt = _build_wish_prompt(wish.text, now)
+        session_id = "proactive:main"
+        agent = self._sm.get_or_create(session_id)
+        loop = asyncio.get_event_loop()
+        try:
+            async with self._sm.acquire(session_id):
+                response = await asyncio.wait_for(
+                    loop.run_in_executor(None, agent.chat, prompt),
+                    timeout=300.0,
+                )
+        except Exception as exc:
+            logger.exception("[Proactive] Wish generation failed: %s", exc)
+            return False
+
+        text = (response or "").strip()
+        if not text:
+            return False
+
+        try:
+            await self._telegram_bot.send_message(chat_id, text)
+            self._today_count += 1
+            wl.mark_surfaced(wish.id)
+            logger.info(
+                "[Proactive] Surfaced wish #%d to chat %s (id=%s)",
+                self._today_count, chat_id, wish.id,
+            )
+            return True
+        except Exception as exc:
+            logger.error("[Proactive] Wish delivery failed: %s", exc)
+            return False
 
     async def _maybe_send_selfie(self, chat_id: int) -> None:
         """Roll the dice on attaching a selfie after a proactive message."""

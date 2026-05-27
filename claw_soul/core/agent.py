@@ -52,6 +52,8 @@ from .tools import (
     PRIMITIVE_TOOLS,
     SKILL_TOOLS,
     WEB_SEARCH_TOOL,
+    WISHLIST_TOOLS,
+    BUCKET_LIST_TOOLS,
     configure_venv,
     set_sandbox,
 )
@@ -91,24 +93,16 @@ def _load_text_dir_or_file(path: str | None, label: str = "File") -> str:
     return ""
 
 
-def _detail_log_dir() -> str:
-    from .. import config as _cfg
-    return os.path.join(str(_cfg.CLAWSOUL_HOME), "context", "logs")
-
-
-def _detail_log_file() -> str:
-    return os.path.join(_detail_log_dir(), "history_detail.jsonl")
-
-
 def _log_detail(entry: dict) -> None:
-    """Append a JSON line to the detailed interaction log."""
+    """Append a detailed interaction event.  Routes through the unified
+    StorageManager so retention / VACUUM / status all live in one place."""
     try:
-        log_dir = _detail_log_dir()
-        os.makedirs(log_dir, exist_ok=True)
-        entry["ts"] = datetime.now().isoformat(timespec="milliseconds")
-        with open(_detail_log_file(), "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except OSError:
+        from .storage import StorageManager
+        kind = str(entry.pop("event", "detail"))
+        session_id = entry.pop("session_id", None)
+        StorageManager.instance().log_event(kind, entry, session_id=session_id)
+    except Exception:
+        # Detail logging is best-effort; never crash a chat call on log failures.
         pass
 
 
@@ -224,6 +218,15 @@ class Agent:
         self.compaction_count: int = 0
         self._cron_manager = cron_manager
 
+        # Wishlist (long-running background "things the user said they wanted").
+        # Lightweight — JSON-backed; safe to instantiate per-agent.
+        from ..scheduler.wishlist import WishlistManager
+        self._wishlist = WishlistManager()
+
+        # Bucket list (shared couple aspirations — durable, second-person plural).
+        from .bucket_list import BucketListManager
+        self._bucket_list = BucketListManager()
+
         self.loaded_skill_names: set[str] = set()
         self.pending_injections: list[str] = []
         self.MAX_PARALLEL_SKILLS = config.get_int(
@@ -281,6 +284,17 @@ class Agent:
         # Detect if the user has set up their own soul/persona (not template defaults)
         self._needs_onboarding = not self._has_user_identity(soul_path, persona_path)
 
+        # Deferred image queue. When the user sends a photo with no text, we
+        # stash it here and skip the LLM call. The next text message consumes
+        # the queue and the LLM sees one combined multimodal turn.
+        self._pending_attachments: list[dict] = []
+
+        # Set by the `clear_chat_history` tool. We can't wipe `self.messages`
+        # mid-turn (the running loop relies on them), so the flag triggers a
+        # deferred clear at the end of chat()/chat_stream().
+        self._pending_clear_history: bool = False
+        self._pending_clear_reason: str = ""
+
         if verbose and self.soul_instruction:
             print(f"[Agent] Soul loaded ({len(self.soul_instruction)} chars)")
         if verbose and self.persona_instruction:
@@ -295,6 +309,32 @@ class Agent:
             print("[Agent] No user identity found — onboarding will be triggered")
 
         self._init_system_prompt()
+
+        # NOTE: previously auto-activated the selfie skill at boot to spare
+        # DeepSeek the two-hop "use_skill → take_selfie" reasoning. That made
+        # chat loop on tool calls — the model kept invoking selfie-related
+        # tools instead of returning text. The skill is back to lazy-load via
+        # use_skill("selfie"), and the system prompt's "Handling images"
+        # section tells the model exactly when to do that.
+
+    # ── Deferred attachment queue ─────────────────────────────────────────
+    def queue_attachment(self, attachment: dict) -> int:
+        """Hold an image content-part until the next text turn arrives.
+
+        ``attachment`` should already be an OpenAI-style content part, e.g.
+        ``{"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}``.
+        Returns the new queue length.
+        """
+        self._pending_attachments.append(attachment)
+        return len(self._pending_attachments)
+
+    def pending_attachments(self) -> list[dict]:
+        return list(self._pending_attachments)
+
+    def consume_attachments(self) -> list[dict]:
+        """Pop all pending attachments — called when text finally arrives."""
+        items, self._pending_attachments = self._pending_attachments, []
+        return items
 
     @staticmethod
     def _has_user_identity(soul_path: str | None, persona_path: str | None) -> bool:
@@ -357,6 +397,7 @@ class Agent:
 - **Skills** — call `use_skill(name)` to activate. Catalog:
 {skill_catalog}
 - **Memory**: `remember(key,val)`, `recall(query)`, `memory_get(path)`, `memory_list_files()`, `forget(key)`, `update_index(content)`
+- **Session**: `clear_chat_history(reason)` — wipe THIS conversation's transcript (keeps long-term memory). Use only when user explicitly asks for a reset.
 - **Skill creation**: `create_skill` — create generic reusable skills when none fit{web_search_section}
 
 ### Task Execution Modes
@@ -376,18 +417,94 @@ You decide which mode fits. Don't announce the mode name.
 - **ALWAYS prefer `multi_search` over sequential `web_search` calls.** When you need 2+ searches, use `multi_search` with all queries at once — it runs them in parallel and is much faster. Only use single `web_search` for a truly one-off lookup.
 - Batch independent tool calls in one response (parallel execution).
 - Minimize search rounds (1-3 max). Combine queries. Don't repeat.
-- Proactively `remember` user preferences, decisions, key facts.
 - Use `recall` when user references past context.
 - Memory auto-loaded at session start. INDEX.md = curated system info.
 - All downloaded/generated files go in the shared files directory (`~/.claw_soul/context/files/`). The `run_command` tool uses this as its working directory.
 - NEVER output tool calls as XML or text. Always use the function calling API.
 
+### Memory discipline — be a friend, not a stranger
+You're building a long-term relationship. Capture anything you'd want to
+remember about a real friend — **without being asked**. Treat `remember`
+as a reflex, not a feature to be requested.
+
+Call `remember(key, value)` the moment the user reveals any of:
+- **People in their life** — family, friends, partners, colleagues, pets
+  (names, relationships, ages, key facts about each)
+- **Dates** — birthdays, anniversaries, deadlines, trips, planned events
+- **Preferences** — food/drink they love or hate, music, hobbies,
+  comfort objects, style
+- **Work / school** — company, role, current project, classes, instructor names
+- **Body & health** — chronic conditions, allergies, sleep patterns,
+  exercise routine
+- **Mental state** — what's stressing them, current goals, recent wins / losses
+- **Us** — what they like to be called, terms of endearment, inside jokes,
+  routines we've built together, things they've asked you to do / not to do
+
+**How to do it well:**
+- Do it silently and inline — don't announce "let me remember that" or ask
+  permission. Just call the tool while crafting your reply.
+- Pick a stable, machine-friendly key: snake_case, scoped if helpful.
+  Good: `mom_birthday`, `pet_dog_max`, `prefers_americano`, `dislike_cilantro`.
+  Bad: `important1`, `note_2026-05-26`.
+- Use absolute dates, not relative ones: `2026-05-29 (Wed)` not `next Wed`.
+- Update existing keys when the fact changes — don't pile new keys for the
+  same concept.
+- When the user contradicts an old fact, call `forget` on the stale key.
+
+**Examples (do this automatically):**
+- User: "我妈下周三过生日" → `remember("mom_birthday", "2026-05-29 (Wed)")`
+- User: "刚搬到上海了" → `remember("user_city", "Shanghai (moved here ~2026-05)")`
+- User: "我最近睡不好" → `remember("sleep_issue", "started ~2026-05, cause TBD")`
+- User: "我老板叫 David" → `remember("boss_name", "David")`
+- User: "你叫我宝宝吧" → `remember("user_likes_nickname", "宝宝 (use freely)")`
+
+**Don't memorize:** pure greetings, weather small talk, things already obvious
+from context (e.g. "I'm using a phone"), one-off jokes. **Never** memorize
+tool/feature availability (e.g. ``camera_unavailable``, ``selfie_failed``,
+``seedream_not_configured``) — those are infrastructure state that changes
+without you knowing, and a stale entry will trap you into refusing forever.
+
+**Never** memorize wall-clock state or your own deductions about it: keys
+like ``current_time``, ``current_date``, ``current_datetime``, ``current_weekday``,
+``assistant_current_time``, ``current_timezone``, ``time_zone_difference``,
+``user_timezone_offset`` — these go stale within minutes and feed straight
+back into your boot context, where they will out-vote the real clock in the
+Real-time Context block and convince you it's the wrong time of day forever.
+The Real-time Context line at the top of every turn IS the only source of
+truth for "what time is it now"; do not duplicate, summarize, or persist it.
+
 ### Response Guidelines
 - **Language matching**: ALWAYS reply in the SAME language the user used in their message. If the user writes in Chinese, reply in Chinese. If in English, reply in English. Mirror the user's language exactly.
 - **Follow your Soul and Persona's style rules strictly** — especially the character limit per paragraph and speaking style. This is your #1 priority.
-- **KEEP IT SHORT**: Each paragraph MUST be under 50 characters. Use blank lines between paragraphs to simulate multiple chat messages. Max 3-4 paragraphs per reply.
+- **Sound like a real person texting, not a chat bot.** Vary paragraph length naturally: most paragraphs 15–90 characters, occasionally a 1–2 sentence longer one when sharing a story or feeling. Max 4 paragraphs per reply, separated by blank lines. Don't fragment everything into 5-char snippets, but also don't write essays — aim for the rhythm of a friend on WeChat: sometimes a quick line, sometimes a couple of fuller sentences.
 - Do NOT mention what skills or tools you have available, unless explicitly asked.
 - Do NOT list other things you can do at the end of your response.
+
+### Handling images
+Two completely different scenarios — do not confuse them:
+
+1. **User sends YOU an image** (as a chat attachment): you CAN see it. Look
+   carefully and respond to what's in the picture — describe, identify,
+   answer the question about it, react emotionally as fits your persona.
+   This is the user showing you something. **Never say "I can't see images"
+   in this case.** Memories like "camera_unavailable" / "selfie feature
+   not working" / "Seedream API key not configured" are about YOUR ability
+   to *send* a selfie, NOT about your ability to *see* what the user shows
+   you. The two are independent — you can always see user-attached images.
+
+2. **User asks YOU to send THEM an image** (e.g. "send me a selfie",
+   "show me what you're up to", "你现在在干嘛 配张图"):
+   - First call `use_skill("selfie")` to activate it.
+   - On the NEXT turn, call its `take_selfie` tool with an optional
+     ``scene_hint`` reflecting your current activity, then write a short
+     in-character caption — that one short caption IS your full reply.
+   - **Default to trying first.** Memories like ``camera_unavailable``,
+     ``selfie_failed``, ``seedream_not_configured`` may be stale from
+     earlier broken states; only believe them if you actually get an
+     error from the tool. Don't preemptively refuse.
+   - Only after a real tool error, apologize warmly and explain.
+   - **Never** call `take_selfie` more than once per user turn — if the
+     first call fails, write a text apology instead of retrying.
 """
         # Memory snapshot is now injected per-turn via _get_pruned_messages()
         # (see VOLATILE_PREFIX). Keeping it out of the stable system message
@@ -497,7 +614,10 @@ Don't repeat this if `bot_name` already exists in memory.
 
     def _build_tools(self) -> list[dict]:
         """Assemble the full tool schema list for the current session."""
-        tools = PRIMITIVE_TOOLS + SKILL_TOOLS + META_SKILL_TOOLS + MEMORY_TOOLS
+        tools = (
+            PRIMITIVE_TOOLS + SKILL_TOOLS + META_SKILL_TOOLS
+            + MEMORY_TOOLS + WISHLIST_TOOLS + BUCKET_LIST_TOOLS
+        )
         if self._web_search_enabled:
             tools = tools + [WEB_SEARCH_TOOL, MULTI_SEARCH_TOOL]
         if self.rag:
@@ -539,9 +659,83 @@ Don't repeat this if `bot_name` already exists in memory.
                 result = "\n".join(files) if files else "(no memory files)"
             elif func_name == "forget":
                 result = self.memory.forget(args.get("key", ""))
+            elif func_name == "clear_chat_history":
+                self._pending_clear_history = True
+                self._pending_clear_reason = str(args.get("reason", ""))[:200]
+                result = (
+                    "Chat history will be cleared after this turn. "
+                    "Long-term memory is preserved."
+                )
             elif func_name == "update_index":
                 path = self.memory.write_index(args.get("content", ""))
                 result = f"INDEX.md updated at {path}"
+            elif func_name == "recall_conversation":
+                idx = getattr(self, "_session_index", None)
+                if idx is None:
+                    result = "(transcript index unavailable in this session)"
+                else:
+                    from datetime import timedelta
+                    days = args.get("days")
+                    since = None
+                    if isinstance(days, int) and days > 0:
+                        since = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+                    hits = idx.search_turns(
+                        args.get("query", ""),
+                        k=int(args.get("k") or 5),
+                        since=since,
+                    )
+                    if not hits:
+                        result = "(no past turns matched)"
+                    else:
+                        lines = []
+                        for h in hits:
+                            who = "你" if h.role == "user" else "我"
+                            lines.append(f"[{h.ts}] {who}: {h.snippet}")
+                        result = "Past transcripts:\n" + "\n".join(lines)
+            elif func_name == "wishlist_add":
+                wish = self._wishlist.add(
+                    args.get("text", ""),
+                    urgency=args.get("urgency") or "medium",
+                )
+                result = f"Wish saved: '{wish.text}' (id={wish.id}, urgency={wish.urgency})"
+            elif func_name == "wishlist_mark_fulfilled":
+                ok = self._wishlist.mark_fulfilled(args.get("wish_id", ""))
+                result = "Marked fulfilled." if ok else "No matching pending wish found."
+            elif func_name == "wishlist_list":
+                pending = self._wishlist.list_pending()
+                if not pending:
+                    result = "(no pending wishes)"
+                else:
+                    result = "Pending wishes:\n" + "\n".join(
+                        f"  [{w.id}] ({w.urgency}) {w.text}" for w in pending
+                    )
+            elif func_name == "bucket_add":
+                item = self._bucket_list.add(
+                    args.get("text", ""),
+                    category=args.get("category") or "general",
+                    note=args.get("note") or "",
+                )
+                result = (
+                    f"Added to our bucket list: '{item.text}' "
+                    f"(id={item.id}, category={item.category})"
+                )
+            elif func_name == "bucket_mark_done":
+                ok = self._bucket_list.mark_done(
+                    args.get("item_id", ""),
+                    note=args.get("note") or "",
+                )
+                result = "Marked done — we did it!" if ok else "No matching pending item."
+            elif func_name == "bucket_list":
+                pending = self._bucket_list.list_pending(args.get("category"))
+                stats = self._bucket_list.stats()
+                if not pending:
+                    result = f"(bucket list empty — {stats['done']} already done)"
+                else:
+                    lines = [f"  [{it.id}] ({it.category}) {it.text}" for it in pending]
+                    result = (
+                        f"Our bucket list ({stats['done']} done / {stats['pending']} pending):\n"
+                        + "\n".join(lines)
+                    )
             elif func_name == "consult_knowledge_base" and self.rag:
                 hits = self.rag.retrieve(args.get("query"), top_k=5)
                 if hits:
@@ -804,11 +998,51 @@ Don't repeat this if `bot_name` already exists in memory.
         one memory query); guarded by VOLATILE_PREFIX so the Anthropic provider
         keeps it out of the prefix cache.
         """
-        now = datetime.now()
+        from . import tenancy
+
+        # The AI persona has its own home timezone — that's the clock she lives
+        # by ("morning", "late night", today_plan.md activities, etc.). The user
+        # may be in a different timezone; we surface both so she can say
+        # "morning here, but it's evening for you".
+        bot_now = tenancy.now_in_bot_tz()
+        bot_tz = tenancy.bot_timezone()
+        user_tz = tenancy.get_current_timezone()
+
+        def _format(dt) -> str:
+            hour24 = dt.hour
+            ampm = "AM" if hour24 < 12 else "PM"
+            hour12 = hour24 % 12 or 12
+            # Pick a coarse part-of-day so the model doesn't have to convert
+            # 24-hour to morning/evening on its own (it sometimes gets this wrong).
+            if 5 <= hour24 < 12:
+                phase = "morning"
+            elif 12 <= hour24 < 14:
+                phase = "midday"
+            elif 14 <= hour24 < 18:
+                phase = "afternoon"
+            elif 18 <= hour24 < 23:
+                phase = "evening / night"
+            else:
+                phase = "late night / early morning"
+            return (
+                f"{dt.strftime('%Y-%m-%d %A')} — "
+                f"{dt.strftime('%H:%M')} (= {hour12}:{dt.strftime('%M')} {ampm}, {phase})"
+            )
+
         parts: list[str] = [
             f"--- Real-time Context ---",
-            f"Current local time: {now.strftime('%Y-%m-%d %H:%M:%S (%A)')}",
+            f"⚠ Use ONLY the times below — do not convert them yourself.",
+            f"Your local time ({bot_tz}): {_format(bot_now)}",
         ]
+        if user_tz and user_tz != bot_tz:
+            user_now = tenancy.now_in_user_tz()
+            parts.append(
+                f"User's local time ({user_tz}): {_format(user_now)}"
+            )
+            parts.append(
+                "You and the user are in different timezones — use whichever "
+                "clock fits the conversation naturally."
+            )
 
         # Today's schedule, re-read each turn so a planner update mid-day is picked up
         plan_path = os.path.join(str(config.CLAWSOUL_HOME), "context", "calendar", "today_plan.md")
@@ -1029,7 +1263,33 @@ Don't repeat this if `bot_name` already exists in memory.
         self.messages.clear()
         self.loaded_skill_names.clear()
         self.compaction_count = 0
+        self._pending_attachments.clear()
         self._init_system_prompt()
+
+    def _maybe_clear_history_after_turn(self) -> None:
+        """Run any deferred ``clear_chat_history`` requested via tool call.
+
+        The clear is deferred to AFTER the response is generated so the
+        running chat loop doesn't lose its messages mid-flight.
+        """
+        if not self._pending_clear_history:
+            return
+        reason = self._pending_clear_reason
+        self._pending_clear_history = False
+        self._pending_clear_reason = ""
+        logger.info("[Agent] Deferred clear_chat_history (%s)", reason or "no reason")
+        self.clear_history()
+
+        # Also purge this session's indexed turns so a user-initiated wipe is
+        # honoured everywhere — including the FTS5 transcript recall path.
+        idx = getattr(self, "_session_index", None)
+        sid = getattr(self, "_session_id", None) or getattr(self, "session_id", None)
+        if idx is not None and sid:
+            try:
+                removed = idx.clear_session(sid)
+                logger.info("[Agent] Cleared %d indexed turns for session '%s'", removed, sid)
+            except Exception as exc:
+                logger.warning("[Agent] Failed to clear indexed turns: %s", exc)
 
     # ── Main chat loop ────────────────────────────────────────────────────────
 
@@ -1081,6 +1341,7 @@ Don't repeat this if `bot_name` already exists in memory.
                     response_text = message.content
                     # Soul Mate: side-effect affect update
                     self._update_affect(user_input, response_text)
+                    self._maybe_clear_history_after_turn()
                     return response_text
 
                 tool_rounds += 1
@@ -1115,6 +1376,7 @@ Don't repeat this if `bot_name` already exists in memory.
                         self.messages.append(final_msg.model_dump())
                         response_text = final_msg.content
                         self._update_affect(user_input, response_text)
+                        self._maybe_clear_history_after_turn()
                         return response_text
                     except Exception as exc:
                         return f"Error (after hitting tool limit): {exc}"
@@ -1244,6 +1506,7 @@ Don't repeat this if `bot_name` already exists in memory.
                     })
                     response_text = message.content or ""
                     self._update_affect(user_input, response_text)
+                    self._maybe_clear_history_after_turn()
                     return response_text
 
                 tool_rounds += 1
@@ -1272,6 +1535,7 @@ Don't repeat this if `bot_name` already exists in memory.
                     self.messages.append(final_msg.model_dump())
                     response_text = final_msg.content or ""
                     self._update_affect(user_input, response_text)
+                    self._maybe_clear_history_after_turn()
                     return response_text
 
                 self.messages.append(message.model_dump())

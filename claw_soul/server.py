@@ -11,6 +11,7 @@ import logging
 import os
 import time as _time
 
+from . import config
 from .core.llm.base import LLMProvider
 from .core.persistent_agent import PersistentAgent
 from .core.session_store import SessionStore
@@ -58,19 +59,49 @@ def _detect_local_timezone() -> str:
     return f"Etc/GMT{'-' if offset_hours > 0 else '+'}{abs(offset_hours)}"
 
 
+def _multi_tenant_mode() -> bool:
+    """Multi-tenant mode is on whenever the dashboard auth gate is on."""
+    return bool(os.environ.get("SUPABASE_JWT_SECRET"))
+
+
 async def start_telegram(
     provider: LLMProvider,
     fastapi_app=None,
 ) -> list:
-    """Start the Telegram bot as a background task.
+    """Start the Telegram bot(s) as background tasks.
 
-    Parameters
-    ----------
-    provider    : LLM provider instance
-    fastapi_app : optional FastAPI app instance (unused, kept for interface compat)
+    In **multi-tenant mode** (``SUPABASE_JWT_SECRET`` set): launches one bot
+    per Supabase user that has a saved ``telegram_bot_token``. The cron
+    scheduler / proactive / selfie features are skipped — they're not yet
+    per-tenant-aware. Multi-tenant scheduling lands in a later phase.
 
-    Returns the list of successfully started bot objects.
+    In **single-tenant mode** (laptop / Eric's existing deploy): unchanged —
+    one bot, full scheduler / proactive / heartbeat / selfies.
     """
+    if _multi_tenant_mode():
+        logger.info("[ClawSoul] Multi-tenant mode — starting per-user Telegram bots + scheduler")
+        from .channels import telegram_multi
+
+        # One global APScheduler shared across all users. Each user's daily
+        # planner / proactive / selfie jobs are registered with it, wrapped in
+        # tenancy.user_context() so they read & write only their own data.
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        _tz = _detect_local_timezone()
+        global_scheduler = AsyncIOScheduler(timezone=_tz)
+
+        bots = await telegram_multi.start_all_user_bots(
+            provider, scheduler=global_scheduler,
+        )
+
+        if not global_scheduler.running:
+            global_scheduler.start()
+            logger.info(
+                "[ClawSoul] Global scheduler started (%s) — %d job(s) across %d user(s)",
+                _tz, len(global_scheduler.get_jobs()), len(bots),
+            )
+
+        return bots
+
     store = SessionStore()
     session_manager = SessionManager(agent_factory=lambda sid: None, store=store)
 

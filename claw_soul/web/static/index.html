@@ -35,7 +35,18 @@
     .chat-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
 
     .msg-user { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); }
-    .msg-bot  { background: #1e293b; border: 1px solid rgba(51,65,85,.6); }
+    .msg-bot  {
+      background: #232a3a;
+      border: 1px solid rgba(120, 135, 165, .25);
+      box-shadow: 0 1px 0 rgba(255,255,255,.03) inset;
+    }
+    .msg-system {
+      background: rgba(124, 117, 137, .12);
+      border: 1px dashed rgba(124, 117, 137, .35);
+      color: #b9b1c8;
+      font-style: italic;
+      font-size: .78rem;
+    }
 
     .skill-card { transition: all .2s ease; }
     .skill-card:hover { border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(59,130,246,.15); }
@@ -119,13 +130,17 @@
           <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
           Chat
         </button>
-        <button onclick="switchTab('skills')" id="nav-skills" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-          Skills
+        <button onclick="switchTab('tools')" id="nav-tools" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Tools
         </button>
-        <button onclick="switchTab('marketplace')" id="nav-marketplace" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-          Marketplace
+        <button onclick="switchTab('persona')" id="nav-persona" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12z"/><path d="M3 22a9 9 0 0118 0"/></svg>
+          Persona
+        </button>
+        <button onclick="switchTab('integrations')" id="nav-integrations" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          Integrations
         </button>
         <button onclick="switchTab('config')" id="nav-config" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
           <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -342,9 +357,9 @@
                   <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
                   Open Chat
                 </button>
-                <button onclick="switchTab('skills')" class="btn-ghost flex items-center gap-2 py-2 px-3 text-left">
-                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg>
-                  Browse Skills
+                <button onclick="switchTab('tools')" class="btn-ghost flex items-center gap-2 py-2 px-3 text-left">
+                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                  Browse Tools
                 </button>
                 <button onclick="switchTab('config')" class="btn-ghost flex items-center gap-2 py-2 px-3 text-left">
                   <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></svg>
@@ -400,48 +415,99 @@
           </div>
         </div>
 
-        <!-- ═══ Skills Tab ═══ -->
-        <div id="tab-skills" class="tab-content hidden p-8 fade-in max-w-[1200px]">
-          <div class="flex items-center justify-between mb-6">
-            <div>
-              <h2 class="text-xl font-bold text-white tracking-tight">Skill Catalog</h2>
-              <p id="skills-count" class="text-sm text-gray-500 mt-1">Loading...</p>
-            </div>
-            <button onclick="loadSkills()" class="btn-ghost">Refresh</button>
+        <!-- ═══ Tools Tab (Syncore-style grid) ═══ -->
+        <div id="tab-tools" class="tab-content hidden p-8 fade-in max-w-[1200px]">
+          <div class="mb-6">
+            <h2 class="text-xl font-bold text-white tracking-tight">All tools</h2>
+            <p id="tools-count" class="text-sm text-gray-500 mt-1">Loading…</p>
           </div>
-          <div id="skills-list" class="space-y-8"></div>
+
+          <!-- Filter chips -->
+          <div class="flex flex-wrap items-center gap-2 mb-8">
+            <button data-filter="all"
+              class="tools-chip px-3 py-1.5 rounded-full text-xs font-medium bg-white text-black"
+              onclick="setToolsFilter('all')">All</button>
+            <button data-filter="activated"
+              class="tools-chip px-3 py-1.5 rounded-full text-xs font-medium bg-surface-800/60 text-gray-300 hover:bg-surface-700"
+              onclick="setToolsFilter('activated')">Connected</button>
+            <button data-filter="not_connected"
+              class="tools-chip px-3 py-1.5 rounded-full text-xs font-medium bg-surface-800/60 text-gray-300 hover:bg-surface-700"
+              onclick="setToolsFilter('not_connected')">Not connected</button>
+            <button data-filter="coming_soon"
+              class="tools-chip px-3 py-1.5 rounded-full text-xs font-medium bg-surface-800/60 text-gray-300 hover:bg-surface-700"
+              onclick="setToolsFilter('coming_soon')">Coming soon</button>
+          </div>
+
+          <!-- Premium section -->
+          <div class="mb-2 flex items-baseline justify-between">
+            <h3 class="text-base font-semibold text-white">Premium Tools</h3>
+            <span id="tools-premium-count" class="text-xs text-gray-500"></span>
+          </div>
+          <p class="text-xs text-gray-500 mb-4">High-leverage integrations — connect to unlock superpowers.</p>
+          <div id="tools-premium-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-10"></div>
+
+          <!-- Standard section -->
+          <div class="mb-2 flex items-baseline justify-between">
+            <h3 class="text-base font-semibold text-white">Standard Tools</h3>
+            <span id="tools-standard-count" class="text-xs text-gray-500"></span>
+          </div>
+          <p class="text-xs text-gray-500 mb-4">Built-in capabilities — already ready when you are.</p>
+          <div id="tools-standard-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
         </div>
 
-        <!-- ═══ Marketplace Tab ═══ -->
-        <div id="tab-marketplace" class="tab-content hidden p-8 fade-in max-w-[1200px]">
-          <div class="flex items-center justify-between mb-6">
+
+        <!-- ═══ Persona Tab ═══ -->
+        <div id="tab-persona" class="tab-content hidden p-8 fade-in max-w-[760px]">
+          <div class="mb-8 flex items-start justify-between">
             <div>
-              <h2 class="text-xl font-bold text-white tracking-tight">ClawHub Marketplace</h2>
-              <p class="text-sm text-gray-500 mt-1">Search and install community skills from <a href="https://clawhub.com" target="_blank" class="text-brand-400 hover:underline">ClawHub</a> — 13K+ free skills, no API key required</p>
+              <h2 class="text-xl font-bold text-white tracking-tight">Your AI Partner</h2>
+              <p class="text-sm text-gray-500 mt-1">How they look, talk, and care for you.</p>
+            </div>
+            <button onclick="openSetupWizard()" class="btn-ghost text-sm">Customize…</button>
+          </div>
+          <div id="persona-summary" class="text-sm text-gray-400">Loading…</div>
+        </div>
+
+        <!-- ═══ Integrations Tab ═══ -->
+        <div id="tab-integrations" class="tab-content hidden p-8 fade-in max-w-[760px]">
+          <div class="mb-8">
+            <h2 class="text-xl font-bold text-white tracking-tight">Integrations</h2>
+            <p class="text-sm text-gray-500 mt-1">Connect your ClawSoul to other places you live.</p>
+          </div>
+
+          <!-- ── Telegram card ── -->
+          <div class="rounded-xl border border-surface-700/50 bg-surface-900/40 p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-10 h-10 rounded-lg bg-[#229ED9]/15 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5 text-[#229ED9]" viewBox="0 0 24 24" fill="currentColor"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+              </div>
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <h3 class="text-white font-semibold">Telegram bot</h3>
+                  <span id="tg-status-badge" class="text-[.6875rem] px-2 py-0.5 rounded-full bg-gray-700/40 text-gray-400">checking…</span>
+                </div>
+                <p class="text-sm text-gray-400 leading-relaxed mb-4">
+                  Chat with your ClawSoul from Telegram. Get a bot token from
+                  <a href="https://t.me/BotFather" target="_blank" rel="noopener" class="text-brand-300 hover:text-brand-200 underline">@BotFather</a>
+                  (<code class="text-[.78rem] px-1.5 py-0.5 rounded bg-surface-800 text-gray-300">/newbot</code> → name → username) and paste it below.
+                </p>
+
+                <label class="text-[.6875rem] text-gray-500 uppercase tracking-wide">Bot token</label>
+                <input id="tg-token" type="text" autocomplete="off" spellcheck="false"
+                  placeholder="123456789:AA…"
+                  class="w-full mt-1.5 px-3.5 py-2.5 bg-surface-950 border border-surface-700/50 rounded-lg text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-brand-500/60 transition">
+
+                <div class="mt-4 flex items-center gap-3">
+                  <button onclick="saveTelegramToken()" id="tg-save-btn" class="btn-primary !py-2 !px-5 text-sm">Save</button>
+                  <button onclick="clearTelegramToken()" id="tg-clear-btn" class="btn-ghost !py-2 !px-4 text-sm hidden">Remove</button>
+                  <span id="tg-status-msg" class="text-sm text-gray-500"></span>
+                </div>
+                <p id="tg-restart-hint" class="text-xs text-gray-600 mt-3 hidden">
+                  ⓘ The new token activates on the next daemon restart.
+                </p>
+              </div>
             </div>
           </div>
-
-          <!-- Search Bar -->
-          <div class="flex gap-3 mb-6">
-            <input id="sh-search-input" type="text" placeholder="Search skills… (e.g. database, frontend, debugging)"
-              class="input-field flex-1 !rounded-xl !py-3 !px-4 !bg-surface-950 text-sm"
-              onkeydown="if(event.key==='Enter'){event.preventDefault();marketplaceSearch();}">
-            <button onclick="marketplaceSearch()" class="btn-primary !rounded-xl !px-6 !py-3 text-sm font-medium">
-              <svg class="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              Search
-            </button>
-            <button onclick="marketplaceBrowse()" class="btn-ghost !rounded-xl !px-5 !py-3 text-sm">Browse Top</button>
-            <select id="sh-sort" class="btn-ghost !rounded-xl !px-3 !py-3 text-sm" onchange="marketplaceBrowse()">
-              <option value="score">Top Downloads</option>
-              <option value="stars">Most Stars</option>
-              <option value="newest">Newest</option>
-              <option value="certified">Certified</option>
-            </select>
-          </div>
-
-          <!-- Results -->
-          <div id="sh-status" class="text-sm text-gray-500 mb-4 hidden"></div>
-          <div id="sh-results" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
         </div>
 
         <!-- ═══ Config Tab ═══ -->
@@ -701,16 +767,154 @@ function switchTab(tab) {
   const nav = document.getElementById('nav-' + tab);
   if (nav) nav.classList.add('active');
 
-  const titles = { dashboard:'Dashboard', chat:'Chat', skills:'Skill Catalog', marketplace:'ClawHub Marketplace', config:'Configuration' };
+  const titles = { dashboard:'Dashboard', chat:'Chat', tools:'Tools', persona:'Persona', integrations:'Integrations', config:'Configuration' };
   document.getElementById('page-title').textContent = titles[tab] || tab;
 
   if (tab === 'dashboard') refreshDashboard();
-  if (tab === 'skills') loadSkills();
-  if (tab === 'marketplace') marketplaceBrowse();
+  if (tab === 'tools') loadTools();
+  if (tab === 'persona') loadPersona();
+  if (tab === 'integrations') loadIntegrations();
   if (tab === 'config') loadConfig();
   if (tab === 'chat') {
     document.getElementById('chat-input').focus();
+    loadChatHistory();
+  }
+}
+
+// ── Chat history ────────────────────────────────────────────────────────────
+let _historyLoaded = false;
+
+async function loadChatHistory(force = false) {
+  if (_historyLoaded && !force) return;
+  _historyLoaded = true;
+
+  try {
+    const r = await fetch('/api/chat/history?limit=80', { credentials: 'include' });
+    if (!r.ok) return;
+    const data = await r.json();
+    const msgs = (data.messages || [])
+      // Drop empties + the Memory Refresh / volatile-context system blobs
+      // that occasionally leak in from older session writes.
+      .filter(m => {
+        const c = (m.content || '').trim();
+        if (!c) return false;
+        if (c.startsWith('[Memory Refresh') || c.startsWith('--- Real-time Context')) return false;
+        return true;
+      });
+    if (!msgs.length) return;
+
+    const container = document.getElementById('chat-messages');
+    const placeholder = container.querySelector('.text-center, .empty-state');
+    if (placeholder) placeholder.remove();
+
+    container.innerHTML = '';
+    for (const m of msgs) {
+      addMessage(m.role === 'assistant' ? 'bot' : 'user', m.content);
+    }
     scrollChat();
+  } catch (e) { console.error('chat history:', e); }
+}
+
+// ── Integrations ─────────────────────────────────────────────────────────────
+async function loadIntegrations() {
+  const badge = document.getElementById('tg-status-badge');
+  const clearBtn = document.getElementById('tg-clear-btn');
+  const restartHint = document.getElementById('tg-restart-hint');
+  const tokenInput = document.getElementById('tg-token');
+
+  badge.className = 'text-[.6875rem] px-2 py-0.5 rounded-full bg-gray-700/40 text-gray-400';
+  badge.textContent = 'checking…';
+  document.getElementById('tg-status-msg').textContent = '';
+
+  try {
+    const r = await fetch('/api/user/telegram', { credentials: 'include' });
+    if (!r.ok) throw new Error('failed to load');
+    const { hasToken } = await r.json();
+    if (hasToken) {
+      badge.className = 'text-[.6875rem] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300';
+      badge.textContent = 'Connected';
+      clearBtn.classList.remove('hidden');
+      tokenInput.placeholder = '(saved — paste a new token to replace)';
+      restartHint.classList.remove('hidden');
+    } else {
+      badge.className = 'text-[.6875rem] px-2 py-0.5 rounded-full bg-gray-700/40 text-gray-400';
+      badge.textContent = 'Not connected';
+      clearBtn.classList.add('hidden');
+      tokenInput.placeholder = '123456789:AA…';
+      restartHint.classList.add('hidden');
+    }
+  } catch (e) {
+    badge.className = 'text-[.6875rem] px-2 py-0.5 rounded-full bg-red-500/15 text-red-300';
+    badge.textContent = 'Error';
+  }
+}
+
+async function saveTelegramToken() {
+  const tokenInput = document.getElementById('tg-token');
+  const btn = document.getElementById('tg-save-btn');
+  const status = document.getElementById('tg-status-msg');
+  const token = tokenInput.value.trim();
+
+  if (!token) {
+    status.textContent = 'Paste a token first, or click Remove to clear.';
+    status.className = 'text-sm text-amber-400';
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = 'Saving…';
+  status.className = 'text-sm text-gray-500';
+
+  try {
+    const r = await fetch('/api/user/telegram', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const body = await r.json();
+    if (!r.ok) {
+      status.textContent = body.error || ('save failed (HTTP ' + r.status + ')');
+      status.className = 'text-sm text-red-400';
+    } else {
+      status.textContent = 'Saved.';
+      status.className = 'text-sm text-emerald-400';
+      tokenInput.value = '';
+      await loadIntegrations();
+    }
+  } catch (e) {
+    status.textContent = 'Network error';
+    status.className = 'text-sm text-red-400';
+  }
+  btn.disabled = false;
+}
+
+async function clearTelegramToken() {
+  if (!confirm('Remove your Telegram bot? You can add it back any time.')) return;
+  const status = document.getElementById('tg-status-msg');
+  status.textContent = 'Removing…';
+  status.className = 'text-sm text-gray-500';
+
+  try {
+    const r = await fetch('/api/user/telegram', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: '' }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      status.textContent = body.error || 'remove failed';
+      status.className = 'text-sm text-red-400';
+      return;
+    }
+    status.textContent = 'Removed.';
+    status.className = 'text-sm text-emerald-400';
+    document.getElementById('tg-token').value = '';
+    await loadIntegrations();
+  } catch (e) {
+    status.textContent = 'Network error';
+    status.className = 'text-sm text-red-400';
   }
 }
 
@@ -841,26 +1045,41 @@ async function refreshDashboard() {
   } catch (e) { console.error('Identity fetch:', e); }
 
   try {
-    const res3 = await fetch('/api/memories');
+    const res3 = await fetch('/api/memories?limit=200');
     const mem = await res3.json();
     const container = document.getElementById('memory-content');
     const badge = document.getElementById('memory-badge');
-    const entries = mem.memories || {};
-    const keys = Object.keys(entries);
-    badge.textContent = keys.length + ' entries';
 
-    if (keys.length === 0) {
-      container.innerHTML = '<span class="text-[.75rem] text-gray-600 italic">No memories stored yet. Chat with the agent to build memory.</span>';
-    } else {
-      container.innerHTML = '<div class="space-y-2">' + keys.map(k => {
-        const val = escapeHtml(String(entries[k]));
-        const preview = val.length > 200 ? val.substring(0, 200) + '...' : val;
-        return `<div class="px-3 py-2 rounded-lg bg-surface-800/50 border border-surface-700/30">
-          <div class="text-[.6875rem] text-cyan-400 font-medium mb-1">${escapeHtml(k)}</div>
-          <div class="text-[.75rem] text-gray-400 leading-relaxed whitespace-pre-wrap">${preview}</div>
-        </div>`;
-      }).join('') + '</div>';
+    // Backward-compat: older builds returned {memories: {key: value}} — coerce.
+    let entries = mem.entries;
+    if (!entries && mem.memories) {
+      entries = Object.entries(mem.memories).map(([k, v]) => ({ key: k, value: String(v), updated: '' }));
     }
+    entries = entries || [];
+
+    const total = mem.total ?? entries.length;
+    const shown = mem.shown ?? entries.length;
+    badge.textContent = total === shown
+      ? `${total} entries`
+      : `latest ${shown} of ${total}`;
+
+    if (entries.length === 0) {
+      container.innerHTML = '<span class="text-[.75rem] text-gray-600 italic">No memories stored yet. Chat with the agent to build memory.</span>';
+      return;
+    }
+
+    container.innerHTML = '<div class="space-y-2">' + entries.map(e => {
+      const val = escapeHtml(e.value);
+      const preview = val.length > 320 ? val.substring(0, 320) + '…' : val;
+      const ts = e.updated ? `<span class="text-[.625rem] text-gray-600 font-mono">${escapeHtml(e.updated)}</span>` : '';
+      return `<div class="px-3 py-2 rounded-lg bg-surface-800/50 border border-surface-700/30">
+        <div class="flex items-baseline justify-between gap-3 mb-1">
+          <div class="text-[.6875rem] text-cyan-400 font-medium truncate">${escapeHtml(e.key)}</div>
+          ${ts}
+        </div>
+        <div class="text-[.75rem] text-gray-400 leading-relaxed whitespace-pre-wrap">${preview}</div>
+      </div>`;
+    }).join('') + '</div>';
   } catch (e) { console.error('Memories fetch:', e); }
 }
 
@@ -1507,12 +1726,29 @@ function connectWebSocket() {
       appendStreamToken(data.content);
       return;
     }
+    // Server says "got your image, waiting for you to tell me what to do".
+    // Don't lock the input — let the user type the follow-up immediately.
+    if (data.type === 'pending') {
+      removeThinking();
+      chatWaiting = false;
+      updateSendButton();
+      addMessage('system', data.content);
+      return;
+    }
+    // Capture what was streamed BEFORE finalizeStream clobbers it, so we can
+    // fall back to it if the final `response` event comes back empty (e.g.
+    // DeepSeek puts the answer in `reasoning_content` and the provider's
+    // promotion didn't reach this code path).
+    const streamedText = _streamRaw;
     removeThinking();
     finalizeStream();
     chatWaiting = false;
     updateSendButton();
-    if (data.type === 'response') addMessage('bot', data.content);
-    else if (data.type === 'error') addMessage('bot', 'Error: ' + data.content);
+    if (data.type === 'response') {
+      addMessage('bot', data.content || streamedText);
+    } else if (data.type === 'error') {
+      addMessage('bot', 'Error: ' + data.content);
+    }
   };
 }
 
@@ -1556,9 +1792,25 @@ function finalizeStream() {
 }
 
 function addMessage(role, content) {
+  const text = (content == null ? '' : String(content)).trim();
+  if (!text) return;  // never render empty bubbles
+
   const container = document.getElementById('chat-messages');
   const welcome = container.querySelector('.text-center');
   if (welcome) welcome.remove();
+
+  // System-style messages (e.g. "📎 image queued") get their own subdued look
+  if (role === 'system') {
+    const wrap = document.createElement('div');
+    wrap.className = 'flex fade-in justify-center';
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-system rounded-full px-4 py-1.5';
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
+    container.appendChild(wrap);
+    scrollChat();
+    return;
+  }
 
   const wrapper = document.createElement('div');
   wrapper.className = 'flex fade-in ' + (role === 'user' ? 'justify-end' : 'justify-start');
@@ -1569,15 +1821,15 @@ function addMessage(role, content) {
   if (role === 'bot') {
     const avatar = document.createElement('div');
     avatar.className = 'w-7 h-7 rounded-lg bg-surface-800 border border-surface-700 flex items-center justify-center shrink-0';
-    avatar.innerHTML = '<img src="/static/logo.png" class="w-4 h-4 rounded">';
+    avatar.innerHTML = '<img src="/static/logo.png" class="w-4 h-4 rounded" alt="">';
     row.appendChild(avatar);
   }
 
   const bubble = document.createElement('div');
   bubble.className = (role === 'user' ? 'msg-user text-white' : 'msg-bot text-gray-200') +
     ' rounded-2xl px-4 py-3 text-[.8125rem] leading-relaxed';
-  if (role === 'user') bubble.textContent = content;
-  else bubble.innerHTML = renderMarkdown(content);
+  if (role === 'user') bubble.textContent = text;
+  else bubble.innerHTML = renderMarkdown(text);
 
   row.appendChild(bubble);
   wrapper.appendChild(row);
@@ -1757,11 +2009,12 @@ document.getElementById('chat-form').addEventListener('submit', (e) => {
   const displayMsg = msg || '(image)';
   addMessage('user', displayMsg);
 
+  const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (_pendingImage) {
-    ws.send(JSON.stringify({ message: msg || 'What is in this image?', image: _pendingImage }));
+    ws.send(JSON.stringify({ message: msg || 'What is in this image?', image: _pendingImage, clientTimezone }));
     clearImageAttachment();
   } else {
-    ws.send(JSON.stringify({ message: msg }));
+    ws.send(JSON.stringify({ message: msg, clientTimezone }));
   }
 
   input.value = '';
@@ -1769,10 +2022,439 @@ document.getElementById('chat-form').addEventListener('submit', (e) => {
   updateSendButton();
 });
 
+// (Wizard modal markup is injected below — see <body> end.)
+// ── Persona / Setup Wizard ───────────────────────────────────────────────────
+
+let _setupOptions = null;
+let _wizardStep = 0;
+let _wizardChoices = {};
+
+const WIZARD_STEPS = [
+  {
+    title: 'About you',
+    subtitle: 'Just the basics so they can talk to you naturally.',
+    fields: [
+      { key: 'userName',   kind: 'text',   label: 'Your name or nickname', placeholder: 'Eric / Alice / 阿明…' },
+      { key: 'userGender', kind: 'choice', label: 'Your gender' },
+      { key: 'userAge',    kind: 'choice', label: 'Your age range' },
+    ],
+  },
+  {
+    title: 'Your AI partner',
+    subtitle: 'Pick the shape of the companion.',
+    fields: [
+      { key: 'companionGender', kind: 'choice', label: 'What are they?' },
+      { key: 'companionName',   kind: 'text',   label: "What's their name?", placeholder: '小爪 / Aria / Kai…' },
+      { key: 'companionAge',    kind: 'choice', label: 'How old do they feel?' },
+    ],
+  },
+  {
+    title: 'Personality',
+    subtitle: 'Six dials that define how they show up.',
+    fields: [
+      { key: 'archetype',   kind: 'choice', label: '❶ Core archetype' },
+      { key: 'dynamic',     kind: 'choice', label: '❷ Relationship dynamic' },
+      { key: 'tone',        kind: 'choice', label: '❸ How they talk to you' },
+      { key: 'proactivity', kind: 'choice', label: '❹ How often they reach out' },
+      { key: 'stress',      kind: 'choice', label: '❺ When you\'re stressed, they…' },
+      { key: 'deepTalk',    kind: 'choice', label: '❻ Late-night conversation' },
+    ],
+  },
+];
+
+async function loadPersona() {
+  const box = document.getElementById('persona-summary');
+  box.textContent = 'Loading…';
+  try {
+    const r = await fetch('/api/setup/companion', { credentials: 'include' });
+    const data = await r.json();
+    if (!data.choices) {
+      box.innerHTML = `
+        <div class="rounded-xl border border-surface-700/50 bg-surface-900/40 p-6 text-center">
+          <p class="text-gray-400 mb-4">You haven't set up your AI partner yet.</p>
+          <button onclick="openSetupWizard()" class="btn-primary !py-2 !px-5 text-sm">Get started →</button>
+        </div>`;
+      return;
+    }
+    await ensureSetupOptions();
+    const labelOf = (field, key) => {
+      const list = _setupOptions[field] || [];
+      const hit = list.find(o => o.key === key);
+      return hit ? hit.label : key;
+    };
+    const c = data.choices;
+    box.innerHTML = `
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+        ${[
+          ['You',              `${c.userName} · ${labelOf('userGender', c.userGender)} · ${labelOf('userAge', c.userAge)}`],
+          ['Your partner',     `${c.companionName} · ${labelOf('companionGender', c.companionGender)} · ${labelOf('companionAge', c.companionAge)}`],
+          ['Core archetype',   labelOf('archetype', c.archetype)],
+          ['Relationship',     labelOf('dynamic', c.dynamic)],
+          ['Tone',             labelOf('tone', c.tone)],
+          ['Proactivity',      labelOf('proactivity', c.proactivity)],
+          ['Under stress',     labelOf('stress', c.stress)],
+          ['Deep-talk topics', labelOf('deepTalk', c.deepTalk)],
+        ].map(([k, v]) => `
+          <div>
+            <dt class="text-[.6875rem] text-gray-500 uppercase tracking-wide mb-1">${k}</dt>
+            <dd class="text-sm text-white">${v}</dd>
+          </div>
+        `).join('')}
+      </dl>`;
+  } catch (e) {
+    box.textContent = 'Failed to load. Try refreshing the page.';
+  }
+}
+
+async function ensureSetupOptions() {
+  if (_setupOptions) return _setupOptions;
+  const r = await fetch('/api/setup/options', { credentials: 'include' });
+  const data = await r.json();
+  _setupOptions = data.options;
+  return _setupOptions;
+}
+
+async function openSetupWizard(existingChoices = null) {
+  await ensureSetupOptions();
+  _wizardChoices = existingChoices ? { ...existingChoices } : {};
+  _wizardStep = 0;
+  document.getElementById('setup-modal').classList.remove('hidden');
+  renderWizardStep();
+}
+
+function closeSetupWizard() {
+  document.getElementById('setup-modal').classList.add('hidden');
+}
+
+function renderWizardStep() {
+  const step = WIZARD_STEPS[_wizardStep];
+  document.getElementById('wiz-title').textContent = step.title;
+  document.getElementById('wiz-subtitle').textContent = step.subtitle;
+  document.getElementById('wiz-progress').textContent = `Step ${_wizardStep + 1} of ${WIZARD_STEPS.length}`;
+  document.getElementById('wiz-progress-bar').style.width = `${((_wizardStep + 1) / WIZARD_STEPS.length) * 100}%`;
+
+  const body = document.getElementById('wiz-fields');
+  body.innerHTML = step.fields.map(f => renderField(f)).join('');
+
+  document.getElementById('wiz-back').classList.toggle('invisible', _wizardStep === 0);
+  document.getElementById('wiz-next').textContent =
+    _wizardStep === WIZARD_STEPS.length - 1 ? 'Finish' : 'Next →';
+}
+
+function renderField(field) {
+  if (field.kind === 'text') {
+    const val = _wizardChoices[field.key] || '';
+    return `
+      <div class="mb-6">
+        <label class="block text-[.78rem] text-gray-300 font-medium mb-2">${field.label}</label>
+        <input id="wiz-${field.key}" type="text" value="${escapeHTML(val)}"
+          placeholder="${field.placeholder || ''}"
+          oninput="_wizardChoices['${field.key}'] = this.value"
+          class="w-full px-3.5 py-2.5 bg-surface-950 border border-surface-700/60 rounded-lg text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-brand-500/60 transition" />
+      </div>`;
+  }
+  // choice
+  const opts = _setupOptions[field.key] || [];
+  const selected = _wizardChoices[field.key];
+  return `
+    <div class="mb-6">
+      <label class="block text-[.78rem] text-gray-300 font-medium mb-2.5">${field.label}</label>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        ${opts.map(o => `
+          <button type="button"
+            onclick="_wizardChoices['${field.key}']='${o.key}'; renderWizardStep()"
+            class="text-left px-4 py-3 rounded-lg border transition ${
+              selected === o.key
+                ? 'border-brand-500/60 bg-brand-500/10'
+                : 'border-surface-700/50 bg-surface-900/40 hover:border-surface-600'
+            }">
+            <div class="text-sm text-white font-medium">${o.label}</div>
+            ${o.description ? `<div class="text-xs text-gray-500 mt-1">${o.description}</div>` : ''}
+          </button>
+        `).join('')}
+      </div>
+    </div>`;
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function wizardBack() {
+  if (_wizardStep > 0) {
+    _wizardStep--;
+    renderWizardStep();
+  }
+}
+
+async function wizardNext() {
+  // Validate current step before advancing
+  const step = WIZARD_STEPS[_wizardStep];
+  for (const f of step.fields) {
+    if (f.kind === 'choice' && !_wizardChoices[f.key]) {
+      flashStatus(`Please pick "${f.label}".`, 'error');
+      return;
+    }
+  }
+
+  if (_wizardStep < WIZARD_STEPS.length - 1) {
+    _wizardStep++;
+    renderWizardStep();
+    return;
+  }
+
+  // Final step: submit
+  const btn = document.getElementById('wiz-next');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  flashStatus('');
+
+  try {
+    const r = await fetch('/api/setup/companion', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ choices: _wizardChoices }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      flashStatus(data.error || 'Save failed.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Finish';
+      return;
+    }
+    flashStatus('Done. Your ClawSoul is ready.', 'ok');
+    setTimeout(() => {
+      closeSetupWizard();
+      // Refresh the dashboard view so stats reflect the new identity
+      refreshDashboard();
+      if (currentTab === 'persona') loadPersona();
+    }, 900);
+  } catch (e) {
+    flashStatus('Network error.', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Finish';
+  }
+}
+
+function flashStatus(msg, kind = '') {
+  const el = document.getElementById('wiz-status');
+  el.textContent = msg;
+  el.className = 'text-sm min-h-[1.2em] ' + (
+    kind === 'error' ? 'text-red-400' :
+    kind === 'ok'    ? 'text-emerald-400' : 'text-gray-500'
+  );
+}
+
+async function maybeOpenWizardOnFirstLoad() {
+  try {
+    const r = await fetch('/api/setup/companion', { credentials: 'include' });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data.choices) openSetupWizard();
+  } catch (e) { /* network blip — silent */ }
+}
+
+// ── Tools tab ────────────────────────────────────────────────────────────────
+
+// Brand logos + generic icons. Each SVG is sized to fill its 36×36 container.
+// Brand marks use brand colours baked into the path; generic icons inherit
+// `currentColor` (set per-card to the tool's accent).
+const ICON_SVG = {
+  // ── Brand logos (paths from simple-icons, single-fill style) ────────────
+  gmail: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#ea4335" d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>`,
+  google_calendar: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#1a73e8" d="M20 4h-1V2h-2v2H7V2H5v2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H4V10h16v10zm0-12H4V6h16v2z"/><text x="12" y="18" text-anchor="middle" font-size="9" font-weight="700" fill="#1a73e8" font-family="Inter,sans-serif">31</text></svg>`,
+  twitter: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`,
+  reddit: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#ff4500" d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12.5c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>`,
+  spotify: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#1ed760" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12A12 12 0 0 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>`,
+  apple: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#a3a3a3" d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>`,
+  openai: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#10a37f" d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>`,
+  elevenlabs: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="6" height="18" rx="0.5" fill="#0f0f0f"/><rect x="15" y="3" width="6" height="18" rx="0.5" fill="#0f0f0f"/></svg>`,
+  deepgram: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#13ef93" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0Zm-.45 18H6V6h5.55c3.46 0 5.7 2.4 5.7 6s-2.24 6-5.7 6Zm0-9.6H9v7.2h2.55c1.84 0 3-1.36 3-3.6s-1.16-3.6-3-3.6Z"/></svg>`,
+  tavily: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="6" fill="none" stroke="#22c55e" stroke-width="2.5"/><line x1="20" y1="20" x2="15.5" y2="15.5" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round"/><circle cx="11" cy="11" r="2.5" fill="#22c55e"/></svg>`,
+
+  // ── Generic icons (Lucide-style, single colour via currentColor) ─────────
+  selfie: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="4"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/></svg>`,
+  weather: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="7" cy="9" r="3.2" fill="currentColor" fill-opacity="0.18"/><circle cx="7" cy="9" r="3.2"/><path d="M11 8h.01M13 5h.01M15 8h.01M17 5h.01M19 8h.01"/><path d="M5 18a4 4 0 0 1 0-8 6 6 0 0 1 11.16-1.5A4 4 0 0 1 18 18Z"/></svg>`,
+  time: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>`,
+  translator: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="m5 8 5 5"/><path d="M4 14 14 4"/><path d="M2 5h12"/><path d="M7 2v3"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>`,
+  summarize: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>`,
+  news: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/></svg>`,
+  random: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="16" cy="8" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="8" cy="16" r="1.4" fill="currentColor"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/></svg>`,
+};
+
+let _toolsCache = null;
+let _toolsFilter = 'all';
+
+async function loadTools(force = false) {
+  if (_toolsCache && !force) return renderTools();
+  document.getElementById('tools-count').textContent = 'Loading…';
+  try {
+    const r = await fetch('/api/tools', { credentials: 'include' });
+    const data = await r.json();
+    _toolsCache = data.tools || [];
+    renderTools();
+  } catch (e) {
+    document.getElementById('tools-count').textContent = 'Failed to load tools.';
+  }
+}
+
+function setToolsFilter(f) {
+  _toolsFilter = f;
+  document.querySelectorAll('.tools-chip').forEach(el => {
+    if (el.dataset.filter === f) {
+      el.className = 'tools-chip px-3 py-1.5 rounded-full text-xs font-medium bg-white text-black';
+    } else {
+      el.className = 'tools-chip px-3 py-1.5 rounded-full text-xs font-medium bg-surface-800/60 text-gray-300 hover:bg-surface-700';
+    }
+  });
+  renderTools();
+}
+
+function _toolMatchesFilter(t) {
+  if (_toolsFilter === 'all') return true;
+  return t.status === _toolsFilter;
+}
+
+function renderTools() {
+  if (!_toolsCache) return;
+  const visible = _toolsCache.filter(_toolMatchesFilter);
+  document.getElementById('tools-count').textContent =
+    `${visible.length} of ${_toolsCache.length} tools`;
+
+  const premium = visible.filter(t => t.category === 'Premium');
+  const standard = visible.filter(t => t.category !== 'Premium');
+
+  document.getElementById('tools-premium-count').textContent =
+    premium.length ? `${premium.length} available` : '';
+  document.getElementById('tools-standard-count').textContent =
+    standard.length ? `${standard.length} available` : '';
+
+  document.getElementById('tools-premium-grid').innerHTML = premium.map(toolCardHTML).join('') || _emptyStateHTML();
+  document.getElementById('tools-standard-grid').innerHTML = standard.map(toolCardHTML).join('') || '';
+}
+
+function _emptyStateHTML() {
+  return '<div class="col-span-full text-sm text-gray-500 italic text-center py-12">No tools match this filter.</div>';
+}
+
+function toolCardHTML(t) {
+  const statusBadge = {
+    activated:     '<span class="text-[.6875rem] text-emerald-400 font-medium flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>ACTIVATED</span>',
+    not_connected: '<span class="text-[.6875rem] text-gray-500 font-medium">Not connected</span>',
+    coming_soon:   '<span class="text-[.6875rem] text-amber-400/80 font-medium">Coming soon</span>',
+  }[t.status] || '';
+
+  const actionBtn = (() => {
+    if (t.status === 'coming_soon') return '';
+    if (t.authType === 'none' || t.authType === 'shared') return '';
+    if (t.status === 'activated') {
+      return `<button onclick="disconnectTool('${t.name}')" class="btn-ghost !py-1.5 !px-3 text-xs">Disconnect</button>`;
+    }
+    return `<button onclick="connectTool('${t.name}')" class="btn-primary !py-1.5 !px-3 text-xs">Connect</button>`;
+  })();
+
+  const desc = escapeHtml(t.description);
+  // Brand SVGs come with their own fill; generic icons use currentColor and
+  // pick up the tool's accent. We render onto a near-white tile so brand
+  // colours pop the same way Syncore's catalogue does.
+  const svg = ICON_SVG[t.iconKey] || `<span class="text-base">${t.icon}</span>`;
+  const isBrand = /<path[^>]*fill="#/.test(svg) || /<rect[^>]*fill="#/.test(svg);
+  const iconWrap = isBrand
+    ? 'background:#f8fafc;'
+    : `background:${t.accent}1a; color:${t.accent};`;
+  return `
+    <div class="rounded-xl border border-surface-700/50 bg-surface-900/40 p-4 hover:border-surface-600 transition flex flex-col">
+      <div class="flex items-start justify-between mb-3">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden" style="${iconWrap}">
+          <span class="w-5 h-5 inline-flex items-center justify-center [&_svg]:w-full [&_svg]:h-full">${svg}</span>
+        </div>
+        ${statusBadge}
+      </div>
+      <div class="flex-1">
+        <div class="text-[.92rem] font-semibold text-white mb-1">${escapeHtml(t.displayName)}</div>
+        <div class="text-[.78rem] text-gray-400 leading-relaxed">${desc}</div>
+      </div>
+      ${actionBtn ? `<div class="mt-4 flex justify-end">${actionBtn}</div>` : ''}
+    </div>
+  `;
+}
+
+async function connectTool(name) {
+  const tool = _toolsCache.find(t => t.name === name);
+  if (!tool) return;
+
+  if (tool.authType === 'api_key') {
+    const link = tool.keyUrl ? ` Get one: ${tool.keyUrl}` : '';
+    const key = prompt(`Paste your ${tool.displayName} API key.${link}`);
+    if (!key) return;
+    const r = await fetch(`/api/tools/${name}/connect`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: key.trim() }),
+    });
+    const body = await r.json();
+    if (!r.ok) { alert(body.error || 'Save failed'); return; }
+    loadTools(true);
+    return;
+  }
+
+  if (tool.authType === 'oauth' || tool.authType === 'caldav') {
+    alert('OAuth integrations are rolling out in the next release — coming soon.');
+    return;
+  }
+}
+
+async function disconnectTool(name) {
+  const tool = _toolsCache.find(t => t.name === name);
+  if (!tool) return;
+  if (!confirm(`Disconnect ${tool.displayName}? You can re-add it any time.`)) return;
+  const r = await fetch(`/api/tools/${name}`, { method: 'DELETE', credentials: 'include' });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    alert(body.error || 'Disconnect failed');
+    return;
+  }
+  loadTools(true);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 switchTab('dashboard');
 connectWebSocket();
 refreshDashboard();
+maybeOpenWizardOnFirstLoad();
 </script>
+
+<!-- ═══ Setup Wizard Modal ═══════════════════════════════════════════════ -->
+<div id="setup-modal" class="hidden fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-surface-900 border border-surface-700/60 rounded-2xl shadow-2xl">
+    <div class="p-8 sm:p-10">
+      <!-- Header -->
+      <div class="mb-1 flex items-baseline justify-between">
+        <span id="wiz-progress" class="text-[.6875rem] text-gray-500 uppercase tracking-widest">Step 1 of 3</span>
+        <button onclick="closeSetupWizard()" class="text-gray-500 hover:text-white text-sm" title="Close">✕</button>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="w-full h-1 bg-surface-800 rounded-full overflow-hidden mb-6">
+        <div id="wiz-progress-bar" class="h-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-300" style="width:33%"></div>
+      </div>
+
+      <!-- Step title -->
+      <h2 id="wiz-title" class="text-2xl font-bold text-white tracking-tight mb-1"></h2>
+      <p id="wiz-subtitle" class="text-sm text-gray-400 mb-8"></p>
+
+      <!-- Fields -->
+      <div id="wiz-fields"></div>
+
+      <!-- Footer -->
+      <div class="mt-6 flex items-center justify-between border-t border-surface-700/50 pt-5">
+        <button id="wiz-back" onclick="wizardBack()" class="btn-ghost !py-2 !px-4 text-sm">← Back</button>
+        <span id="wiz-status" class="text-sm min-h-[1.2em] text-gray-500"></span>
+        <button id="wiz-next" onclick="wizardNext()" class="btn-primary !py-2.5 !px-6 text-sm">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

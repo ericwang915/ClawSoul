@@ -28,6 +28,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from .agent import Agent
+from .storage import StorageManager
 
 if TYPE_CHECKING:
     from .session_store import SessionStore
@@ -49,6 +50,15 @@ class PersistentAgent(Agent):
         super().__init__(*args, **kwargs)
         self._store = store
         self._session_id = session_id
+
+        # Unified storage (events + FTS5 transcript index).  The Agent reads
+        # back via attribute name ``_session_index`` (legacy) so the
+        # recall_conversation tool dispatcher in agent.py keeps working.
+        try:
+            self._session_index: StorageManager | None = StorageManager.instance()
+        except Exception as exc:
+            logger.warning("[PersistentAgent] StorageManager init failed: %s", exc)
+            self._session_index = None
 
         # ── Soul Mate: ensure milestone first-chat date on init ────────────
         try:
@@ -131,6 +141,15 @@ class PersistentAgent(Agent):
         for msg in self.messages[1:]:
             self._ensure_ts(msg)
         self._store.save(self._session_id, self.messages)
+
+        # Mirror to the FTS5 transcript index for cross-session recall.
+        # index_turn() dedupes by content hash so re-saving the whole list
+        # each chat() call only inserts the *new* turns.
+        if self._session_index is not None:
+            try:
+                self._session_index.index_messages(self._session_id, self.messages[1:])
+            except Exception as exc:
+                logger.warning("[PersistentAgent] FTS5 index write failed: %s", exc)
 
     def chat(self, user_input: str) -> str:
         response = super().chat(user_input)

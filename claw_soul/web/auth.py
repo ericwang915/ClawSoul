@@ -19,9 +19,12 @@ import os
 from typing import Optional
 
 import jwt
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from jwt import PyJWKClient
+from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse, RedirectResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+from ..core import tenancy
 
 # Routes that bypass auth entirely
 PUBLIC_PATHS = {
@@ -63,39 +66,148 @@ def allowed_origins() -> list[str]:
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 
+def cookie_domain() -> str | None:
+    """Optional cookie ``Domain`` attribute.
+
+    Set ``COOKIE_DOMAIN=.herandhim.ai`` so the dashboard cookie is shared with
+    the marketing site / login page on the same registrable domain. Leave
+    empty for a host-only cookie (default).
+    """
+    return os.environ.get("COOKIE_DOMAIN", "").strip() or None
+
+
 def auth_enabled() -> bool:
-    return bool(jwt_secret())
+    # The auth gate turns on whenever EITHER a shared JWT secret (legacy
+    # HS256-signed Supabase projects) OR a Supabase URL (new ES256-signed
+    # projects, where we verify with the JWKS public key) is configured.
+    return bool(jwt_secret() or supabase_url())
+
+
+def login_url() -> str:
+    """Where to send an unauthenticated browser.
+
+    Defaults to the dashboard's built-in ``/login`` (the bundled fallback
+    page). If ``LOGIN_REDIRECT_URL`` is configured, redirect there instead
+    — usually the marketing site's branded login (e.g. herandhim.ai/login)
+    which has OAuth providers, so users don't see a duplicate login form
+    sitting on the dashboard subdomain.
+    """
+    return os.environ.get("LOGIN_REDIRECT_URL", "").strip() or "/login"
+
+
+# ── JWKS cache for asymmetric (ES256 / RS256) Supabase projects ─────────────
+
+_jwks_client: PyJWKClient | None = None
+_jwks_url_cached: str | None = None
+
+
+def _jwks_client_for_supabase() -> PyJWKClient | None:
+    """Lazy-build (and cache) a JWKS client for the current SUPABASE_URL."""
+    global _jwks_client, _jwks_url_cached
+    base = supabase_url()
+    if not base:
+        return None
+    url = f"{base}/auth/v1/.well-known/jwks.json"
+    if _jwks_url_cached != url:
+        _jwks_url_cached = url
+        # PyJWKClient caches keys in-process and respects HTTP cache headers.
+        _jwks_client = PyJWKClient(url, cache_keys=True, max_cached_keys=8)
+    return _jwks_client
 
 
 # ── JWT decode + validation ─────────────────────────────────────────────────
 
 def decode_jwt(token: str) -> Optional[dict]:
-    secret = jwt_secret()
-    if not secret or not token:
+    """Verify a Supabase access token and return its payload.
+
+    Supports two flavours of Supabase JWT signing:
+
+    * **HS256** — legacy projects with a shared ``SUPABASE_JWT_SECRET``.
+    * **ES256 / RS256** — current Supabase default. Public key is fetched
+      from ``<SUPABASE_URL>/auth/v1/.well-known/jwks.json`` and cached.
+
+    Returns the payload on success, ``None`` on any failure. The reason is
+    captured on ``decode_jwt.last_error`` so callers can surface it.
+    """
+    decode_jwt.last_error = None  # type: ignore[attr-defined]
+
+    if not token:
+        decode_jwt.last_error = "missing token"  # type: ignore[attr-defined]
         return None
+
     try:
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-    except jwt.PyJWTError:
+        header = jwt.get_unverified_header(token)
+    except jwt.PyJWTError as exc:
+        decode_jwt.last_error = f"malformed JWT header: {exc}"  # type: ignore[attr-defined]
+        return None
+
+    alg = header.get("alg") or ""
+
+    try:
+        if alg == "HS256":
+            secret = jwt_secret()
+            if not secret:
+                decode_jwt.last_error = (
+                    "JWT signed with HS256 but server has no SUPABASE_JWT_SECRET"
+                )  # type: ignore[attr-defined]
+                return None
+            payload = jwt.decode(
+                token, secret, algorithms=["HS256"], audience="authenticated"
+            )
+        elif alg in ("ES256", "RS256"):
+            client = _jwks_client_for_supabase()
+            if client is None:
+                decode_jwt.last_error = (
+                    f"JWT signed with {alg} but server has no SUPABASE_URL "
+                    "to fetch JWKS from"
+                )  # type: ignore[attr-defined]
+                return None
+            signing_key = client.get_signing_key_from_jwt(token)
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=[alg],
+                audience="authenticated",
+            )
+        else:
+            decode_jwt.last_error = f"unsupported JWT algorithm: {alg!r}"  # type: ignore[attr-defined]
+            return None
+    except jwt.ExpiredSignatureError:
+        decode_jwt.last_error = "token expired"  # type: ignore[attr-defined]
+        return None
+    except jwt.InvalidAudienceError:
+        decode_jwt.last_error = "wrong audience (expected 'authenticated')"  # type: ignore[attr-defined]
+        return None
+    except jwt.InvalidSignatureError:
+        decode_jwt.last_error = (
+            "signature mismatch — verification key on the server doesn't match Supabase"
+        )  # type: ignore[attr-defined]
+        return None
+    except jwt.PyJWTError as exc:
+        decode_jwt.last_error = f"jwt error: {type(exc).__name__}: {exc}"  # type: ignore[attr-defined]
+        return None
+    except Exception as exc:
+        decode_jwt.last_error = f"jwks/key error: {type(exc).__name__}: {exc}"  # type: ignore[attr-defined]
         return None
 
     allowed = allowed_emails()
     if allowed:
         email = (payload.get("email") or "").lower()
         if email not in allowed:
+            decode_jwt.last_error = f"email {email!r} not on ALLOWED_EMAILS"  # type: ignore[attr-defined]
             return None
     return payload
 
 
-def extract_token(request: Request) -> Optional[str]:
-    auth = request.headers.get("authorization", "")
+decode_jwt.last_error = None  # type: ignore[attr-defined]
+
+
+def extract_token(conn: HTTPConnection) -> Optional[str]:
+    """Pull the JWT from Authorization or cookie. Works for both HTTP + WS."""
+    auth = conn.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         return auth[7:].strip()
-    return request.cookies.get(COOKIE_NAME)
+    return conn.cookies.get(COOKIE_NAME)
 
 
 def authorize_websocket(token: Optional[str]) -> Optional[dict]:
@@ -110,25 +222,67 @@ def authorize_websocket(token: Optional[str]) -> Optional[dict]:
 
 # ── Middleware ──────────────────────────────────────────────────────────────
 
-class AuthMiddleware(BaseHTTPMiddleware):
-    """Reject unauthenticated requests when SUPABASE_JWT_SECRET is set."""
+class AuthMiddleware:
+    """Pure-ASGI middleware. Gates requests AND sets the tenancy contextvar.
 
-    async def dispatch(self, request: Request, call_next):
-        path = request.url.path
+    Implemented as raw ASGI (not Starlette's ``BaseHTTPMiddleware``) because
+    that base class spawns the downstream app in a separate task, which
+    breaks contextvar propagation — our per-user tenancy contextvar would
+    not be visible to route handlers. See encode/starlette#1715.
+    """
 
-        if path in PUBLIC_PATHS or any(path.startswith(p) for p in PUBLIC_PREFIXES):
-            return await call_next(request)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        is_public = (
+            path in PUBLIC_PATHS
+            or any(path.startswith(p) for p in PUBLIC_PREFIXES)
+        )
+
+        # Fast path 1: auth gate is off altogether (local dev). No contextvar
+        # binding; everything runs single-tenant.
         if not auth_enabled():
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
-        token = extract_token(request)
-        payload = decode_jwt(token) if token else None
+        # In all other cases we have to inspect the token, because we want to
+        # bind tenancy even for "public" routes (e.g. an authed /api/status
+        # call should still see the user's own state). The gate ENFORCEMENT
+        # still skips public routes — fly health checks reach /api/status
+        # without a token and get the daemon-wide stats.
+        # NB: must use HTTPConnection (not Request) so this works for both
+        # HTTP and WebSocket scopes — Request asserts scope['type']=='http'.
+        conn = HTTPConnection(scope)
+        token_str = extract_token(conn)
+        payload = decode_jwt(token_str) if token_str else None
 
         if not payload:
+            if is_public:
+                await self.app(scope, receive, send)
+                return
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": 4401})
+                return
             if path.startswith(("/api/", "/ws/")):
-                return JSONResponse({"error": "unauthorized"}, status_code=401)
-            return RedirectResponse(url="/login", status_code=302)
+                response = JSONResponse({"error": "unauthorized"}, status_code=401)
+            else:
+                response = RedirectResponse(url=login_url(), status_code=302)
+            await response(scope, receive, send)
+            return
 
-        request.state.user = payload
-        return await call_next(request)
+        # Have a valid token — bind the tenancy contextvar so all route
+        # handlers, agent lookups, and storage calls see the right user_id.
+        user_id = payload.get("sub")
+        cv_token = tenancy.set_current_user(user_id) if user_id else None
+
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            if cv_token is not None:
+                tenancy.reset_current_user(cv_token)

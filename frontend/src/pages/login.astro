@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import Nav from '../components/Nav.astro';
 
-const DASHBOARD = 'https://clawsoul.fly.dev';
+const DASHBOARD = 'https://app.herandhim.ai';
 ---
 
 <Layout title="Sign in · ClawSoul" description="Sign in to your ClawSoul dashboard.">
@@ -150,9 +150,11 @@ const DASHBOARD = 'https://clawsoul.fly.dev';
           btn.disabled = false;
           return;
         }
+        // (body.error path above already shows the real reason verbatim)
 
         setStatus('Signed in. Redirecting…', 'ok');
-        // Top-level navigation: cookie set above will be sent on this request.
+        // Go straight to the dashboard — Telegram setup lives inside it now
+        // (under the Integrations tab).
         window.location.href = `${DASHBOARD}/`;
       });
     })();

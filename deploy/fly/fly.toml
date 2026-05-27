@@ -31,10 +31,13 @@ swap_size_mb    = 512
     method       = "GET"
     path         = "/api/status"
 
-# Plenty for one user's daemon. Bump memory if you load big persona libs.
+# Sized for the multi-tenant in-process model: every active user costs
+# ~30-50 MB in cached agent state + a per-user PTB long-poll Application.
+# 1 GB / 2 vCPU comfortably handles ~25-35 active users; bump again before
+# we cross ~50 users, or move to horizontal Fly Machines sharding.
 [[vm]]
-  size   = "shared-cpu-1x"
-  memory = "512mb"
+  size   = "shared-cpu-2x"
+  memory = "1gb"
 
 # Persistent volume for ~/.claw_soul/ contents (config, memory, photos, logs).
 # Volume is created once via `fly volumes create` (see README) and

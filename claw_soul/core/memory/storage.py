@@ -134,10 +134,18 @@ class MemoryStorage:
             print(f"Error saving MEMORY.md: {e}")
 
     def _append_daily_log(self, key: str, value: str) -> None:
-        """Append an entry to today's daily log file."""
-        today = datetime.now().strftime("%Y-%m-%d")
+        """Append an entry to today's daily log file.
+
+        Timestamps use the bot's home timezone so the daily file actually lines
+        up with wall-clock — `datetime.now()` in a UTC container would write
+        "03:21" for a memory set at noon Shanghai, then leak into the agent's
+        boot context and convince it that everything happens at night.
+        """
+        from ...core import tenancy
+        dt = tenancy.now_in_bot_tz()
+        today = dt.strftime("%Y-%m-%d")
         daily_file = os.path.join(self.memory_dir, f"{today}.md")
-        now = datetime.now().strftime("%H:%M:%S")
+        now = dt.strftime("%H:%M:%S")
 
         is_new = not os.path.exists(daily_file)
         try:
@@ -155,7 +163,8 @@ class MemoryStorage:
         return entry["value"] if entry else None
 
     def set(self, key: str, value: Any) -> None:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        from ...core import tenancy
+        now = tenancy.now_in_bot_tz().strftime("%Y-%m-%d %H:%M:%S")
         self.data[key] = {"value": str(value), "updated": now}
         self._save_memory_md()
         self._append_daily_log(key, str(value))

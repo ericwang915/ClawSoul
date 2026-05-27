@@ -22,17 +22,44 @@ import re
 from pathlib import Path
 from typing import Any
 
-CLAWSOUL_HOME = Path(os.environ.get("CLAWSOUL_HOME", Path.home() / ".claw_soul"))
+# The base directory (single root for all tenants). The *per-user* dir is
+# computed dynamically by ``home()`` / ``CLAWSOUL_HOME`` based on the current
+# tenancy contextvar. In single-tenant mode (no user bound) both return BASE.
+_CLAWSOUL_BASE = Path(os.environ.get("CLAWSOUL_HOME", Path.home() / ".claw_soul"))
 
 _TRAILING_COMMA_RE = re.compile(r",\s*([}\]])")
 
-_config: dict | None = None
-_config_path: Path | None = None
+# Per-user config caches. Key = user_id (or "" for single-tenant).
+_configs: dict[str, dict] = {}
+_config_paths: dict[str, Path | None] = {}
+
+
+def _tenant_key() -> str:
+    """Return the cache key for the current tenant (empty string = legacy)."""
+    from .core.tenancy import get_current_user  # lazy import: tenancy → config dep
+    return get_current_user() or ""
 
 
 def home() -> Path:
-    """Return the ClawSoul home directory (``~/.claw_soul`` by default)."""
-    return CLAWSOUL_HOME
+    """Return the ClawSoul home directory for the current tenant.
+
+    - Multi-tenant request (user bound): ``<base>/users/<user_id>``
+    - Single-tenant fallback (laptop): ``<base>`` (e.g. ``~/.claw_soul``)
+    """
+    from .core.tenancy import resolve_home
+    return resolve_home(_CLAWSOUL_BASE)
+
+
+def __getattr__(name: str):
+    """Module-level dynamic attribute lookup (PEP 562).
+
+    Exposes ``config.CLAWSOUL_HOME`` as a *property* that resolves per-tenant
+    on every access. Existing code reading ``config.CLAWSOUL_HOME`` is auto-
+    matically per-user without modification.
+    """
+    if name == "CLAWSOUL_HOME":
+        return home()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _strip_json5(text: str) -> str:
@@ -72,7 +99,7 @@ def _strip_json5(text: str) -> str:
 
 def _find_config_file() -> Path | None:
     candidates = [
-        CLAWSOUL_HOME / "claw_soul.json",
+        home() / "claw_soul.json",
         Path.cwd() / "claw_soul.json",
     ]
     for p in candidates:
@@ -93,20 +120,18 @@ def _deep_get(data: dict, *keys: str, default: Any = None) -> Any:
 
 
 def load(path: str | Path | None = None, *, force: bool = False) -> dict:
-    """Load and cache configuration.  Safe to call multiple times.
+    """Load and cache configuration for the current tenant.
 
-    Parameters
-    ----------
-    path   : explicit path to a JSON config file (overrides auto-discovery)
-    force  : if True, reload even if already cached
+    Each tenant (user) has its own cached config. Switching tenants via the
+    ``tenancy`` contextvar transparently reads/loads a different file.
     """
-    global _config, _config_path
+    key = _tenant_key()
 
-    if _config is not None and not force:
-        return _config
+    if key in _configs and not force:
+        return _configs[key]
 
     config_path = Path(path) if path else _find_config_file()
-    _config_path = config_path
+    _config_paths[key] = config_path
     raw: dict = {}
 
     if config_path and config_path.is_file():
@@ -114,19 +139,20 @@ def load(path: str | Path | None = None, *, force: bool = False) -> dict:
         text = _strip_json5(text)
         raw = json.loads(text)
 
-    _config = raw
-    return _config
+    _configs[key] = raw
+    return raw
 
 
 def get(*keys: str, env: str | None = None, default: Any = None) -> Any:
-    """Get a config value.  Env var takes priority over JSON.
+    """Get a config value for the current tenant. Env var takes priority over JSON.
 
     Examples
     --------
     config.get("llm", "provider", env="LLM_PROVIDER", default="deepseek")
     config.get("channels", "telegram", "token", env="TELEGRAM_BOT_TOKEN")
     """
-    if _config is None:
+    key = _tenant_key()
+    if key not in _configs:
         load()
 
     if env:
@@ -134,7 +160,7 @@ def get(*keys: str, env: str | None = None, default: Any = None) -> Any:
         if env_val is not None:
             return env_val
 
-    val = _deep_get(_config, *keys, default=default)
+    val = _deep_get(_configs.get(key, {}), *keys, default=default)
     return val
 
 
@@ -152,7 +178,8 @@ def get_str(*keys: str, env: str | None = None, default: str = "") -> str:
 
 def get_list(*keys: str, env: str | None = None, default: list | None = None) -> list:
     """Get a list value.  Env var is parsed as comma-separated."""
-    if _config is None:
+    key = _tenant_key()
+    if key not in _configs:
         load()
 
     if env:
@@ -160,7 +187,7 @@ def get_list(*keys: str, env: str | None = None, default: list | None = None) ->
         if env_val is not None and env_val.strip():
             return [v.strip() for v in env_val.split(",") if v.strip()]
 
-    val = _deep_get(_config, *keys)
+    val = _deep_get(_configs.get(key, {}), *keys)
     if isinstance(val, list):
         return val
     return default or []
@@ -173,15 +200,16 @@ def get_int_list(*keys: str, env: str | None = None) -> list[int]:
 
 
 def config_path() -> Path | None:
-    """Return the path to the loaded config file, or None."""
-    return _config_path
+    """Return the path to the loaded config file for the current tenant."""
+    return _config_paths.get(_tenant_key())
 
 
 def as_dict() -> dict:
-    """Return a copy of the full loaded config dict."""
-    if _config is None:
+    """Return a copy of the full loaded config dict for the current tenant."""
+    key = _tenant_key()
+    if key not in _configs:
         load()
-    return dict(_config)
+    return dict(_configs.get(key, {}))
 
 
 def get_bool(*keys: str, env: str | None = None, default: bool = False) -> bool:
@@ -200,18 +228,18 @@ def per_group_isolation() -> bool:
 
 
 def group_context_dir(session_id: str) -> Path:
-    """Return the per-group context directory for *session_id*.
+    """Return the per-group context directory for *session_id* (per-tenant).
 
     Maps ``session_id`` (e.g. ``telegram:123``) to a safe filesystem path
-    under ``~/.claw_soul/context/groups/<safe_id>/``.
+    under ``<tenant home>/context/groups/<safe_id>/``.
     """
     safe = re.sub(r"[^\w\-]", "_", session_id)
-    return CLAWSOUL_HOME / "context" / "groups" / safe
+    return home() / "context" / "groups" / safe
 
 
 def files_dir() -> Path:
-    """Return the shared files directory (``~/.claw_soul/context/files/``)."""
-    d = CLAWSOUL_HOME / "context" / "files"
+    """Return the shared files directory for the current tenant."""
+    d = home() / "context" / "files"
     d.mkdir(parents=True, exist_ok=True)
     return d
 

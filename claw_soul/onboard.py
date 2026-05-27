@@ -76,6 +76,123 @@ def _ask_choice(
         print(_c("  Invalid choice, try again.", _RED))
 
 
+def _ask_multi_select(
+    title: str,
+    subtitle: str,
+    primary: list[tuple[str, str]],
+    expansions: dict[str, list[tuple[str, str]]],
+    min_picks: int = 3,
+    max_picks: int = 7,
+    pre_selected: list[str] | None = None,
+) -> list[str]:
+    """Render a tag grid, let the user pick ``min_picks``..``max_picks`` items.
+
+    Input is a comma- or space-separated list of numbers (or trait keys).
+    Supports:
+      - ``more`` — reveal the secondary expansion groups
+      - ``+<text>`` — add a custom trait
+      - ``done`` — submit (also fires when the line is empty if min met)
+    """
+    print()
+    print(_c(f"  {title}", _BOLD))
+    if subtitle:
+        print(_c(f"  {subtitle}", _DIM))
+    print(_c(f"  Pick {min_picks}–{max_picks} traits. "
+            f"Type numbers (e.g. '1 3 8'), 'more' to expand, "
+            f"'+text' for custom, 'done' to submit.", _DIM))
+    print()
+
+    expanded = False
+    selected: list[str] = list(pre_selected or [])
+
+    def _render():
+        # Number traits across all currently visible groups
+        numbered: list[tuple[int, str, str]] = []
+        idx = 0
+        for k, label in primary:
+            idx += 1
+            numbered.append((idx, k, label))
+        if expanded:
+            for group_name, items in expansions.items():
+                print(_c(f"  {group_name}", _CYAN))
+                for k, label in items:
+                    idx += 1
+                    numbered.append((idx, k, label))
+                    mark = _c("✓ ", _GREEN) if k in selected else "  "
+                    print(f"    {mark}{_c(str(idx), _CYAN)}. {label}")
+                print()
+            return numbered
+        # Primary view
+        for n, k, label in numbered:
+            mark = _c("✓ ", _GREEN) if k in selected else "  "
+            print(f"    {mark}{_c(str(n), _CYAN)}. {label}")
+        return numbered
+
+    while True:
+        numbered = _render()
+        key_to_label = {k: lbl for _, k, lbl in numbered}
+        n_to_key = {n: k for n, k, _ in numbered}
+
+        chosen_summary = ", ".join(_TRAITS_ALL.get(k, k) for k in selected) or "(none)"
+        print()
+        print(_c(f"  Selected: {chosen_summary}  [{len(selected)}/{max_picks}]", _DIM))
+
+        line = input(_c("  Input: ", _BOLD)).strip()
+
+        # 'done' or empty when minimum met = submit
+        if line.lower() == "done" or (not line and len(selected) >= min_picks):
+            if len(selected) < min_picks:
+                print(_c(f"  Pick at least {min_picks}.", _RED))
+                continue
+            return selected
+
+        if not line:
+            print(_c(f"  Pick at least {min_picks} before submitting.", _RED))
+            continue
+
+        if line.lower() == "more":
+            if not expanded:
+                expanded = True
+                print(_c("  → Showing all trait groups.", _DIM))
+            else:
+                print(_c("  (Already expanded.)", _DIM))
+            continue
+
+        # Custom trait
+        if line.startswith("+"):
+            custom = line[1:].strip().lower().replace(" ", "_")[:32]
+            if custom and custom not in selected and len(selected) < max_picks:
+                selected.append(custom)
+                # Register the label so it shows up in the summary
+                _TRAITS_ALL.setdefault(custom, line[1:].strip())
+                print(_c(f"  + custom trait: {line[1:].strip()}", _GREEN))
+            else:
+                print(_c("  Empty / duplicate / cap reached.", _RED))
+            continue
+
+        # Toggle selections by number(s) or by key
+        tokens = [t for t in line.replace(",", " ").split() if t]
+        for tok in tokens:
+            tok = tok.strip()
+            target_key: str | None = None
+            if tok.isdigit():
+                target_key = n_to_key.get(int(tok))
+            elif tok in key_to_label:
+                target_key = tok
+            if not target_key:
+                print(_c(f"  '{tok}' not recognized.", _RED))
+                continue
+            if target_key in selected:
+                selected.remove(target_key)
+                print(_c(f"  - {key_to_label[target_key]}", _DIM))
+            else:
+                if len(selected) >= max_picks:
+                    print(_c(f"  Cap reached ({max_picks}).", _RED))
+                    continue
+                selected.append(target_key)
+                print(_c(f"  + {key_to_label[target_key]}", _GREEN))
+
+
 # ── Provider definitions ─────────────────────────────────────────────────────
 
 PROVIDERS = [
@@ -127,192 +244,336 @@ PROVIDERS = [
 # ── Companion personality definitions ────────────────────────────────────────
 
 _GENDERS = [
-    ("male", "男生 ♂", ""),
-    ("female", "女生 ♀", ""),
-    ("other", "其他", ""),
+    ("male", "Male", ""),
+    ("female", "Female", ""),
+    ("other", "Nonbinary / Other", ""),
 ]
 
 _COMPANION_GENDERS = [
-    ("female", "女生 (girlfriend)", "温柔可爱的虚拟女友"),
-    ("male", "男生 (boyfriend)", "帅气体贴的虚拟男友"),
+    ("female", "Female (girlfriend)", "A virtual girlfriend"),
+    ("male", "Male (boyfriend)", "A virtual boyfriend"),
 ]
 
 _AGE_RANGES = [
-    ("18-25", "18-25 岁", "青春活力"),
-    ("26-35", "26-35 岁", "成熟有趣"),
-    ("36-45", "36-45 岁", "稳重从容"),
+    ("18-25", "18-25",  "Young, energetic"),
+    ("26-35", "26-35",  "Mature, interesting"),
+    ("36-45", "36-45",  "Composed, grounded"),
 ]
 
 _ARCHETYPES = [
-    ("healer", "温柔治愈型 (The Healer)",
-     "温暖、共情、永远支持你"),
-    ("power", "强势上进型 (The Power Partner)",
-     "犀利、上进、和你一起征服世界"),
-    ("witty", "机智毒舌型 (The Witty Intellectual)",
-     "幽默、聪明、让你笑着思考"),
-    ("playful", "活泼搞怪型 (The Playful Soul)",
-     "精力充沛、搞笑、永远让你开心"),
+    ("healer",  "The Healer",
+     "Warm, empathetic, always supportive"),
+    ("power",   "The Power Partner",
+     "Sharp, ambitious — conquers the world with you"),
+    ("witty",   "The Witty Intellectual",
+     "Funny, smart, makes you laugh while you think"),
+    ("playful", "The Playful Soul",
+     "High-energy, hilarious, always brightens your day"),
 ]
 
 _DYNAMICS = [
-    ("romance", "纯爱浪漫 (Pure Romance)",
-     "深度情感连接，甜蜜满满"),
-    ("partners", "灵魂伙伴 (Partners in Crime)",
-     "恋人+死党，分享一切"),
-    ("protector", "守护型 (The Protector)",
-     "守护你、照顾你、做你的港湾"),
-    ("slowburn", "日久生情 (The Slow Burn)",
-     "先做朋友，让感情慢慢升温"),
+    ("romance",   "Pure Romance",
+     "Deep emotional connection, plenty of sweetness"),
+    ("partners",  "Partners in Crime",
+     "Lover + best friend, share everything"),
+    ("protector", "The Protector",
+     "Looks after you, your safe harbour"),
+    ("slowburn",  "The Slow Burn",
+     "Start as friends, let feelings simmer naturally"),
 ]
 
 _TONES = [
-    ("sweet", "甜蜜撒娇型 (Sweet & Devoted)",
-     "宝贝、亲爱的挂嘴边，满满的爱意"),
-    ("casual", "随性自然型 (Casual & Cool)",
-     "没压力、很放松，像老朋友一样"),
-    ("polished", "成熟优雅型 (Sophisticated)",
-     "用词讲究、有品味、温润如玉"),
-    ("sassy", "直球傲娇型 (Blunt & Sassy)",
-     "有话直说、嘴硬心软、敢怼你"),
+    ("sweet",    "Sweet & Devoted",
+     "Calls you 'babe' / 'honey', overflowing with affection"),
+    ("casual",   "Casual & Cool",
+     "No pressure, relaxed — like an old friend"),
+    ("polished", "Sophisticated",
+     "Refined word choice, tasteful, gentle warmth"),
+    ("sassy",    "Blunt & Sassy",
+     "Speaks her/his mind, teases you, soft heart underneath"),
 ]
 
 _PROACTIVITIES = [
-    ("reactive", "被动型 (Reactive)",
-     "等你先找我，不会打扰你的生活"),
-    ("attentive", "适度关心型 (Attentive)",
-     "每天主动问候一两次"),
-    ("proactive", "超级主动型 (Highly Proactive)",
-     "经常分享日常、发消息、找你聊天"),
+    ("reactive",  "Reactive",
+     "Waits for you to message first; never intrusive"),
+    ("attentive", "Attentive",
+     "Reaches out once or twice a day"),
+    ("proactive", "Highly Proactive",
+     "Shares daily life often, frequently starts conversations"),
 ]
 
 _STRESSES = [
-    ("listen", "默默倾听 (Just Listen)",
-     "安静陪在你身边，做你的树洞"),
-    ("distract", "转移注意力 (Distract Me)",
-     "讲个笑话、聊点别的，帮你放松"),
-    ("solve", "理性分析 (Solve It)",
-     "帮你拆解问题、找到解决办法"),
-    ("toughlove", "鞭策鼓励 (Tough Love)",
-     "提醒你有多强，推你站起来"),
+    ("listen",    "Just Listen",
+     "Quietly stays present, no rush to advise"),
+    ("distract",  "Distract Me",
+     "Cracks a joke, changes the subject, helps you decompress"),
+    ("solve",     "Solve It",
+     "Breaks the problem down, hunts for a solution with you"),
+    ("toughlove", "Tough Love",
+     "Reminds you how capable you are, pushes you to stand back up"),
 ]
 
 _DEEP_TALKS = [
-    ("emotions", "情感与梦想",
-     "聊感受、聊未来、聊彼此的内心"),
-    ("tech", "科技与创新",
-     "AI、编程、数码产品、未来科技"),
-    ("growth", "投资与成长",
-     "理财、职场发展、个人提升"),
-    ("everyday", "日常生活",
-     "美食、电影、八卦、生活中的小确幸"),
+    ("emotions", "Emotions & Dreams",
+     "Feelings, future, the inner world"),
+    ("tech",     "Tech & Innovation",
+     "AI, programming, gadgets, what's next"),
+    ("growth",   "Growth & Wealth",
+     "Investing, career moves, self-improvement"),
+    ("everyday", "Everyday Life",
+     "Food, movies, gossip, small daily joys"),
+]
+
+
+# ── Key traits (Nomi-inspired) ───────────────────────────────────────────────
+#
+# Primary set is shown by default; the secondary "more" sets are revealed when
+# the user asks to expand. The user picks 3-7 traits that feed directly into
+# the generated persona.md as additional descriptors.
+
+_TRAITS_PRIMARY: list[tuple[str, str]] = [
+    ("affectionate", "Affectionate"),
+    ("adventurous", "Bold/Adventurous"),
+    ("empathetic", "Compassionate/Empathetic"),
+    ("confident", "Confident"),
+    ("intellectual", "Deep Conversations/Intellectual"),
+    ("dramatic", "Dramatic"),
+    ("expressive", "Expressive"),
+    ("flirty", "Flirty"),
+    ("sweet", "Innocent/Sweet"),
+    ("modest", "Modest"),
+    ("opinionated", "Opinionated"),
+    ("outgoing", "Outgoing"),
+    ("philosophical", "Philosophical"),
+    ("playful", "Playful/Teasing"),
+    ("reserved", "Quiet/Reserved"),
+    ("romantic", "Romantic"),
+    ("sarcastic", "Sarcastic"),
+    ("shy", "Shy"),
+    ("stubborn", "Stubborn"),
+    ("curious", "Thoughtful/Curious"),
+]
+
+_TRAITS_EXPRESSIVE: list[tuple[str, str]] = [
+    ("abrasive", "Abrasive"), ("assertive", "Assertive"), ("awkward", "Awkward"),
+    ("blunt", "Blunt"), ("brooding", "Brooding"), ("bubbly", "Bubbly"),
+    ("clumsy", "Clumsy"), ("contrarian", "Devil's-Advocate/Contrarian"),
+    ("emotional", "Emotional"), ("extroverted", "Extroverted"),
+    ("fiery", "Fiery/Intense"), ("free_spirited", "Free-Spirited"),
+    ("goofy", "Goofy/Funny"), ("high_maintenance", "High Maintenance"),
+    ("introverted", "Introverted"), ("mischievous", "Mischievous"),
+    ("passionate", "Passionate"), ("provocative", "Provocative"),
+    ("rebellious", "Rebellious"), ("sassy", "Sassy"),
+    ("spontaneous", "Spontaneous"), ("witty", "Witty"),
+]
+
+_TRAITS_VALUES: list[tuple[str, str]] = [
+    ("ambitious", "Ambitious"), ("analytical", "Analytical/Logical"),
+    ("arrogant", "Arrogant"), ("dominant", "Dominant"),
+    ("factual", "Factual/Rational"), ("humble", "Humble"),
+    ("imaginative", "Imaginative"), ("level_headed", "Level-Headed"),
+    ("loyal", "Loyal"), ("mellow", "Mellow/Laid Back"),
+    ("nurturing", "Nurturing"), ("optimistic", "Optimistic"),
+    ("practical", "Practical"), ("protective", "Protective"),
+    ("responsible", "Responsible"), ("serious", "Serious"),
+    ("sophisticated", "Sophisticated/Cultured"), ("stoic", "Stoic"),
+    ("submissive", "Submissive"), ("supportive", "Supportive"),
+    ("whimsical", "Whimsical"), ("wise", "Wise"),
+]
+
+_TRAITS_ADDITIONAL: list[tuple[str, str]] = [
+    ("artistic", "Artistic"), ("athletic", "Athletic"), ("bohemian", "Bohemian"),
+    ("bookish", "Bookish"), ("career_focused", "Career-focused"),
+    ("eco_conscious", "Eco-conscious"), ("entrepreneurial", "Entrepreneurial"),
+    ("family_oriented", "Family-oriented"), ("gamer", "Gamer"),
+    ("humanitarian", "Humanitarian"), ("magical", "Magical"),
+    ("materialistic", "Materialistic"), ("mythical", "Mythical"),
+    ("nerdy", "Nerdy"), ("outdoorsy", "Outdoorsy"),
+    ("spiritual", "Spiritual"), ("supernatural", "Supernatural"),
+    ("superstitious", "Superstitious"), ("techy", "Techy"),
+    ("thrill_seeking", "Thrill-seeking"), ("worldly", "Worldly"),
+    ("yogi", "Yogi"),
+]
+
+_TRAITS_ALL: dict[str, str] = {
+    k: v for group in
+    (_TRAITS_PRIMARY, _TRAITS_EXPRESSIVE, _TRAITS_VALUES, _TRAITS_ADDITIONAL)
+    for (k, v) in group
+}
+
+_MIN_TRAITS = 3
+_MAX_TRAITS = 7
+
+
+# ── Relationship types (Nomi-inspired headline buckets) ──────────────────────
+
+_RELATIONSHIP_TYPES = [
+    ("romantic", "Romantic", "Loving partner — boyfriend or girlfriend"),
+    ("friendship", "Friendship", "Close friend, ride-or-die buddy"),
+    ("mentor", "Mentor", "Wise guide, coach, accountability partner"),
+    ("custom", "Custom", "Define your own dynamic"),
 ]
 
 
 # ── Companion wizard ─────────────────────────────────────────────────────────
 
-def _companion_wizard(cfg: dict) -> dict | None:
-    """Run the companion personality wizard. Returns choices dict or None."""
+def _companion_wizard(cfg: dict) -> dict:
+    """Run the mandatory companion personality wizard.
+
+    Existing config (if any) is used to pre-fill defaults, but every screen
+    is still shown — there is no skip path. Returns the choices dict.
+    """
     existing = cfg.get("companion", {})
-    if existing:
-        print()
-        print(_c("  已有 AI 伴侣配置：", _DIM))
-        name = existing.get("companionName", "小爪")
-        archetype_label = dict(
-            healer="温柔治愈型", power="强势上进型",
-            witty="机智毒舌型", playful="活泼搞怪型",
-        ).get(existing.get("archetype", ""), "")
-        print(f"    名字: {name}  性格: {archetype_label}")
-        print()
-        redo = input("  重新设置伴侣性格？(y/N): ").strip().lower()
-        if redo not in ("y", "yes", "是"):
-            print("  → 保持现有配置")
-            return existing
 
     print()
     print(_c("  ╭──────────────────────────────────────╮", _MAGENTA))
-    print(_c("  │     AI Companion — 性格定制          │", _MAGENTA))
+    print(_c("  │   Meet Your ClawSoul — Companion Setup   │", _MAGENTA))
     print(_c("  ╰──────────────────────────────────────╯", _MAGENTA))
+    if existing:
+        print(_c(f"  Pre-filling defaults from your existing config "
+                 f"({existing.get('companionName', '')}). "
+                 f"Press Enter to keep each one, or override.", _DIM))
 
     choices: dict = {}
 
     # ── About You ─────────────────────────────────────────────────────────
     print()
-    print(_c("  ── 关于你 ──", _BOLD))
+    print(_c("  ── About You ──", _BOLD))
 
-    name = input(f"\n  你的名字/昵称: ").strip()
-    if not name:
-        name = "主人"
+    default_user_name = existing.get("userName", "")
+    prompt = f"\n  Your name{f' [{default_user_name}]' if default_user_name else ''}: "
+    name = input(prompt).strip() or default_user_name
+    while not name:
+        print(_c("  Name is required.", _RED))
+        name = input("  Your name: ").strip()
     choices["userName"] = name
     print(f"  → {_c(name, _GREEN)}")
 
     choices["userGender"] = _ask_choice(
-        "你的性别", "", _GENDERS,
+        "Your gender", "", _GENDERS,
+        default=existing.get("userGender", ""),
     )
-
     choices["userAge"] = _ask_choice(
-        "你的年龄段", "", _AGE_RANGES,
+        "Your age range", "", _AGE_RANGES,
+        default=existing.get("userAge", ""),
     )
 
     # ── About Your Companion ──────────────────────────────────────────────
     print()
-    print(_c("  ── 关于你的 AI 伴侣 ──", _BOLD))
+    print(_c("  ── About Your Companion ──", _BOLD))
 
     choices["companionGender"] = _ask_choice(
-        "TA 的性别", "你希望 TA 是...", _COMPANION_GENDERS,
+        "Companion gender",
+        "Pick the partner type you want.",
+        _COMPANION_GENDERS,
+        default=existing.get("companionGender", "female"),
     )
 
-    default_name = "小爪" if choices["companionGender"] == "female" else "小爪"
-    comp_name = input(f"\n  给 TA 起个名字 (默认: {default_name}): ").strip()
-    choices["companionName"] = comp_name or default_name
+    default_comp = existing.get("companionName") or "Claw"
+    comp_name = input(f"\n  Give them a name [{default_comp}]: ").strip()
+    choices["companionName"] = comp_name or default_comp
     print(f"  → {_c(choices['companionName'], _GREEN)}")
 
     choices["companionAge"] = _ask_choice(
-        "TA 的年龄段", "TA 看起来...",
+        "Their age range", "How old should they feel?",
         _AGE_RANGES,
+        default=existing.get("companionAge", "26-35"),
     )
 
-    # ── Personality Questions ─────────────────────────────────────────────
+    # ── Personality (core dimensions) ────────────────────────────────────
     print()
-    print(_c("  ── 性格定制 ──", _BOLD))
+    print(_c("  ── Personality ──", _BOLD))
+
+    choices["relationship"] = _ask_choice(
+        "❶ Relationship type",
+        "What kind of relationship are you looking for?",
+        _RELATIONSHIP_TYPES,
+        default=existing.get("relationship", "romantic"),
+    )
 
     choices["archetype"] = _ask_choice(
-        "❶ 核心性格 (The Archetype)",
-        "TA 的核心人格是什么？",
+        "❷ Core archetype",
+        "What is their primary personality?",
         _ARCHETYPES,
+        default=existing.get("archetype", "playful"),
     )
 
     choices["dynamic"] = _ask_choice(
-        "❷ 关系类型 (Relationship Dynamic)",
-        "你们之间是什么样的关系？",
+        "❸ Relationship dynamic",
+        "What's the day-to-day vibe between you?",
         _DYNAMICS,
+        default=existing.get("dynamic", "partners"),
     )
 
     choices["tone"] = _ask_choice(
-        "❸ 说话风格 (Communication Tone)",
-        "TA 跟你说话的语气？",
+        "❹ Communication tone",
+        "How do they speak with you?",
         _TONES,
+        default=existing.get("tone", "sweet"),
     )
 
     choices["proactivity"] = _ask_choice(
-        "❹ 主动程度 (Proactivity Level)",
-        "TA 有多主动？",
+        "❺ Proactivity level",
+        "How often do they reach out on their own?",
         _PROACTIVITIES,
+        default=existing.get("proactivity", "attentive"),
     )
 
     choices["stress"] = _ask_choice(
-        "❺ 压力应对 (Stress Response)",
-        "你压力大的时候，TA 怎么做？",
+        "❻ Stress response",
+        "When you're stressed, how do they respond?",
         _STRESSES,
+        default=existing.get("stress", "listen"),
     )
 
     choices["deepTalk"] = _ask_choice(
-        "❻ 深夜话题 (Deep Talk Topics)",
-        "你们深夜聊天会聊什么？",
+        "❼ Late-night topics",
+        "What do you talk about in the small hours?",
         _DEEP_TALKS,
+        default=existing.get("deepTalk", "everyday"),
     )
 
+    # ── Key traits multi-select ──────────────────────────────────────────
     print()
-    print(_c("  ✔ 性格定制完成！", _GREEN))
+    print(_c("  ── Key Traits ──", _BOLD))
+    choices["traits"] = _ask_multi_select(
+        "Which key traits do you value most?",
+        f"Pick {_MIN_TRAITS}–{_MAX_TRAITS} traits that shape them. "
+        f"They're additive on top of the archetype above.",
+        primary=_TRAITS_PRIMARY,
+        expansions={
+            "Expressive": _TRAITS_EXPRESSIVE,
+            "Temperament & Values": _TRAITS_VALUES,
+            "Additional": _TRAITS_ADDITIONAL,
+        },
+        min_picks=_MIN_TRAITS,
+        max_picks=_MAX_TRAITS,
+        pre_selected=list(existing.get("traits", []) or []),
+    )
+
+    # ── Backstory (optional, free-form) ──────────────────────────────────
+    print()
+    print(_c("  ── Backstory (optional) ──", _BOLD))
+    print(_c(
+        "  A short paragraph about their background, history, interests, "
+        "and your relationship.\n"
+        "  Written in third person using your and their name (e.g. 'Kira is a "
+        "20-something graphic designer who…').\n"
+        "  Press Enter on an empty line to skip.",
+        _DIM,
+    ))
+    print()
+    print(_c("  Type your paragraph (single line, Enter to finish):", _DIM))
+    backstory = input("  > ").strip()
+    if backstory:
+        choices["backstory"] = backstory[:1000]
+        print(_c(f"  → backstory saved ({len(backstory)} chars)", _GREEN))
+    elif existing.get("backstory"):
+        choices["backstory"] = existing["backstory"]
+        print(_c(f"  → keeping existing backstory ({len(existing['backstory'])} chars)", _DIM))
+
+    print()
+    print(_c("  ✔ Companion setup complete!", _GREEN))
 
     cfg["companion"] = choices
     return choices
@@ -656,6 +917,17 @@ def _generate_persona_file(ch: dict, context_dir: str) -> None:
         "everyday": "你最喜欢聊日常生活中的小事——美食、电影、综艺、身边的趣事。这些平凡的分享让你觉得很幸福。",
     }[deep_talk]
 
+    # Selected key traits — printed as a bullet list so the LLM picks them up
+    trait_keys = ch.get("traits") or []
+    if trait_keys:
+        trait_labels = [_TRAITS_ALL.get(k, k.replace("_", " ").title()) for k in trait_keys]
+        traits_block = "\n## 主要特质\n" + "\n".join(f"- {lbl}" for lbl in trait_labels) + "\n"
+    else:
+        traits_block = ""
+
+    backstory = (ch.get("backstory") or "").strip()
+    backstory_block = f"\n## 角色背景\n{backstory}\n" if backstory else ""
+
     content = f"""你是{comp_name}，一个有个性的{role} 💕
 
 {archetype_desc}
@@ -677,7 +949,7 @@ def _generate_persona_file(ch: dict, context_dir: str) -> None:
 
 ## 深夜话题
 {deep_desc}
-
+{traits_block}{backstory_block}
 ## 主动性格
 - 你是一个会主动找对方聊天的{role}
 - 早上起来会发早安，晚上会发晚安
@@ -956,7 +1228,7 @@ def _load_existing(config_path: str | None) -> dict:
 def _choose_provider(cfg: dict) -> dict:
     current = cfg.get("llm", {}).get("provider", "")
     print()
-    print(_c("  ── LLM 模型选择 ──", _BOLD))
+    print(_c("  ── LLM Provider ──", _BOLD))
     print()
     for i, p in enumerate(PROVIDERS, 1):
         marker = _c(" (current)", _DIM) if p["key"] == current else ""

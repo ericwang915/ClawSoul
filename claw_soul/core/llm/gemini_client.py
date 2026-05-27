@@ -16,12 +16,44 @@ from .base import LLMProvider
 from .response import MockChoice, MockFunction, MockMessage, MockResponse, MockToolCall
 
 
+# Fields Gemini's Schema proto accepts on function-tool parameters.
+# Anything else (default, examples, additionalProperties, $schema,
+# format, const, oneOf, anyOf, allOf, ...) gets stripped.
+_GEMINI_SCHEMA_FIELDS = {
+    "type", "description", "properties", "required",
+    "items", "enum", "nullable", "title",
+}
+
+
+def _sanitize_schema(schema: Any) -> Any:
+    """Recursively drop JSON-Schema fields that Gemini's Schema proto rejects.
+
+    Property names inside a ``"properties"`` dict are user-defined keys
+    (e.g. ``{"properties": {"email": {...}}}``) — they must NOT be filtered
+    by the whitelist; only their *values* are nested schemas.
+    """
+    if isinstance(schema, dict):
+        cleaned: dict = {}
+        for k, v in schema.items():
+            if k not in _GEMINI_SCHEMA_FIELDS:
+                continue
+            if k == "properties" and isinstance(v, dict):
+                cleaned[k] = {pname: _sanitize_schema(pschema) for pname, pschema in v.items()}
+            else:
+                cleaned[k] = _sanitize_schema(v)
+        return cleaned
+    if isinstance(schema, list):
+        return [_sanitize_schema(item) for item in schema]
+    return schema
+
+
 class GeminiProvider(LLMProvider):
     supports_images = True
 
     def __init__(self, api_key: str, model_name: str = "gemini-2.0-flash-exp"):
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
+        self.model_name = model_name  # for diagnostics / routing logs
 
     def _convert_tool_calls_to_parts(self, tool_calls_data: list) -> list:
         parts = []
@@ -79,14 +111,16 @@ class GeminiProvider(LLMProvider):
                     "parts": [content_types.FunctionResponse(name=func_name, response=resp_dict)],
                 })
 
-        # Convert tool schemas
+        # Convert tool schemas. Gemini's Schema proto is stricter than the
+        # OpenAI/JSON-Schema dialect — it rejects `default`, `examples`,
+        # `additionalProperties`, etc. with "Unknown field for Schema".
         gemini_tools = None
         if tools:
             declarations = [
                 {
                     "name": t["function"]["name"],
                     "description": t["function"].get("description"),
-                    "parameters": t["function"].get("parameters"),
+                    "parameters": _sanitize_schema(t["function"].get("parameters")),
                 }
                 for t in tools if t["type"] == "function"
             ]
@@ -152,10 +186,14 @@ class GeminiProvider(LLMProvider):
                     r"data:(image/\w+);base64,(.+)", url, _re.DOTALL
                 )
                 if m:
+                    # Gemini's inline_data wants RAW bytes, not the base64
+                    # text. Passing the b64 string makes Gemini decode it as
+                    # if it were bytes — model sees noise and says "I can't
+                    # see anything".
                     out.append({
                         "inline_data": {
                             "mime_type": m.group(1),
-                            "data": m.group(2),
+                            "data": _b64.b64decode(m.group(2)),
                         }
                     })
                 else:
@@ -170,7 +208,7 @@ class GeminiProvider(LLMProvider):
                         out.append({
                             "inline_data": {
                                 "mime_type": ct,
-                                "data": _b64.b64encode(data).decode(),
+                                "data": data,  # raw bytes, not base64
                             }
                         })
                     except Exception:

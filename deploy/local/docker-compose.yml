@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  clawsoul:
+    build:
+      context: ../..
+      dockerfile: deploy/fly/Dockerfile
+    ports:
+      - "7788:7788"
+    env_file:
+      - .env
+    volumes:
+      # 持久化数据：记忆、对话历史、配置等
+      - clawsoul_data:/data
+    # 重启策略：本地开发手动控制就好
+    restart: "no"
+
+volumes:
+  clawsoul_data:

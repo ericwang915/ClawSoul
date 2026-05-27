@@ -420,6 +420,28 @@ MEMORY_TOOLS: list[dict] = [
         ["key"],
     ),
     _fn(
+        "clear_chat_history",
+        (
+            "Wipe the current conversation history (this turn's chat thread) "
+            "and start a fresh session AFTER your reply is sent. Long-term "
+            "memory (MEMORY.md), persona, soul, skills, and learned facts "
+            "are preserved — only the rolling chat transcript is reset. "
+            "Use when the user explicitly asks to 'start over', 'reset our "
+            "chat', 'forget what we just talked about', or when you notice "
+            "the conversation has drifted badly and a clean slate would help. "
+            "Do NOT call this just to free context — auto-compaction handles "
+            "that. Send one farewell sentence to the user in the SAME turn, "
+            "then call this tool last."
+        ),
+        {
+            "reason": {
+                "type": "string",
+                "description": "Short note (1 line) on why a reset is appropriate, for logs.",
+            },
+        },
+        [],
+    ),
+    _fn(
         "update_index",
         (
             "Update the INDEX.md system info file. "
@@ -434,6 +456,31 @@ MEMORY_TOOLS: list[dict] = [
             },
         },
         ["content"],
+    ),
+    _fn(
+        "recall_conversation",
+        (
+            "Full-text search across past conversation transcripts (all sessions, "
+            "all time).  Use when the user asks 'did I tell you about X', 'we "
+            "talked about Y last week', or you need to find what was literally "
+            "said.  Different from `recall` which searches curated long-term "
+            "memory — this searches verbatim chat history."
+        ),
+        {
+            "query": {
+                "type": "string",
+                "description": "Keywords or phrase to search for in past conversations.",
+            },
+            "k": {
+                "type": "integer",
+                "description": "Max number of matches to return (default 5).",
+            },
+            "days": {
+                "type": "integer",
+                "description": "Only search turns from the last N days (omit for all time).",
+            },
+        },
+        ["query"],
     ),
 ]
 
@@ -866,6 +913,103 @@ CRON_TOOLS: list[dict] = [
         "cron_list",
         "List all currently scheduled cron jobs (both static and dynamic).",
         {},
+        [],
+    ),
+]
+
+
+WISHLIST_TOOLS: list[dict] = [
+    _fn(
+        "wishlist_add",
+        (
+            "Record a wish or want the user has expressed (food, place, activity, "
+            "purchase, plan). The wish stays pending until fulfilled; the wishlist "
+            "ticker may surface it later as a proactive nudge when the time is right. "
+            "ALWAYS use this when the user says things like '我想 / 想吃 / 想去 / 想要 / "
+            "下次 / 找时间 / 改天 / I want / I'd like to / one of these days'."
+        ),
+        {
+            "text": {
+                "type": "string",
+                "description": "Short, third-person description of what the user wants (e.g. '去日本吃寿司', 'try the new ramen place').",
+            },
+            "urgency": {
+                "type": "string",
+                "description": "How time-sensitive: 'high' (today/this week), 'medium' (default, soon), 'low' (someday).",
+                "enum": ["low", "medium", "high"],
+            },
+        },
+        ["text"],
+    ),
+    _fn(
+        "wishlist_mark_fulfilled",
+        (
+            "Mark a wish fulfilled when the user reports having done it / gotten it. "
+            "Use after the user says 'I just had sushi for dinner' for a 'eat sushi' wish."
+        ),
+        {"wish_id": {"type": "string", "description": "The wish ID returned by wishlist_add or wishlist_list."}},
+        ["wish_id"],
+    ),
+    _fn(
+        "wishlist_list",
+        "List the user's currently pending wishes (id + text + urgency).",
+        {},
+        [],
+    ),
+]
+
+
+BUCKET_LIST_TOOLS: list[dict] = [
+    _fn(
+        "bucket_add",
+        (
+            "Record a SHARED aspiration the couple wants to do TOGETHER long-term — "
+            "travel, food, experiences, milestone moments. Different from "
+            "`wishlist_add`: bucket items are 'WE' (durable, months-to-years horizon, "
+            "rephrased in second-person plural). Use when the user says things like "
+            "'someday we should...' / '以后我们一起去 X' / 'one day' / '咱俩...' / "
+            "'I wish we could'. Phrase the text in the 'we' voice."
+        ),
+        {
+            "text": {
+                "type": "string",
+                "description": "Short couple-voice description (e.g. '一起去北海道看雪', 'we try the omakase place downtown').",
+            },
+            "category": {
+                "type": "string",
+                "description": "Bucket: 'travel', 'food', 'experience', 'milestone', or 'general'.",
+                "enum": ["general", "travel", "food", "experience", "milestone"],
+            },
+            "note": {
+                "type": "string",
+                "description": "Optional short context the LLM captured.",
+            },
+        },
+        ["text"],
+    ),
+    _fn(
+        "bucket_mark_done",
+        (
+            "Mark a bucket-list item done when the couple actually does it. "
+            "Use after the user reports 'we just did X' for an existing bucket entry. "
+            "Feeds the milestone tracker so the agent can celebrate."
+        ),
+        {
+            "item_id": {"type": "string", "description": "The bucket item ID."},
+            "note": {"type": "string", "description": "Optional how-it-went note."},
+        },
+        ["item_id"],
+    ),
+    _fn(
+        "bucket_list",
+        "List the couple's currently pending bucket-list items, optionally filtered by category.",
+        {
+            "category": {
+                "type": "string",
+                "description": "Filter by category: travel / food / experience / milestone / general.",
+                "enum": ["general", "travel", "food", "experience", "milestone"],
+            },
+        },
         [],
     ),
 ]

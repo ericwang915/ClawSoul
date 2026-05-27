@@ -241,12 +241,12 @@ class MemoryManager:
         except Exception:
             logger.debug("Soul Mate affect context injection failed (non-fatal)", exc_info=True)
 
-        daily_budget = max(500, max_chars - sum(len(p) for p in parts))
-        daily = self.storage.read_recent_daily_logs(days=2)
-        if daily:
-            if len(daily) > daily_budget:
-                daily = daily[:daily_budget] + "\n\n…(truncated)"
-            parts.append("### Recent Activity (Daily Logs)\n" + daily)
+        # The daily logs were once injected here, but they leaked raw
+        # per-event timestamps into the agent's context and confused its
+        # sense of "now" (especially when timestamps were UTC while the
+        # agent thought in local time). The curated long-term memory above
+        # already carries the facts that matter; daily logs stay on disk
+        # for audit and recall(), not for boot context.
 
         return "\n\n".join(parts) if parts else ""
 
