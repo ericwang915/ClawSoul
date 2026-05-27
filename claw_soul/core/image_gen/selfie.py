@@ -91,6 +91,14 @@ def take_selfie(
     LLM has a specific situation in mind).  ``use_reference`` toggles
     pulling the primary reference image from the album.
     """
+    # Pre-flight disk quota check — refuse BEFORE spending an API call when
+    # there's no room to save the result anyway. ~700 KB is a conservative
+    # over-estimate of a 2048x2048 JPEG selfie.
+    from ..quota import check_disk
+    refusal = check_disk(extra_bytes=700_000)
+    if refusal:
+        raise SeedreamError(refusal)
+
     appearance = load_appearance()
     scene = build_scene(now)
 

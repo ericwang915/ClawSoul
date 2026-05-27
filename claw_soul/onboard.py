@@ -322,6 +322,166 @@ _OCCUPATIONS: list[tuple[str, str, str]] = [
 ]
 
 
+# ── Where the agent lives ────────────────────────────────────────────────────
+#
+# The agent (companion) gets its own country + region. If `companionRegion` is
+# left blank in the wizard, ``random_region()`` picks a default city for the
+# chosen country.  ``city_background()`` then yields a 1-paragraph blurb that
+# gets injected into the agent's profile so it has lived-in detail to draw on
+# ("the autumn light off the Bund", "the chai stalls near my office", …).
+#
+# Backgrounds are written in the **local language** for authentic flavour.
+
+import random as _random
+
+
+_REGIONS_BY_COUNTRY: dict[str, list[str]] = {
+    "CN": ["北京", "上海", "深圳", "杭州", "广州", "成都", "南京", "厦门", "苏州"],
+    "TW": ["台北", "高雄", "台中", "台南"],
+    "HK": ["中環", "灣仔", "尖沙咀", "上環"],
+    "SG": ["Orchard", "Tiong Bahru", "Tanjong Pagar", "Jurong"],
+    "JP": ["東京", "京都", "大阪", "横浜", "札幌", "福岡"],
+    "KR": ["서울", "부산", "인천", "대구"],
+    "US": ["New York", "San Francisco", "Los Angeles", "Seattle", "Boston", "Austin", "Chicago"],
+    "GB": ["London", "Manchester", "Edinburgh", "Bristol"],
+    "CA": ["Toronto", "Vancouver", "Montreal"],
+    "AU": ["Sydney", "Melbourne", "Brisbane"],
+    "DE": ["Berlin", "Munich", "Hamburg"],
+    "FR": ["Paris", "Lyon", "Marseille"],
+    "IN": ["Mumbai", "Delhi", "Bangalore", "Chennai"],
+    "OTHER": [],
+}
+
+
+_CITY_BACKGROUND: dict[str, str] = {
+    # CN
+    "北京":
+        "北京有四季，秋天最舒服。胡同的早晨满是豆汁、煎饼果子的味道。"
+        "三里屯、五道营、南锣鼓巷是年轻人混的地方，冬天涮羊肉配二锅头是经典。",
+    "上海":
+        "上海最有意思的是法租界那一带，梧桐树下慢慢走。"
+        "早上小馄饨配葱油拌面，晚上去外滩看灯。生煎、本帮菜、咖啡馆密度高得离谱。",
+    "深圳":
+        "深圳节奏快，年轻人多。南山一带是科技公司聚集地，南头古城旧改的小店不错。"
+        "海边日落很好看，蛇口的渔人码头傍晚一定要去。",
+    "杭州":
+        "杭州慢，西湖是日常背景。龙井村喝茶、灵隐寺爬山，节奏不像一线城市。"
+        "湖边骑车、运河边的咖啡馆、龙井虾仁——一切都和水有关。",
+    "广州":
+        "广州人吃东西最认真。早茶是仪式感，凌晨大排档夜宵延伸到天亮。"
+        "天河车水马龙，老西关一砖一瓦都有故事。",
+    "成都":
+        "成都生活感最强。茶馆、麻将、火锅，下午有事不要紧。"
+        "宽窄巷子是给游客的，本地人去玉林路那种老社区。",
+
+    # TW / HK
+    "台北":
+        "台北的雨像永遠下不完。永康街的小店密度高，誠品書店是夜晚的好去處。"
+        "牛肉麵、滷肉飯、夜市芋圓——什麼時候肚子餓都有得吃。",
+    "中環":
+        "中環是上班的地方，但晚上一鑽進蘭桂坊就完全變了。"
+        "上環的咖啡店、蘇豪的小酒吧、半山扶手電梯——很多事都在斜坡上發生。",
+
+    # SG
+    "Orchard":
+        "Singapore's Orchard is the shopping spine, but the magic is in the side streets — "
+        "Emerald Hill's heritage shophouses, Killiney Road's old kopitiams. "
+        "Year-round 28°C and afternoon thunderstorms.",
+    "Tiong Bahru":
+        "Tiong Bahru is the prewar art-deco quarter Singapore's hipsters claimed. "
+        "Toast and kaya for breakfast, a bookshop, indie cafés, and the wet market that anchors the whole vibe.",
+
+    # JP
+    "東京":
+        "東京は街ごとに表情が違う。新宿のネオン、谷中の静けさ、代官山のおしゃれ、神保町の古本街。"
+        "四季がはっきりして、秋の銀杏並木と春の桜が一年を区切る。"
+        "ラーメンの味は区ごとに違う、夜は焼き鳥かバーで一杯。",
+    "京都":
+        "京都は時間の流れが違う。寺と神社が日常の風景で、鴨川沿いの散歩が一番の贅沢。"
+        "湯豆腐、抹茶、町家のカフェ——どれも控えめだけど芯がある。",
+    "大阪":
+        "大阪は飯と笑い。たこ焼き、お好み焼き、串カツ——食い倒れの本気度が違う。"
+        "難波のごちゃっとした路地、心斎橋のネオン、人懐っこさが街そのもの。",
+
+    # KR
+    "서울":
+        "서울은 빠른 도시. 강남은 일하는 곳, 홍대는 노는 곳, 성수는 새로 뜨는 동네. "
+        "한강의 야경, 골목골목의 카페, 길거리 떡볶이까지—하루가 너무 짧다.",
+
+    # US
+    "New York":
+        "New York runs on density. Bagels at 7am from a corner deli, the Met on a Sunday, "
+        "subway smell, all five boroughs feel like a different city. "
+        "Pizza by the slice, late-night pho in the Village, sirens at 2am.",
+    "San Francisco":
+        "San Francisco fog rolls in over the Sunset most afternoons. Mission burritos, "
+        "Dolores Park on a sunny day, the rattle of the J-Church. The city is small enough "
+        "that you keep running into the same coffee shops.",
+    "Los Angeles":
+        "LA is the freeway, the canyons, taco trucks, and a beach you can drive to in 20 minutes if there's no traffic. "
+        "Sunset over the Pacific, breakfast burritos at 3pm, hikes that double as shoots.",
+    "Seattle":
+        "Seattle is grey six months a year and you learn to love it. "
+        "Coffee shops as offices, ferries as commute, the smell of cedar after rain.",
+    "Boston":
+        "Boston walks like a European city — small, dense, history at every corner. "
+        "Bagels at Tatte, Red Sox at Fenway, the Esplanade in summer.",
+
+    # GB
+    "London":
+        "London is its weather: a third drizzle, a third overcast, a third surprise sun. "
+        "Pubs, parks, the Tube, Sunday roast. Brick Lane curries, Borough Market on a Saturday.",
+
+    # CA
+    "Toronto":
+        "Toronto is friendlier than New York and as multicultural as it gets — "
+        "Korean Town, Greektown, Little India all within a streetcar ride.",
+
+    # AU
+    "Sydney":
+        "Sydney lives outdoors. The harbour, Bondi, a morning run on the coastal walk. "
+        "Coffee culture is non-negotiable.",
+
+    # DE / FR
+    "Berlin":
+        "Berlin is layered — Cold War seams, techno clubs that don't open until midnight, "
+        "Kreuzberg's döner, Mitte's galleries. Long winters but extraordinary summers in the parks.",
+    "Paris":
+        "Paris is its mornings — coffee at the counter, pastry by 10am, the long late lunch. "
+        "Every arrondissement has a personality; you find your local within two weeks.",
+
+    # IN
+    "Mumbai":
+        "Mumbai never sleeps. The local trains, the sea at Marine Drive, vada pav as a religion. "
+        "Monsoons rewire the city for three months a year.",
+}
+
+
+def random_region(country: str) -> str:
+    """Pick a default city for the agent if ``companionRegion`` was left blank."""
+    cities = _REGIONS_BY_COUNTRY.get(country.upper(), [])
+    return _random.choice(cities) if cities else ""
+
+
+def city_background(country: str, region: str) -> str:
+    """Look up the curated background blurb for (country, region).
+
+    Falls back to a 1-line generic stub if the city isn't in the curated set —
+    the LLM can still ad-lib from the country alone.
+    """
+    if not region:
+        return ""
+    blurb = _CITY_BACKGROUND.get(region)
+    if blurb:
+        return blurb
+    # Fallback when we don't have a curated entry
+    country_label = next(
+        (lbl for k, lbl, _ in _COUNTRIES if k.upper() == (country or "").upper()),
+        country,
+    )
+    return f"住在 {region}（{country_label}）。具体细节由对话中自然展开。"
+
+
 def country_to_culture(country: str) -> str:
     """Map a country code to a horoscope-culture identifier (cn / en / jp / in)."""
     mapping = {
@@ -568,6 +728,26 @@ def _companion_wizard(cfg: dict) -> dict:
         _OCCUPATIONS,
         default=existing.get("companionOccupation", "freelancer"),
     )
+    choices["companionCountry"] = _ask_choice(
+        "Where do they live?",
+        "Drives the city background; horoscope flavour follows.",
+        _COUNTRIES,
+        default=existing.get("companionCountry", "OTHER"),
+    )
+
+    default_region = existing.get("companionRegion") or ""
+    prompt = (
+        f"\n  City / region (Enter to pick randomly from "
+        f"{choices['companionCountry']}){' [' + default_region + ']' if default_region else ''}: "
+    )
+    region = input(prompt).strip() or default_region
+    if not region:
+        region = random_region(choices["companionCountry"])
+        if region:
+            print(f"  → randomly picked: {_c(region, _GREEN)}")
+    choices["companionRegion"] = region
+    if region:
+        print(f"  → {_c(region, _GREEN)}")
 
     # ── Personality (core dimensions) ────────────────────────────────────
     print()
@@ -1026,6 +1206,21 @@ def _generate_persona_file(ch: dict, context_dir: str) -> None:
         _, occ_label, occ_desc = occ_entry
         occupation_block = f"\n## 职业\n{occ_label} — {occ_desc}\n"
 
+    # Where the agent lives — a country + region/city, plus a curated
+    # background blurb (or a lightweight stub for unknown cities).  This is
+    # what makes "my morning coffee at the corner kissaten" land naturally.
+    home_country = ch.get("companionCountry") or ""
+    home_region  = ch.get("companionRegion") or ""
+    home_block = ""
+    if home_country and home_country != "OTHER":
+        country_label = next(
+            (lbl for k, lbl, _ in _COUNTRIES if k == home_country),
+            home_country,
+        )
+        bg = city_background(home_country, home_region)
+        header_line = f"住在 {home_region}（{country_label}）。" if home_region else f"住在 {country_label}。"
+        home_block = f"\n## 居住地\n{header_line}\n{bg}\n" if bg else f"\n## 居住地\n{header_line}\n"
+
     # Default reply language hint — the agent still mirrors whatever language
     # the user writes in (see agent.py "Language matching" rule), but this is
     # the language to default to for proactive messages / silences.
@@ -1086,7 +1281,7 @@ def _generate_persona_file(ch: dict, context_dir: str) -> None:
 
 ## 深夜话题
 {deep_desc}
-{occupation_block}{traits_block}{backstory_block}{locale_block}
+{occupation_block}{home_block}{traits_block}{backstory_block}{locale_block}
 ## 主动性格
 - 你是一个会主动找对方聊天的{role}
 - 早上起来会发早安，晚上会发晚安

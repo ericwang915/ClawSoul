@@ -64,6 +64,20 @@ def _multi_tenant_mode() -> bool:
     return bool(os.environ.get("SUPABASE_JWT_SECRET"))
 
 
+# Module-level handles so the dashboard can reach the global APScheduler when
+# hot-adding a freshly-onboarded user without restarting the daemon.
+_global_scheduler = None
+_active_provider = None
+
+
+def get_global_scheduler():
+    return _global_scheduler
+
+
+def get_active_provider():
+    return _active_provider
+
+
 async def start_telegram(
     provider: LLMProvider,
     fastapi_app=None,
@@ -78,6 +92,9 @@ async def start_telegram(
     In **single-tenant mode** (laptop / Eric's existing deploy): unchanged —
     one bot, full scheduler / proactive / heartbeat / selfies.
     """
+    global _global_scheduler, _active_provider
+    _active_provider = provider
+
     if _multi_tenant_mode():
         logger.info("[ClawSoul] Multi-tenant mode — starting per-user Telegram bots + scheduler")
         from .channels import telegram_multi
@@ -87,17 +104,17 @@ async def start_telegram(
         # tenancy.user_context() so they read & write only their own data.
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         _tz = _detect_local_timezone()
-        global_scheduler = AsyncIOScheduler(timezone=_tz)
+        _global_scheduler = AsyncIOScheduler(timezone=_tz)
 
         bots = await telegram_multi.start_all_user_bots(
-            provider, scheduler=global_scheduler,
+            provider, scheduler=_global_scheduler,
         )
 
-        if not global_scheduler.running:
-            global_scheduler.start()
+        if not _global_scheduler.running:
+            _global_scheduler.start()
             logger.info(
                 "[ClawSoul] Global scheduler started (%s) — %d job(s) across %d user(s)",
-                _tz, len(global_scheduler.get_jobs()), len(bots),
+                _tz, len(_global_scheduler.get_jobs()), len(bots),
             )
 
         return bots

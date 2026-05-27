@@ -97,6 +97,33 @@ async def get_user_settings(user_id: str) -> dict | None:
 _UNSET: object = object()
 
 
+async def _find_other_user_with_token(
+    user_id: str, token: str,
+) -> str | None:
+    """Return the user_id of any OTHER row already using *token*, else None.
+
+    Prevents two users from both pointing at the same bot (which would cause
+    Telegram getUpdates conflicts and burn the bot for both).
+    """
+    if not (token and supabase_configured()):
+        return None
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(
+            f"{supabase_url()}/rest/v1/user_settings",
+            params={
+                "select": "user_id",
+                "telegram_bot_token": f"eq.{token}",
+                "user_id": f"neq.{user_id}",
+            },
+            headers={"apikey": service_role_key(),
+                     "Authorization": f"Bearer {service_role_key()}"},
+        )
+    if not resp.is_success:
+        return None
+    rows = resp.json() or []
+    return rows[0]["user_id"] if rows else None
+
+
 async def upsert_user_settings(
     user_id: str,
     *,
@@ -107,9 +134,21 @@ async def upsert_user_settings(
 
     Only fields you pass explicitly are sent — omitted kwargs leave the
     existing column untouched. Pass ``None`` to clear a field.
+
+    Duplicate-token guard: refuses to save a Telegram token already used by
+    another user.
     """
     if not supabase_configured():
         return False, "supabase not configured on the server"
+
+    # Reject duplicate Telegram bot tokens (one bot, one user).
+    if telegram_bot_token not in (_UNSET, None, ""):
+        other = await _find_other_user_with_token(user_id, str(telegram_bot_token))
+        if other:
+            return False, (
+                "This Telegram bot token is already claimed by another user. "
+                "Each bot can only be paired with one ClawSoul account."
+            )
 
     body: dict = {"user_id": user_id}
     if telegram_bot_token is not _UNSET:
@@ -486,12 +525,20 @@ async def start_all_user_bots(
     """
     configs = fetch_all_user_bot_configs()
     bots: list[TelegramBot] = []
+    cap = _max_active_users()
 
     for cfg in configs:
+        if len(_active_bots_by_uid) >= cap:
+            logger.warning(
+                "[Telegram-multi] capacity reached (%d/%d) — skipping user=%s",
+                len(_active_bots_by_uid), cap, cfg.user_id[:8],
+            )
+            continue
         try:
             bot, sm = _build_tenant_bot(cfg, provider)
             await bot.start_async()
             bots.append(bot)
+            _active_bots_by_uid[cfg.user_id] = {"bot": bot, "sm": sm, "cfg": cfg}
             logger.info("[Telegram-multi] Started bot for user=%s", cfg.user_id[:8])
 
             if scheduler is not None:
@@ -503,6 +550,106 @@ async def start_all_user_bots(
             )
 
     return bots
+
+
+# ── Hot-add registry (so dashboard can spin up a new user without restart) ──
+
+DEFAULT_MAX_ACTIVE_USERS = 20
+
+# Maintained by start_all_user_bots / start_user_bot / stop_user_bot.
+# Keys are user_ids, values are the running TelegramBot + the scheduler info
+# we need to tear down later.
+_active_bots_by_uid: dict[str, dict[str, object]] = {}
+
+
+def _max_active_users() -> int:
+    from .. import config as _cfg
+    return int(_cfg.get_int("quota", "maxActiveUsers",
+                            default=DEFAULT_MAX_ACTIVE_USERS) or DEFAULT_MAX_ACTIVE_USERS)
+
+
+def active_user_count() -> int:
+    return len(_active_bots_by_uid)
+
+
+def is_user_active(user_id: str) -> bool:
+    return user_id in _active_bots_by_uid
+
+
+async def start_user_bot(
+    user_id: str,
+    provider: "LLMProvider",
+    *,
+    scheduler=None,
+) -> tuple[bool, str | None]:
+    """Start (or replace) one user's Telegram bot in-process.
+
+    Called by the dashboard right after a user saves their Telegram token, so
+    they don't have to wait for the next daemon restart to get their bot live.
+
+    Returns ``(ok, error)`` — when ok is False, error is a human-readable
+    reason (capacity reached, no token, etc).
+    """
+    # Fetch this user's settings
+    settings = await get_user_settings(user_id)
+    token = (settings or {}).get("telegram_bot_token") if settings else None
+    if not token:
+        return False, "user has no telegram bot token saved"
+
+    raw_chat = (settings or {}).get("telegram_chat_id")
+    try:
+        chat_id = int(raw_chat) if raw_chat is not None else None
+    except (TypeError, ValueError):
+        chat_id = None
+
+    # Soft cap — new users only; if this user is already active, we still
+    # let them replace their bot below.
+    if user_id not in _active_bots_by_uid and active_user_count() >= _max_active_users():
+        return False, (
+            f"at capacity ({active_user_count()}/{_max_active_users()} active "
+            "users); contact the operator to scale up"
+        )
+
+    # If this user already has a bot running, stop it first.
+    await stop_user_bot(user_id)
+
+    cfg = UserBotConfig(user_id=user_id, bot_token=token, chat_id=chat_id)
+    try:
+        bot, sm = _build_tenant_bot(cfg, provider)
+        await bot.start_async()
+    except Exception as exc:
+        logger.warning("[Telegram-multi] hot-add for user=%s failed: %s",
+                       user_id[:8], exc)
+        return False, f"failed to start bot: {exc}"
+
+    if scheduler is not None:
+        try:
+            _register_user_scheduler_jobs(scheduler, cfg, sm, bot, provider)
+        except Exception as exc:
+            logger.warning("[Telegram-multi] scheduler reg failed for user=%s: %s",
+                           user_id[:8], exc)
+
+    _active_bots_by_uid[user_id] = {"bot": bot, "sm": sm, "cfg": cfg}
+    logger.info("[Telegram-multi] hot-added bot for user=%s "
+                "(now %d/%d active)",
+                user_id[:8], active_user_count(), _max_active_users())
+    return True, None
+
+
+async def stop_user_bot(user_id: str) -> bool:
+    """Stop and de-register one user's bot. Returns True if anything was running."""
+    entry = _active_bots_by_uid.pop(user_id, None)
+    if entry is None:
+        return False
+    bot = entry.get("bot")
+    if bot is not None and hasattr(bot, "stop_async"):
+        try:
+            await bot.stop_async()
+        except Exception as exc:
+            logger.warning("[Telegram-multi] stop failed for user=%s: %s",
+                           user_id[:8], exc)
+    logger.info("[Telegram-multi] stopped bot for user=%s", user_id[:8])
+    return True
 
 
 async def stop_all_bots(bots: list[TelegramBot]) -> None:

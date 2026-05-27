@@ -2049,6 +2049,9 @@ const WIZARD_STEPS = [
       { key: 'companionName',       kind: 'text',   label: "What's their name?", placeholder: '小爪 / Aria / Kai…' },
       { key: 'companionAge',        kind: 'choice', label: 'How old do they feel?' },
       { key: 'companionOccupation', kind: 'choice', label: 'What do they do?' },
+      { key: 'companionCountry',    kind: 'choice', label: 'Where do they live?' },
+      { key: 'companionRegion',     kind: 'text',   label: 'City / region (optional)',
+        placeholder: 'Leave blank to pick one randomly' },
     ],
   },
   {
@@ -2120,6 +2123,13 @@ async function loadPersona() {
       c.companionOccupation ? labelOf('companionOccupation', c.companionOccupation) : null,
     ].filter(Boolean).join(' · ');
 
+    const partnerHomeParts = [];
+    if (c.companionRegion) partnerHomeParts.push(c.companionRegion);
+    if (c.companionCountry && c.companionCountry !== 'OTHER') {
+      partnerHomeParts.push(labelOf('companionCountry', c.companionCountry));
+    }
+    const partnerHome = partnerHomeParts.join(', ') || null;
+
     const traitChips = (Array.isArray(c.traits) && c.traits.length)
       ? `<div class="flex flex-wrap gap-1.5 mt-1">${c.traits.map(t => `
           <span class="px-2.5 py-1 rounded-full text-[.7rem] border border-surface-700/60 bg-surface-900/40 text-gray-200">${escapeHTML(traitLabel(t))}</span>
@@ -2135,6 +2145,7 @@ async function loadPersona() {
         ${[
           ['You',              youParts],
           ['Your partner',     partnerParts],
+          ['They live in',     partnerHome],
           ['Core archetype',   labelOf('archetype', c.archetype)],
           ['Relationship',     labelOf('dynamic', c.dynamic)],
           ['Tone',             labelOf('tone', c.tone)],

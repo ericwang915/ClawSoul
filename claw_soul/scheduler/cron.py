@@ -258,6 +258,11 @@ class CronScheduler:
                 logger.error("[CronScheduler] Failed to restore dynamic job '%s': %s", job_id, exc)
         return registered
 
+    # Per-user cap on dynamic jobs.  Keeps a single user from filling the
+    # APScheduler thread pool with self-scheduled chats (which would also
+    # burn the operator's shared LLM API key).
+    _MAX_USER_CRON_JOBS = 5
+
     def add_dynamic_job(
         self,
         job_id: str,
@@ -269,11 +274,25 @@ class CronScheduler:
         """
         Add a new dynamic job (called from the Agent cron_add tool).
         Persists to dynamic_jobs.json so it survives restarts.
+        Rejects when the per-user job count is already at the cap (unless
+        the new job is *replacing* an existing one with the same id).
         """
         try:
             trigger = _parse_cron(cron_expr)
         except ValueError as exc:
             return f"Invalid cron expression: {exc}"
+
+        from .. import config as _cfg
+        cap = int(_cfg.get_int("quota", "maxCronJobs",
+                               default=self._MAX_USER_CRON_JOBS)
+                  or self._MAX_USER_CRON_JOBS)
+        with self._dynamic_jobs_lock:
+            existing = self._load_dynamic_jobs()
+        if job_id not in existing and len(existing) >= cap:
+            return (
+                f"Refused: you already have {len(existing)} cron jobs (cap {cap}). "
+                "Remove one with `cron_remove` before adding more."
+            )
 
         self._scheduler.add_job(
             self._run_job,

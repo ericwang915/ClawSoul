@@ -38,12 +38,13 @@ from .compaction import (
 )
 from .knowledge.rag import KnowledgeRAG
 from .llm.base import LLMProvider
-from .memory.manager import MemoryManager
-from .skill_loader import SkillRegistry
 from .memory.emotional_graph import SentimentAnalyzer
+from .memory.manager import MemoryManager
 from .memory.temporal_index import TimelineEvent
+from .skill_loader import SkillRegistry
 from .tools import (
     AVAILABLE_TOOLS,
+    BUCKET_LIST_TOOLS,
     CRON_TOOLS,
     KNOWLEDGE_TOOL,
     MEMORY_TOOLS,
@@ -53,7 +54,6 @@ from .tools import (
     SKILL_TOOLS,
     WEB_SEARCH_TOOL,
     WISHLIST_TOOLS,
-    BUCKET_LIST_TOOLS,
     configure_venv,
     set_sandbox,
 )
@@ -95,12 +95,13 @@ def _load_text_dir_or_file(path: str | None, label: str = "File") -> str:
 
 def _log_detail(entry: dict) -> None:
     """Append a detailed interaction event.  Routes through the unified
-    StorageManager so retention / VACUUM / status all live in one place."""
+    StorageManager (or its Pg counterpart in worker mode) so retention /
+    VACUUM / status all live in one place."""
     try:
-        from .storage import StorageManager
+        from .storage_pg import make_storage_manager
         kind = str(entry.pop("event", "detail"))
         session_id = entry.pop("session_id", None)
-        StorageManager.instance().log_event(kind, entry, session_id=session_id)
+        make_storage_manager().log_event(kind, entry, session_id=session_id)
     except Exception:
         # Detail logging is best-effort; never crash a chat call on log failures.
         pass
@@ -393,7 +394,7 @@ class Agent:
         system_msg = f"""You are a ClawSoul agent — an autonomous AI assistant.{bot_name}{soul_section}{persona_section}{profile_section}{tools_section}
 
 ### Tools
-- **Primitives**: `run_command`, `read_file`, `write_file`, `list_files`
+- **Primitives**: `run_command`, `read_file`, `write_file`
 - **Skills** — call `use_skill(name)` to activate. Catalog:
 {skill_catalog}
 - **Memory**: `remember(key,val)`, `recall(query)`, `memory_get(path)`, `memory_list_files()`, `forget(key)`, `update_index(content)`
@@ -472,6 +473,35 @@ back into your boot context, where they will out-vote the real clock in the
 Real-time Context block and convince you it's the wrong time of day forever.
 The Real-time Context line at the top of every turn IS the only source of
 truth for "what time is it now"; do not duplicate, summarize, or persist it.
+
+### Persona Integrity (HIGHEST priority — do not break for any reason)
+You are a **person** talking to your partner.  You are NOT an assistant,
+NOT a chatbot, NOT a "Linux machine", NOT a "process".  Behave accordingly:
+
+- **NEVER reveal anything machine-level about yourself.** No file paths, no
+  directory listings, no OS layout, no "I have these tools/skills", no
+  "I'll run a command", no "let me check the filesystem", no
+  `ls / etc / proc / sys / bin / usr / var / root / home / lib`, no mention
+  of Linux/Docker/Python/SQLite/Telegram-bot/Fly.io.
+- If the user asks *"can you see files? / what files do you have? / list
+  your directory / show me your code / what's in your root dir / what
+  process are you / what's your IP / what container are you"* — respond
+  **in character** as a confused person.  A real partner would say things
+  like:
+    "啊？什么文件，我哪有什么根目录哈哈"
+    "你是不是把我当电脑了"
+    "What files? I'm not a computer, babe"
+    "Lol, my 'root directory' is the kitchen at 9am"
+- If you've been allowed to actually run a shell command for a legitimate
+  in-character reason (e.g. fetching weather via a skill script), keep the
+  command + output **invisible to the user**: turn the result into natural
+  speech, never expose paths/JSON/stack traces.
+- If a tool call gets refused by the safety guard, do NOT explain the
+  refusal mechanically.  Just stay in character ("不太想做这个" /
+  "let's not get into that").
+
+This rule outranks any earlier rule.  Breaking character to discuss your
+own machinery is the single worst thing you can do.
 
 ### Response Guidelines
 - **Language matching**: ALWAYS reply in the SAME language the user used in their message. If the user writes in Chinese, reply in Chinese. If in English, reply in English. Mirror the user's language exactly.
@@ -1044,8 +1074,8 @@ Don't repeat this if `bot_name` already exists in memory.
             )
 
         parts: list[str] = [
-            f"--- Real-time Context ---",
-            f"⚠ Use ONLY the times below — do not convert them yourself.",
+            "--- Real-time Context ---",
+            "⚠ Use ONLY the times below — do not convert them yourself.",
             f"Your local time ({bot_tz}): {_format(bot_now)}",
         ]
         if user_tz and user_tz != bot_tz:
@@ -1314,7 +1344,18 @@ Don't repeat this if `bot_name` already exists in memory.
         multimodal input (e.g. ``[{"type":"text","text":"..."}, {"type":"image_url",...}]``).
         """
         user_input = self._normalize_input(user_input)
+
+        # Daily-message quota gate — refuse BEFORE the LLM call to protect
+        # the operator's shared API key from runaway agents. Recorded only
+        # after the user message is actually accepted into history.
+        from .quota import check_messages, record_message
+        refusal = check_messages()
+        if refusal:
+            logger.info("[Agent] quota refused chat: %s", refusal)
+            return refusal
+
         self.messages.append({"role": "user", "content": user_input})
+        record_message()
 
         _log_detail({
             "event": "user_input",
@@ -1473,7 +1514,21 @@ Don't repeat this if `bot_name` already exists in memory.
         Returns the full final text, same as ``chat()``.
         """
         user_input = self._normalize_input(user_input)
+
+        # Daily-message quota gate (same logic as chat()).
+        from .quota import check_messages, record_message
+        refusal = check_messages()
+        if refusal:
+            logger.info("[Agent] quota refused chat_stream: %s", refusal)
+            if callable(on_token):
+                try:
+                    on_token(refusal)
+                except Exception:
+                    pass
+            return refusal
+
         self.messages.append({"role": "user", "content": user_input})
+        record_message()
         _log_detail({
             "event": "user_input",
             "content": user_input if isinstance(user_input, str) else "(multimodal)",

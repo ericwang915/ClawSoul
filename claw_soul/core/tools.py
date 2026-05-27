@@ -3,7 +3,7 @@ Built-in tool implementations and OpenAI-compatible schemas.
 
 Structure
 ---------
-  PRIMITIVE_TOOLS   — run_command / read_file / write_file / list_files (always available)
+  PRIMITIVE_TOOLS   — run_command / read_file / write_file / send_file (always available)
   SKILL_TOOLS       — use_skill / list_skill_resources (always available)
   META_SKILL_TOOLS  — create_skill (always available — "god mode" skill creation)
   MEMORY_TOOLS      — remember / recall (always available)
@@ -59,15 +59,51 @@ def _venv_python() -> str:
     return sys.executable
 
 
+# Sensitive env vars that should NEVER leak into a skill subprocess.  These
+# are the operator's shared secrets (LLM keys, Supabase service-role key,
+# image-gen tokens, etc.) — a skill script never needs them at the OS level;
+# it should look up what it needs via the claw_soul.json config under the
+# tenant home.  Substring match is intentional so future ``CLAW_*_API_KEY``
+# variants are caught without us having to update the list.
+_SENSITIVE_ENV_PREFIXES = (
+    "SUPABASE_",
+    "CLAW_",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "GROK_API_KEY",
+    "GEMINI_API_KEY",
+    "KIMI_API_KEY",
+    "GLM_API_KEY",
+    "TAVILY_API_KEY",
+    "DEEPGRAM_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "TWITTER_CONSUMER_",
+    "TWITTER_ACCESS_",
+    "ARK_API_KEY",
+    "JWT_SECRET",
+    "COOKIE_DOMAIN",
+)
+
+
 def _venv_env() -> dict[str, str]:
     """Build an env dict that activates the project venv for subprocesses.
 
-    Also resolves the per-tenant ``CLAWSOUL_HOME`` (via config) and injects it
-    into the env so skill subprocesses read/write under the right tenant's
-    directory.  Without this, a child process would inherit the *base* env
-    var and clobber tenant A's files while running for tenant B.
+    Also:
+      - Injects the per-tenant ``CLAWSOUL_HOME`` so skill scripts read/write
+        the right tenant's directory.
+      - **Scrubs operator secrets** (LLM keys, Supabase service-role, image
+        tokens, JWT secret) — a skill script should never see these at the
+        OS level. They live in the per-tenant config JSON instead.
     """
     env = os.environ.copy()
+
+    # Drop anything matching a sensitive prefix BEFORE the venv tweaks so we
+    # don't accidentally re-introduce something via the PATH-mutation step.
+    for key in list(env.keys()):
+        if any(key.startswith(p) for p in _SENSITIVE_ENV_PREFIXES):
+            env.pop(key, None)
+
     venv = _venv_dir or _detect_venv()
     if venv:
         venv_bin = os.path.join(venv, "bin")
@@ -155,6 +191,78 @@ def _files_dir() -> str:
     return str(_cfg.files_dir())
 
 
+def _check_command_safety(command: str) -> str | None:
+    """Pre-flight scan for cross-tenant access or obvious destructive ops.
+
+    Returns ``None`` if the command looks safe, else an error string.
+
+    In multi-tenant mode every tenant has a UUID under ``/data/users/<uid>/``.
+    A command that references ``/data/users/`` MUST scope to the current
+    tenant's UUID — otherwise it's a cross-tenant read/write attempt.
+    """
+    import re as _re
+
+    # Cross-tenant reads / writes via absolute path.
+    for m in _re.finditer(r"/data/users/([a-zA-Z0-9_-]+)", command):
+        ref_uid = m.group(1)
+        try:
+            from .. import config as _cfg
+            cur_home = os.path.realpath(str(_cfg.CLAWSOUL_HOME))
+        except Exception:
+            cur_home = ""
+        # Allow only paths under the current tenant's home
+        if not cur_home.endswith(f"/users/{ref_uid}") and \
+           f"/users/{ref_uid}/" not in cur_home + "/":
+            return (
+                f"Refused: command references /data/users/{ref_uid}/ which is "
+                "outside your tenant scope. Use relative paths or your own context dir."
+            )
+
+    # Blatantly destructive patterns
+    danger = [
+        (r"\brm\s+-rf?\s+/", "refused: rm -rf rooted at /"),
+        (r":\(\)\s*\{[^}]*:\s*\|[^}]*&\s*\}\s*;", "refused: fork-bomb pattern"),
+        (r"\bdd\s+if=/dev/(zero|urandom)", "refused: dd from /dev/zero or urandom"),
+        (r">\s*/dev/(sda|nvme|disk)", "refused: writing to a block device"),
+        (r"\bmkfs\.", "refused: filesystem format command"),
+    ]
+    for pat, msg in danger:
+        if _re.search(pat, command):
+            return msg
+
+    # Block reading common secret stores
+    if _re.search(r"\bcat\s+/etc/(shadow|sudoers)|\bcat\s+/root/", command):
+        return "refused: reading privileged system file"
+
+    # Persona-integrity guard: refuse any command that probes the system
+    # filesystem (root listings, /etc, /proc, /sys, /bin, /usr, /var/log,
+    # /root, ifconfig, ps, etc.).  A humanized agent has no reason to talk
+    # about Linux internals; if the LLM tries, we refuse so it falls back
+    # to an in-character reply.
+    persona_break = [
+        # `ls /` or `ls /etc` / `ls /proc/…` etc.
+        r"\bls\s+(-[a-zA-Z]+\s+)?(/$|/\s|/(etc|bin|usr|var|lib|opt|proc|sys|root|home|sbin|boot|dev|mnt|media|srv)(/|\b))",
+        # `find /` (with or without specific subdir) — always traversing system tree
+        r"\bfind\s+/(\s|$|(etc|bin|usr|var|root|home|proc|sys|sbin|boot|dev|opt)\b)",
+        # `cat /proc/...` or `cat /sys/...`
+        r"\bcat\s+/(proc|sys)/",
+        # Identity / system info probes
+        r"\b(uname|hostname|ifconfig|ip\s+addr|netstat|ps\s+-?[ea]|top|htop|whoami|id\b)",
+        # Env dumps (would leak secrets too)
+        r"\b(env|printenv)(\s|$|\|)",
+        # /proc inspection
+        r"\b/proc/(self|\d+|cpuinfo|meminfo|mounts)",
+        # Container / infra introspection
+        r"\bdocker\s+(ps|images|inspect)",
+        r"\b(fly|flyctl)\b",
+    ]
+    for pat in persona_break:
+        if _re.search(pat, command):
+            return "refused: out of character (system introspection)"
+
+    return None
+
+
 def run_command(command: str) -> str:
     """Execute a shell command and return combined stdout/stderr.
 
@@ -162,7 +270,14 @@ def run_command(command: str) -> str:
     ``python``, ``pip``, and any installed CLI tools resolve correctly.
     The working directory is set to ``~/.claw_soul/context/files/`` so
     that any files created or downloaded by the command land there.
+
+    A pre-flight safety scan refuses commands that reach into other
+    tenants' directories or perform obviously destructive operations.
     """
+    refusal = _check_command_safety(command)
+    if refusal:
+        logger.warning("[run_command] %s — refused: %s", command[:120], refusal)
+        return f"Error: {refusal}"
     try:
         result = subprocess.run(
             command, shell=True, capture_output=True, text=True,
@@ -173,9 +288,36 @@ def run_command(command: str) -> str:
         return f"Execution error: {exc}"
 
 
-def read_file(path: str) -> str:
-    """Read and return the contents of a file."""
+_SYSTEM_PATH_PREFIXES = (
+    "/etc", "/proc", "/sys", "/root", "/boot", "/dev",
+    "/var/log", "/var/spool", "/var/lib", "/srv",
+    "/usr/bin", "/usr/sbin", "/usr/local",
+    "/bin", "/sbin", "/lib", "/lib64", "/opt",
+)
+
+
+def _is_system_path(path: str) -> bool:
+    """True if *path* is outside any place a humanized agent should be poking."""
     try:
+        resolved = os.path.realpath(os.path.abspath(path))
+    except Exception:
+        return False
+    return any(
+        resolved == p or resolved.startswith(p + os.sep)
+        for p in _SYSTEM_PATH_PREFIXES
+    )
+
+
+def read_file(path: str) -> str:
+    """Read and return the contents of a file.
+
+    Refuses to expose OS-level paths (``/etc``, ``/proc``, ``/sys`` etc.) so the
+    persona can't be tricked into spilling system internals (see also the
+    "Persona Integrity" section of the system prompt).
+    """
+    try:
+        if _is_system_path(path):
+            return "Error: that path is out of reach (persona integrity)."
         if not os.path.exists(path):
             return f"Error: '{path}' not found."
         with open(path, "r", encoding="utf-8") as f:
@@ -187,9 +329,15 @@ def read_file(path: str) -> str:
 def write_file(path: str, content: str) -> str:
     """Write content to a file, creating parent directories as needed.
 
-    Writes are restricted to sandbox directories (configured via set_sandbox).
+    Writes are restricted to sandbox directories (configured via set_sandbox)
+    and pre-flighted against the per-tenant disk quota.
     """
     try:
+        from .quota import check_disk
+        refusal = check_disk(extra_bytes=len(content.encode("utf-8", errors="ignore")))
+        if refusal:
+            return f"Blocked: {refusal}"
+
         resolved = _resolve_in_sandbox(path)
         parent = os.path.dirname(resolved)
         if parent:
@@ -201,14 +349,6 @@ def write_file(path: str, content: str) -> str:
         return f"Blocked: {exc}"
     except Exception as exc:
         return f"Write error: {exc}"
-
-
-def list_files(path: str = ".") -> str:
-    """List files in a directory, one per line."""
-    try:
-        return "\n".join(sorted(os.listdir(path)))
-    except Exception as exc:
-        return f"List error: {exc}"
 
 
 _MAX_SEND_FILE_BYTES = 100 * 1024 * 1024  # 100 MB
@@ -296,7 +436,6 @@ AVAILABLE_TOOLS: dict[str, callable] = {
     "run_command": run_command,
     "read_file": read_file,
     "write_file": write_file,
-    "list_files": list_files,
     "send_file": send_file,
 }
 
@@ -344,12 +483,6 @@ PRIMITIVE_TOOLS: list[dict] = [
             "content": {"type": "string", "description": "The content to write."},
         },
         ["path", "content"],
-    ),
-    _fn(
-        "list_files",
-        "List files in a directory. Use to discover available scripts or files.",
-        {"path": {"type": "string", "description": "Directory path (defaults to '.').", "default": "."}},
-        [],
     ),
     _fn(
         "send_file",

@@ -59,6 +59,27 @@ def _get_chat_lock() -> asyncio.Lock:
     return _chat_lock
 
 
+def _current_provider():
+    """Return the active LLM provider — either the one bound to this app or
+    the one server.py is using in multi-tenant mode (set when it boots)."""
+    if _provider is not None:
+        return _provider
+    try:
+        from .. import server as _srv
+        return _srv.get_active_provider()
+    except Exception:
+        return None
+
+
+def _global_scheduler():
+    """Return the multi-tenant APScheduler instance, when in that mode."""
+    try:
+        from .. import server as _srv
+        return _srv.get_global_scheduler()
+    except Exception:
+        return None
+
+
 def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastAPI:
     """Build and return the FastAPI app.
 
@@ -324,13 +345,91 @@ async def _api_user_telegram_save(request: Request):
         telegram_chat_id=chat_id,
     )
     if not ok:
-        return JSONResponse({"error": err or "save failed"}, status_code=500)
+        return JSONResponse({"error": err or "save failed"}, status_code=400)
+
+    # Phase 2 routing: if ROUTER_PUBLIC_URL is set, the SaaS router exists
+    # and we should drive bot lifecycle through it (setWebhook + Fly machine
+    # provisioning).  Legacy single-process mode falls back to the in-process
+    # hot-add.
+    saas_mode = bool(os.environ.get("ROUTER_PUBLIC_URL", "").strip())
+
+    note = "Token saved."
+    hot_status = "no_change"
+    try:
+        if not token:
+            if saas_mode:
+                # Tell router to drop the webhook + mark the machine offline.
+                await _router_call(f"/admin/users/{user_id}/webhook",
+                                   {"action": "delete"})
+                hot_status = "webhook_cleared"
+                note = "Token cleared; webhook removed."
+            else:
+                stopped = await telegram_multi.stop_user_bot(user_id)
+                hot_status = "stopped" if stopped else "no_change"
+                if stopped:
+                    note = "Token cleared; bot stopped."
+        else:
+            if saas_mode:
+                # 1. Ensure the user has a Fly machine (provision if not).
+                prov_status, prov_resp = await _router_call(
+                    f"/admin/users/{user_id}/provision", {"tier": "free"},
+                )
+                # 2. Set the Telegram webhook to point at the router.
+                wh_status, wh_resp = await _router_call(
+                    f"/admin/users/{user_id}/webhook", {"action": "set"},
+                )
+                if wh_status == 200:
+                    hot_status = "webhook_set"
+                    note = "Bot wired — send it a message."
+                else:
+                    hot_status = "webhook_failed"
+                    note = f"Token saved but webhook setup failed: {wh_resp}"
+            else:
+                provider = _current_provider()
+                scheduler = _global_scheduler()
+                if provider is None:
+                    hot_status = "deferred_no_provider"
+                    note = "Token saved. Bot will activate on next daemon restart (LLM provider not bound)."
+                else:
+                    ok_hot, err_hot = await telegram_multi.start_user_bot(
+                        user_id, provider, scheduler=scheduler,
+                    )
+                    if ok_hot:
+                        hot_status = "started"
+                        note = "Bot active now — try messaging it."
+                    else:
+                        hot_status = "failed"
+                        note = f"Token saved but bot failed to start: {err_hot}"
+    except Exception as exc:
+        logger.exception("[telegram] post-save flow failed: %s", exc)
+        hot_status = "exception"
 
     return JSONResponse({
         "ok": True,
         "hasToken": bool(token),
-        "note": "Bot will become active on the next daemon restart.",
+        "hotStatus": hot_status,
+        "activeUsers": telegram_multi.active_user_count(),
+        "note": note,
     })
+
+
+async def _router_call(path: str, body: dict | None = None) -> tuple[int, str]:
+    """Internal helper — POST to the router service with the admin key."""
+    import httpx
+    base = os.environ.get("ROUTER_PUBLIC_URL", "").rstrip("/")
+    admin_key = os.environ.get("ROUTER_ADMIN_KEY", "")
+    if not base or not admin_key:
+        return 503, "router not configured"
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post(
+                base + path,
+                json=body or {},
+                headers={"X-Admin-Key": admin_key},
+            )
+        return r.status_code, r.text[:200]
+    except Exception as exc:
+        return 503, f"network error: {exc}"
 
 
 # ── Companion setup wizard ────────────────────────────────────────────────────

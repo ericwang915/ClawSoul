@@ -29,6 +29,7 @@ from .onboard import (
     _LANGUAGES,
     _OCCUPATIONS,
     _PROACTIVITIES,
+    random_region,
     _STRESSES,
     _TONES,
     _TRAITS_PRIMARY,
@@ -65,6 +66,7 @@ OPTIONS: dict[str, list[dict]] = {
     "companionGender":     _opt(_COMPANION_GENDERS),
     "companionAge":        _opt(_AGE_RANGES),
     "companionOccupation": _opt(_OCCUPATIONS),
+    "companionCountry":    _opt(_COUNTRIES),
     "archetype":        _opt(_ARCHETYPES),
     "dynamic":          _opt(_DYNAMICS),
     "tone":             _opt(_TONES),
@@ -85,7 +87,7 @@ TRAITS_MAX = _MAX_TRAITS
 
 # Fields that are validated against OPTIONS, plus the free-text ones.
 _CHOICE_FIELDS = set(OPTIONS.keys())
-_TEXT_FIELDS = {"userName", "companionName"}
+_TEXT_FIELDS = {"userName", "companionName", "companionRegion"}
 ALL_FIELDS = _CHOICE_FIELDS | _TEXT_FIELDS | {"traits", "backstory"}
 
 # Fields that may be missing on legacy configs — fall back to a sensible
@@ -94,6 +96,7 @@ _OPTIONAL_DEFAULTS: dict[str, str] = {
     "userCountry": "OTHER",
     "userLanguage": "en",
     "companionOccupation": "freelancer",
+    "companionCountry": "OTHER",
 }
 
 
@@ -123,8 +126,9 @@ def validate(choices: dict[str, Any]) -> dict[str, Any]:
     lang = choices.get("userLanguage") or "en"
     defaults = _TEXT_DEFAULTS_BY_LANG.get(lang) or _TEXT_DEFAULTS_BY_LANG["en"]
 
-    # Free-text fields with locale-aware defaults
-    for name in _TEXT_FIELDS:
+    # Free-text fields with locale-aware defaults (name fields).  Region is
+    # a regular text field but defaults are computed later from companionCountry.
+    for name in ("userName", "companionName"):
         val = (choices.get(name) or "").strip()
         cleaned[name] = val[:60] if val else defaults.get(name, "")
 
@@ -172,6 +176,14 @@ def validate(choices: dict[str, Any]) -> dict[str, Any]:
     backstory = (choices.get("backstory") or "").strip()
     cleaned["backstory"] = backstory[:1000]
 
+    # Companion region — free text, optional.  If blank, pick a default city
+    # from the chosen country.  Stored on the cleaned dict so the persona/
+    # profile generators don't have to re-randomize each run.
+    region = (choices.get("companionRegion") or "").strip()[:80]
+    if not region:
+        region = random_region(cleaned.get("companionCountry", "OTHER"))
+    cleaned["companionRegion"] = region
+
     return cleaned
 
 
@@ -196,10 +208,12 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
     cfg["companion"] = cleaned
     _update_proactive_config(cfg, cleaned["proactivity"])
 
-    # Country drives horoscope culture (cn / en / jp / in). Surfaced as
-    # `agent.culture` so the horoscope skill picks it up without re-reading
-    # the wizard payload at runtime.
-    cfg.setdefault("agent", {})["culture"] = country_to_culture(cleaned.get("userCountry", ""))
+    # `agent.culture` powers the horoscope skill (cn 黄历 / en zodiac / jp 占い
+    # / in rashifal). It belongs to the *agent's* worldview, so prefer the
+    # companion's country and fall back to the user's only when the companion
+    # hasn't been placed.
+    culture_source = cleaned.get("companionCountry") or cleaned.get("userCountry") or ""
+    cfg.setdefault("agent", {})["culture"] = country_to_culture(culture_source)
     cfg["agent"]["language"] = cleaned.get("userLanguage") or "en"
 
     _persist_config(cfg)
