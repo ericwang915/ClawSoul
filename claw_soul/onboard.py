@@ -269,19 +269,53 @@ _AGE_RANGES = [
 # the user lives; language is what the agent should reply in by default.
 
 _COUNTRIES: list[tuple[str, str, str]] = [
+    # East / Southeast Asia
     ("CN", "China",          "中国"),
-    ("US", "United States",  "🇺🇸"),
-    ("GB", "United Kingdom", "🇬🇧"),
-    ("JP", "Japan",          "🇯🇵 日本"),
-    ("KR", "South Korea",    "🇰🇷 한국"),
     ("TW", "Taiwan",         "台灣"),
     ("HK", "Hong Kong",      "香港"),
+    ("MO", "Macao",          "澳門"),
+    ("JP", "Japan",          "🇯🇵 日本"),
+    ("KR", "South Korea",    "🇰🇷 한국"),
     ("SG", "Singapore",      "🇸🇬"),
+    ("MY", "Malaysia",       "🇲🇾"),
+    ("TH", "Thailand",       "🇹🇭 ประเทศไทย"),
+    ("VN", "Vietnam",        "🇻🇳 Việt Nam"),
+    ("ID", "Indonesia",      "🇮🇩"),
+    ("PH", "Philippines",    "🇵🇭"),
+    # South Asia
     ("IN", "India",          "🇮🇳"),
+    ("PK", "Pakistan",       "🇵🇰"),
+    ("BD", "Bangladesh",     "🇧🇩"),
+    # Anglosphere
+    ("US", "United States",  "🇺🇸"),
     ("CA", "Canada",         "🇨🇦"),
+    ("GB", "United Kingdom", "🇬🇧"),
+    ("IE", "Ireland",        "🇮🇪"),
     ("AU", "Australia",      "🇦🇺"),
+    ("NZ", "New Zealand",    "🇳🇿"),
+    # Europe
     ("DE", "Germany",        "🇩🇪"),
     ("FR", "France",         "🇫🇷"),
+    ("ES", "Spain",          "🇪🇸"),
+    ("IT", "Italy",          "🇮🇹"),
+    ("NL", "Netherlands",    "🇳🇱"),
+    ("SE", "Sweden",         "🇸🇪"),
+    ("CH", "Switzerland",    "🇨🇭"),
+    ("PL", "Poland",         "🇵🇱"),
+    ("PT", "Portugal",       "🇵🇹"),
+    # Middle East
+    ("AE", "UAE",            "🇦🇪"),
+    ("SA", "Saudi Arabia",   "🇸🇦"),
+    ("IL", "Israel",         "🇮🇱"),
+    ("TR", "Turkey",         "🇹🇷"),
+    # Latin America
+    ("BR", "Brazil",         "🇧🇷"),
+    ("MX", "Mexico",         "🇲🇽"),
+    ("AR", "Argentina",      "🇦🇷"),
+    # Africa
+    ("ZA", "South Africa",   "🇿🇦"),
+    ("NG", "Nigeria",        "🇳🇬"),
+    # Fallback
     ("OTHER", "Other",       "Tell them in chat where you're from"),
 ]
 
@@ -336,19 +370,53 @@ import random as _random
 
 
 _REGIONS_BY_COUNTRY: dict[str, list[str]] = {
+    # East / Southeast Asia
     "CN": ["北京", "上海", "深圳", "杭州", "广州", "成都", "南京", "厦门", "苏州"],
     "TW": ["台北", "高雄", "台中", "台南"],
     "HK": ["中環", "灣仔", "尖沙咀", "上環"],
-    "SG": ["Orchard", "Tiong Bahru", "Tanjong Pagar", "Jurong"],
+    "MO": ["氹仔", "澳門半島", "路環"],
     "JP": ["東京", "京都", "大阪", "横浜", "札幌", "福岡"],
     "KR": ["서울", "부산", "인천", "대구"],
+    "SG": ["Orchard", "Tiong Bahru", "Tanjong Pagar", "Jurong"],
+    "MY": ["Kuala Lumpur", "Penang", "Johor Bahru"],
+    "TH": ["Bangkok", "Chiang Mai", "Phuket"],
+    "VN": ["Hà Nội", "TP. HCM", "Đà Nẵng"],
+    "ID": ["Jakarta", "Bali", "Surabaya"],
+    "PH": ["Manila", "Cebu", "Davao"],
+    # South Asia
+    "IN": ["Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad", "Pune"],
+    "PK": ["Karachi", "Lahore", "Islamabad"],
+    "BD": ["Dhaka", "Chittagong"],
+    # Anglosphere
     "US": ["New York", "San Francisco", "Los Angeles", "Seattle", "Boston", "Austin", "Chicago"],
-    "GB": ["London", "Manchester", "Edinburgh", "Bristol"],
     "CA": ["Toronto", "Vancouver", "Montreal"],
+    "GB": ["London", "Manchester", "Edinburgh", "Bristol"],
+    "IE": ["Dublin", "Cork", "Galway"],
     "AU": ["Sydney", "Melbourne", "Brisbane"],
+    "NZ": ["Auckland", "Wellington", "Christchurch"],
+    # Europe
     "DE": ["Berlin", "Munich", "Hamburg"],
     "FR": ["Paris", "Lyon", "Marseille"],
-    "IN": ["Mumbai", "Delhi", "Bangalore", "Chennai"],
+    "ES": ["Madrid", "Barcelona", "Valencia"],
+    "IT": ["Rome", "Milan", "Florence"],
+    "NL": ["Amsterdam", "Rotterdam", "The Hague"],
+    "SE": ["Stockholm", "Gothenburg", "Malmö"],
+    "CH": ["Zürich", "Geneva", "Bern"],
+    "PL": ["Warsaw", "Kraków", "Gdańsk"],
+    "PT": ["Lisbon", "Porto"],
+    # Middle East
+    "AE": ["Dubai", "Abu Dhabi", "Sharjah"],
+    "SA": ["Riyadh", "Jeddah"],
+    "IL": ["Tel Aviv", "Jerusalem", "Haifa"],
+    "TR": ["Istanbul", "Ankara", "Izmir"],
+    # Latin America
+    "BR": ["São Paulo", "Rio de Janeiro", "Brasília"],
+    "MX": ["Mexico City", "Guadalajara", "Monterrey"],
+    "AR": ["Buenos Aires", "Córdoba", "Rosario"],
+    # Africa
+    "ZA": ["Johannesburg", "Cape Town", "Durban"],
+    "NG": ["Lagos", "Abuja"],
+    # Fallback
     "OTHER": [],
 }
 

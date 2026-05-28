@@ -284,6 +284,12 @@ class Agent:
 
         # Detect if the user has set up their own soul/persona (not template defaults)
         self._needs_onboarding = not self._has_user_identity(soul_path, persona_path)
+        # In SaaS mode the web wizard is the only valid onboarding path —
+        # the worker refuses to chat until user_companion exists in Pg.
+        # The legacy chat-driven onboarding flow would only confuse the
+        # user; force it off so even a hydration glitch can't trigger it.
+        if os.environ.get("CLAW_USER_ID", "").strip():
+            self._needs_onboarding = False
 
         # Deferred image queue. When the user sends a photo with no text, we
         # stash it here and skip the LLM call. The next text message consumes

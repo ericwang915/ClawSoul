@@ -238,12 +238,18 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
     cfg["agent"]["language"] = cleaned.get("userLanguage") or "en"
     _persist_config(cfg)
 
-    # 3. Identity files
-    context_dir = str(config.CLAWSOUL_HOME / "context")
-    Path(context_dir).mkdir(parents=True, exist_ok=True)
-    _generate_soul_file(cleaned, context_dir)
-    _generate_persona_file(cleaned, context_dir)
-    _generate_profile_file(cleaned, context_dir)
+    # 3. Identity files.  In SaaS mode the dashboard host (legacy
+    # `clawsoul` app) doesn't actually serve Telegram traffic anymore —
+    # workers do, and they materialize their own copy from Pg via
+    # _hydrate_persona_from_pg on boot.  Writing identity files on the
+    # dashboard host just leaves dead state on the legacy volume.
+    # Single-tenant / dev installs still need the local copy.
+    if not _in_saas_dashboard_mode():
+        context_dir = str(config.CLAWSOUL_HOME / "context")
+        Path(context_dir).mkdir(parents=True, exist_ok=True)
+        _generate_soul_file(cleaned, context_dir)
+        _generate_persona_file(cleaned, context_dir)
+        _generate_profile_file(cleaned, context_dir)
 
     # 4. Best-effort: flip onboarded on the user's user_machines row so
     #    the scheduler picks them up at the next reconcile.  Failure
@@ -320,6 +326,15 @@ def _save_choices_pg(cleaned: dict[str, Any]) -> bool:
         return r.is_success
     except Exception:
         return False
+
+
+def _in_saas_dashboard_mode() -> bool:
+    """True when we're running on the legacy dashboard host inside SaaS
+    Phase 2 — i.e. Telegram traffic goes through the per-user worker
+    machines, not this process.  Detected by ROUTER_PUBLIC_URL being
+    set (dashboard's env points at the router for provisioning)."""
+    return bool(os.environ.get("ROUTER_PUBLIC_URL", "").strip() and
+                not os.environ.get("CLAW_USER_ID", "").strip())
 
 
 def _flip_onboarded_pg() -> None:

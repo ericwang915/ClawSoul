@@ -205,6 +205,24 @@ def create_router_app() -> FastAPI:
         await scheduler.kick_reconcile()
         return JSONResponse({"ok": True, "machine_id": row.machine_id})
 
+    @app.post("/admin/users/{user_id}/reload")
+    async def reload(
+        user_id: str,
+        x_admin_key: str | None = Header(default=None),
+    ) -> JSONResponse:
+        """Tell the user's worker to re-hydrate persona from Postgres.
+
+        Used after the dashboard's wizard save so a running worker
+        picks up the new identity files immediately instead of waiting
+        for its next idle-restart.
+        """
+        _check_admin(x_admin_key)
+        row = await db.get_user_machine(user_id)
+        if row is None:
+            return JSONResponse({"ok": True, "note": "no machine yet"})
+        ok = await dispatch.reload_worker(row)
+        return JSONResponse({"ok": ok, "machine_id": row.machine_id})
+
     @app.post("/admin/users/{user_id}/wake")
     async def wake(
         user_id: str,

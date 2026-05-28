@@ -132,3 +132,31 @@ async def dispatch(user_id: str, kind: str, payload: dict[str, Any]) -> bool:
 
     await db.upsert_user_machine(user_id, state="running")
     return True
+
+
+async def reload_worker(row: db.UserMachineRow) -> bool:
+    """POST /reload on the worker so it re-hydrates persona from Pg
+    without waiting for its next idle-restart.
+
+    Best-effort: if the worker is suspended we wake it via flycast
+    (same path as /dispatch), then POST.  If the worker is healthy
+    we just POST and return.
+    """
+    try:
+        await wake_if_needed(row)
+    except DispatchError as exc:
+        logger.warning("[router] reload wake failed: %s", exc)
+        return False
+    url = _worker_flycast_base() + "/reload"
+    headers = {"Fly-Force-Instance-Id": row.machine_id}
+    for attempt in range(4):
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as c:
+                r = await c.post(url, headers=headers)
+            return r.is_success
+        except httpx.HTTPError:
+            if attempt < 3:
+                await asyncio.sleep(1.5)
+                continue
+            return False
+    return False

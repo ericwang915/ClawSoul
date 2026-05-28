@@ -126,6 +126,27 @@ def create_worker_app() -> FastAPI:
             "idle_for_sec": int(time.monotonic() - state.last_active),
         })
 
+    @app.post("/reload")
+    async def reload() -> JSONResponse:
+        """Re-hydrate persona from Postgres and drop the cached agent so
+        the next message rebuilds it with the new identity files.
+
+        Called by the router (which proxies the dashboard's
+        /api/setup/companion save) so wizard edits take effect without
+        the user having to wait for an idle-restart.
+        """
+        try:
+            _hydrate_persona_from_pg(user_id)
+            async with state._lock:  # noqa: SLF001
+                state._agent = None  # noqa: SLF001 — force rebuild next chat
+                state._sm = None     # noqa: SLF001
+            logger.info("[worker] reloaded persona from Pg")
+            return JSONResponse({"ok": True})
+        except Exception as exc:
+            logger.warning("[worker] reload failed: %s", exc)
+            return JSONResponse({"ok": False, "error": str(exc)[:200]},
+                                status_code=500)
+
     @app.post("/dispatch")
     async def dispatch(request: Request) -> JSONResponse:
         try:

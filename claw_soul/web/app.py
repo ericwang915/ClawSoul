@@ -358,11 +358,14 @@ async def _api_user_telegram_save(request: Request):
     try:
         if not token:
             if saas_mode:
-                # Tell router to drop the webhook + mark the machine offline.
+                # Tell router to drop the webhook AND destroy the machine —
+                # leaving an idle worker around when the user has no token
+                # wastes resources (it still receives scheduler ticks).
                 await _router_call(f"/admin/users/{user_id}/webhook",
                                    {"action": "delete"})
+                await _router_call(f"/admin/users/{user_id}/destroy", {})
                 hot_status = "webhook_cleared"
-                note = "Token cleared; webhook removed."
+                note = "Token cleared; bot stopped."
             else:
                 stopped = await telegram_multi.stop_user_bot(user_id)
                 hot_status = "stopped" if stopped else "no_change"
@@ -370,9 +373,24 @@ async def _api_user_telegram_save(request: Request):
                     note = "Token cleared; bot stopped."
         else:
             if saas_mode:
+                # #7: refuse if the user hasn't completed the web wizard.
+                # The worker can't function without companion choices, and
+                # provisioning a machine that immediately tells the user
+                # "go to dashboard" is a worse UX than blocking save.
+                from .. import companion as comp
+                if not comp.load_choices():
+                    return JSONResponse({
+                        "error": "Please complete the companion setup wizard "
+                                 "before connecting your Telegram bot.",
+                    }, status_code=400)
+
                 # 1. Ensure the user has a Fly machine (provision if not).
+                # Default tier is "paid" — billing wires the real value
+                # later; "free" would have meant the scheduler never
+                # fires proactive/selfie/planner for anyone.
+                prov_tier = os.environ.get("CLAW_DEFAULT_TIER", "paid")
                 prov_status, prov_resp = await _router_call(
-                    f"/admin/users/{user_id}/provision", {"tier": "free"},
+                    f"/admin/users/{user_id}/provision", {"tier": prov_tier},
                 )
                 # 2. Set the Telegram webhook to point at the router.
                 wh_status, wh_resp = await _router_call(
@@ -571,6 +589,18 @@ async def _api_setup_companion_save(request: Request):
 
     # Drop the cached agent so subsequent chats see the new persona/soul
     _reset_agent()
+
+    # SaaS mode: tell the user's worker (if any) to re-hydrate persona
+    # from Pg right now so edits take effect immediately instead of
+    # waiting for the next idle-restart.
+    if os.environ.get("ROUTER_PUBLIC_URL", "").strip():
+        user_id = tenancy.get_current_user()
+        if user_id:
+            try:
+                await _router_call(f"/admin/users/{user_id}/reload", {})
+            except Exception as exc:
+                logger.warning("[setup/companion] worker reload failed: %s", exc)
+
     return JSONResponse({"ok": True, "choices": cleaned})
 
 

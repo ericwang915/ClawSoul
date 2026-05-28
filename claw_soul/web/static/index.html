@@ -463,7 +463,7 @@
               <h2 class="text-xl font-bold text-white tracking-tight">Your AI Partner</h2>
               <p class="text-sm text-gray-500 mt-1">How they look, talk, and care for you.</p>
             </div>
-            <button onclick="reopenSetupWizardForEdit()" class="btn-ghost text-sm">Customize…</button>
+            <button id="persona-customize-btn" onclick="reopenSetupWizardForEdit()" class="btn-ghost text-sm hidden">Customize…</button>
           </div>
           <div id="persona-summary" class="text-sm text-gray-400">Loading…</div>
         </div>
@@ -2079,10 +2079,17 @@ const WIZARD_STEPS = [
 
 async function loadPersona() {
   const box = document.getElementById('persona-summary');
+  const customizeBtn = document.getElementById('persona-customize-btn');
   box.textContent = 'Loading…';
   try {
     const r = await fetch('/api/setup/companion', { credentials: 'include' });
     const data = await r.json();
+    // Only expose the "Customize…" header button to users who have
+    // already completed setup — otherwise it offers a way to skip
+    // mandatory onboarding (since re-edit path shows the ✕).
+    if (customizeBtn) {
+      customizeBtn.classList.toggle('hidden', !data.choices);
+    }
     if (!data.choices) {
       box.innerHTML = `
         <div class="rounded-xl border border-surface-700/50 bg-surface-900/40 p-6 text-center">
@@ -2200,13 +2207,15 @@ function closeSetupWizard() {
 }
 
 async function reopenSetupWizardForEdit() {
-  // Re-edit path — load existing choices first so the close (✕) button shows.
+  // Re-edit path — fetch existing choices.  If the user has none (e.g.
+  // they clicked Customize before completing onboarding) fall back to
+  // the first-time flow so the ✕ stays hidden and they have to finish.
   try {
     const r = await fetch('/api/setup/companion', { credentials: 'include' });
     const data = await r.json();
-    openSetupWizard(data.choices || {});
+    openSetupWizard(data.choices || null);   // null → first-time, no ✕
   } catch (_) {
-    openSetupWizard({});
+    openSetupWizard(null);
   }
 }
 
@@ -2390,6 +2399,11 @@ function wizardBack() {
   }
 }
 
+// Required text fields: blank values would otherwise silently fall back
+// to "You" / "Claw" on the server, which is a worse UX than enforcing
+// the user to actually type something.
+const REQUIRED_TEXT_FIELDS = new Set(['userName', 'companionName']);
+
 async function wizardNext() {
   // Validate current step before advancing
   const step = WIZARD_STEPS[_wizardStep];
@@ -2397,6 +2411,13 @@ async function wizardNext() {
     if (f.kind === 'choice' && !_wizardChoices[f.key]) {
       flashStatus(`Please pick "${f.label}".`, 'error');
       return;
+    }
+    if (f.kind === 'text' && REQUIRED_TEXT_FIELDS.has(f.key)) {
+      const val = (_wizardChoices[f.key] || '').trim();
+      if (!val) {
+        flashStatus(`Please fill in "${f.label}".`, 'error');
+        return;
+      }
     }
     if (f.kind === 'multi') {
       const range = _setupOptions.traits_range || { min: 3, max: 7 };
@@ -2440,6 +2461,8 @@ async function wizardNext() {
       // Refresh the dashboard view so stats reflect the new identity
       refreshDashboard();
       if (currentTab === 'persona') loadPersona();
+      // Hand off to Telegram-connect step.  Required to actually use the bot.
+      openConnectTelegramPanel();
     }, 900);
   } catch (e) {
     flashStatus('Network error.', 'error');
@@ -2457,12 +2480,81 @@ function flashStatus(msg, kind = '') {
   );
 }
 
+// ── Post-wizard: Connect Telegram panel ────────────────────────────────
+// After the user finishes the persona wizard, they still need a
+// Telegram bot token before anything actually works.  Open a modal
+// that explains how to get one from @BotFather and includes the
+// paste-token form inline — no hunting through tabs.
+
+async function openConnectTelegramPanel() {
+  // Don't show if the user already has a token saved.
+  try {
+    const r = await fetch('/api/user/telegram', { credentials: 'include' });
+    if (r.ok) {
+      const data = await r.json();
+      if (data.hasToken) return;
+    }
+  } catch (_) {}
+  document.getElementById('connect-tg-modal').classList.remove('hidden');
+}
+
+function closeConnectTelegramPanel() {
+  document.getElementById('connect-tg-modal').classList.add('hidden');
+}
+
+async function submitConnectTelegram() {
+  const input = document.getElementById('connect-tg-input');
+  const btn = document.getElementById('connect-tg-submit');
+  const status = document.getElementById('connect-tg-status');
+  const token = (input.value || '').trim();
+  if (!token) {
+    status.textContent = 'Paste your bot token first.';
+    status.className = 'text-xs text-amber-400 min-h-[1.2em]';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  status.textContent = '';
+  try {
+    const r = await fetch('/api/user/telegram', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      status.textContent = data.error || ('Save failed (HTTP ' + r.status + ')');
+      status.className = 'text-xs text-red-400 min-h-[1.2em]';
+      btn.disabled = false;
+      btn.textContent = 'Connect bot';
+      return;
+    }
+    status.textContent = '✓ Connected — send your bot a message to say hi.';
+    status.className = 'text-xs text-emerald-400 min-h-[1.2em]';
+    setTimeout(() => {
+      closeConnectTelegramPanel();
+      if (typeof loadIntegrations === 'function') loadIntegrations();
+    }, 1500);
+  } catch (e) {
+    status.textContent = 'Network error.';
+    status.className = 'text-xs text-red-400 min-h-[1.2em]';
+    btn.disabled = false;
+    btn.textContent = 'Connect bot';
+  }
+}
+
 async function maybeOpenWizardOnFirstLoad() {
   try {
     const r = await fetch('/api/setup/companion', { credentials: 'include' });
     if (!r.ok) return;
     const data = await r.json();
-    if (!data.choices) openSetupWizard();
+    if (!data.choices) {
+      openSetupWizard();
+      return;
+    }
+    // Wizard done — but maybe they haven't connected Telegram yet.
+    openConnectTelegramPanel();
   } catch (e) { /* network blip — silent */ }
 }
 
@@ -2667,5 +2759,65 @@ maybeOpenWizardOnFirstLoad();
     </div>
   </div>
 </div>
+
+<!-- ═══ Connect Telegram Modal ═══════════════════════════════════════════ -->
+<div id="connect-tg-modal" class="hidden fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="w-full max-w-lg bg-surface-900 border border-surface-700/60 rounded-2xl shadow-2xl">
+    <div class="p-8">
+      <div class="mb-1 flex items-baseline justify-between">
+        <span class="text-[.6875rem] text-emerald-400 uppercase tracking-widest">Almost done</span>
+        <button onclick="closeConnectTelegramPanel()" class="text-gray-500 hover:text-white text-sm" title="Close">✕</button>
+      </div>
+      <h2 class="text-2xl font-bold text-white tracking-tight mb-1 mt-2">Connect your Telegram bot</h2>
+      <p class="text-sm text-gray-400 mb-6">One last step — you'll chat with them through your own private Telegram bot.</p>
+
+      <ol class="text-sm text-gray-300 space-y-3 mb-6 pl-1">
+        <li class="flex gap-3">
+          <span class="text-emerald-400 font-mono text-xs pt-0.5">1.</span>
+          <span>Open <a href="https://t.me/BotFather" target="_blank" rel="noopener" class="text-brand-400 hover:underline">@BotFather</a> on Telegram, send <code class="px-1.5 py-0.5 rounded bg-surface-800 text-gray-200 text-xs">/newbot</code>, and pick a name + username.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="text-emerald-400 font-mono text-xs pt-0.5">2.</span>
+          <span>BotFather replies with a token that looks like <code class="px-1.5 py-0.5 rounded bg-surface-800 text-gray-200 text-xs">123456:AAEd-…</code>. Copy it.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="text-emerald-400 font-mono text-xs pt-0.5">3.</span>
+          <span>Paste it below and click Connect bot.</span>
+        </li>
+      </ol>
+
+      <label class="block text-[.78rem] text-gray-300 font-medium mb-2">Telegram bot token</label>
+      <input id="connect-tg-input" type="text" placeholder="123456789:AA…"
+        class="w-full px-3.5 py-2.5 bg-surface-950 border border-surface-700/60 rounded-lg text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-brand-500/60 transition mb-2" />
+      <p id="connect-tg-status" class="text-xs text-gray-500 min-h-[1.2em]"></p>
+
+      <div class="mt-5 flex items-center justify-end gap-3 border-t border-surface-700/50 pt-5">
+        <button onclick="closeConnectTelegramPanel()" class="btn-ghost !py-2 !px-4 text-sm">Skip for now</button>
+        <button id="connect-tg-submit" onclick="submitConnectTelegram()" class="btn-primary !py-2.5 !px-6 text-sm">Connect bot</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// #11: ESC closes only modals that are explicitly cancellable.  The
+// setup wizard's first-time mode (no ✕) is non-dismissible — ESC is a
+// no-op there.  The connect-telegram and re-edit wizard paths support
+// ESC as a quick close.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const wiz = document.getElementById('setup-modal');
+  const wizClose = document.getElementById('wiz-close');
+  if (wiz && !wiz.classList.contains('hidden')) {
+    // Only allow ESC when the ✕ is visible (i.e. re-edit, not first-time).
+    if (wizClose && !wizClose.classList.contains('hidden')) closeSetupWizard();
+    return;
+  }
+  const tg = document.getElementById('connect-tg-modal');
+  if (tg && !tg.classList.contains('hidden')) {
+    closeConnectTelegramPanel();
+  }
+});
+</script>
 </body>
 </html>
