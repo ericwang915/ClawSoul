@@ -130,14 +130,14 @@
   <div class="flex h-full">
 
     <!-- Sidebar -->
-    <aside class="w-[260px] bg-surface-900 border-r border-surface-700/50 flex flex-col shrink-0">
-      <!-- Brand + status -->
+    <aside class="w-[280px] bg-surface-900 border-r border-surface-700/50 flex flex-col shrink-0">
+      <!-- Brand + status (single source of connection state) -->
       <div class="px-5 py-5 border-b border-surface-700/50">
         <div class="flex items-center gap-3">
-          <img src="/static/logo.png" alt="ClawSoul" class="w-9 h-9 rounded-full shadow-lg ring-1 ring-brand-500/40">
+          <img src="/static/logo.png" alt="ClawSoul" class="w-11 h-11 rounded-full shadow-lg ring-1 ring-brand-500/40">
           <div class="min-w-0">
-            <div class="font-semibold text-white text-base tracking-tight">ClawSoul</div>
-            <div id="brand-status" class="text-[.6875rem] text-gray-500 font-medium flex items-center gap-1.5 mt-0.5">
+            <div class="font-semibold text-white text-[1.0625rem] tracking-tight">ClawSoul</div>
+            <div id="brand-status" class="text-[.75rem] text-gray-500 font-medium flex items-center gap-1.5 mt-0.5">
               <span id="brand-status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
               <span id="brand-status-text">Connecting…</span>
             </div>
@@ -146,37 +146,39 @@
       </div>
 
       <!-- Navigation -->
-      <nav class="flex-1 py-4 px-3 space-y-0.5">
-        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 2l2 5h5l-4 3 2 6-5-3-5 3 2-6-4-3h5z"/></svg>
+      <nav class="flex-1 py-5 px-3 space-y-1">
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item w-full text-left px-3.5 py-3 rounded-lg text-[.9375rem] flex items-center gap-3.5 text-gray-400 font-medium">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 2l2 5h5l-4 3 2 6-5-3-5 3 2-6-4-3h5z"/></svg>
           Sanctum
         </button>
-        <button onclick="switchTab('chat')" id="nav-chat" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 012-2h11l3 3v13a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M8 8h8M8 12h6"/></svg>
+        <button onclick="switchTab('chat')" id="nav-chat" class="nav-item w-full text-left px-3.5 py-3 rounded-lg text-[.9375rem] flex items-center gap-3.5 text-gray-400 font-medium">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 012-2h11l3 3v13a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M8 8h8M8 12h6"/></svg>
           Chronicles
         </button>
-        <button onclick="switchTab('persona')" id="nav-persona" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 21s-7-4.5-7-10a4.5 4.5 0 018-2.8A4.5 4.5 0 0119 11c0 5.5-7 10-7 10z"/></svg>
+        <button onclick="switchTab('persona')" id="nav-persona" class="nav-item w-full text-left px-3.5 py-3 rounded-lg text-[.9375rem] flex items-center gap-3.5 text-gray-400 font-medium">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 21s-7-4.5-7-10a4.5 4.5 0 018-2.8A4.5 4.5 0 0119 11c0 5.5-7 10-7 10z"/></svg>
           Soul Bond
         </button>
-        <button onclick="switchTab('tools')" id="nav-tools" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <button onclick="switchTab('tools')" id="nav-tools" class="nav-item w-full text-left px-3.5 py-3 rounded-lg text-[.9375rem] flex items-center gap-3.5 text-gray-400 font-medium">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
           Arsenal
         </button>
       </nav>
 
-      <!-- CTA + footer -->
-      <div class="px-3 pb-2">
-        <button onclick="switchTab('tools')" class="w-full py-2.5 rounded-full text-sm font-medium text-white shadow-lg transition" style="background: linear-gradient(135deg, #ff8fb8, #c084fc);">
-          Enhance Connection
-        </button>
-      </div>
-      <div class="px-5 py-3 border-t border-surface-700/50 space-y-2">
-        <div class="flex items-center gap-2.5">
-          <div id="ws-indicator" class="w-2 h-2 rounded-full bg-red-400 shrink-0"></div>
-          <span id="ws-status" class="text-[.6875rem] text-gray-500">Disconnected</span>
+      <!-- User footer (avatar + email + logout arrow) -->
+      <div class="px-3 py-3 border-t border-surface-700/50">
+        <div class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-800/40 transition">
+          <div id="user-avatar" class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0"
+               style="background: linear-gradient(135deg, #f472b6, #c084fc);">·</div>
+          <div class="flex-1 min-w-0">
+            <div id="user-email" class="text-[.78rem] text-gray-300 font-medium truncate">…</div>
+            <div class="text-[.6875rem] text-gray-500">Signed in</div>
+          </div>
+          <button onclick="logout()" title="Log out"
+                  class="text-gray-500 hover:text-white p-1 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+          </button>
         </div>
-        <button onclick="logout()" class="text-[.6875rem] text-gray-500 hover:text-white transition">Log out</button>
       </div>
     </aside>
 
@@ -1156,12 +1158,11 @@ function connectWebSocket() {
   ws = new WebSocket(protocol + '//' + location.host + '/ws/chat');
 
   ws.onopen = () => {
-    document.getElementById('ws-indicator').className = 'w-2 h-2 rounded-full bg-accent-green shrink-0';
-    document.getElementById('ws-status').textContent = 'Connected';
+    // The single sidebar status indicator (brand-status-dot/text) is
+    // driven by /api/sanctum/status — the WebSocket only powers chat
+    // streaming.  No DOM bridge needed here.
   };
   ws.onclose = () => {
-    document.getElementById('ws-indicator').className = 'w-2 h-2 rounded-full bg-accent-red shrink-0';
-    document.getElementById('ws-status').textContent = 'Disconnected';
     setTimeout(connectWebSocket, 3000);
   };
   ws.onerror = () => { ws.close(); };
@@ -2288,7 +2289,29 @@ async function disconnectTool(name) {
   loadTools(true);
 }
 
+// ── Auth ─────────────────────────────────────────────────────────────────────
+async function loadCurrentUser() {
+  try {
+    const r = await fetch('/api/auth/me', { credentials: 'include' });
+    if (!r.ok) return;
+    const d = await r.json();
+    const email = (d.email || '').trim();
+    const emailEl = document.getElementById('user-email');
+    const avatarEl = document.getElementById('user-avatar');
+    if (emailEl) emailEl.textContent = email || 'You';
+    if (avatarEl) avatarEl.textContent = (d.initial || email[0] || '·').toUpperCase();
+  } catch (_) { /* anon — leave placeholders */ }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch (_) {}
+  window.location.href = '/login';
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
+loadCurrentUser();
 switchTab('dashboard');
 connectWebSocket();
 refreshDashboard();

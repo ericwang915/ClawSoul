@@ -117,6 +117,7 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app.add_api_route("/api/auth/config", _api_auth_config, methods=["GET"])
     app.add_api_route("/api/auth/session", _api_auth_session, methods=["POST"])
     app.add_api_route("/api/auth/logout", _api_auth_logout, methods=["POST"])
+    app.add_api_route("/api/auth/me", _api_auth_me, methods=["GET"])
     app.add_api_route("/api/user/telegram", _api_user_telegram_get, methods=["GET"])
     app.add_api_route("/api/user/telegram", _api_user_telegram_save, methods=["POST"])
     app.add_api_route("/api/setup/options", _api_setup_options, methods=["GET"])
@@ -283,6 +284,26 @@ async def _api_auth_session(request: Request):
 
     resp.set_cookie(**cookie_kwargs)
     return resp
+
+
+async def _api_auth_me(request: Request):
+    """Return the current user's email + initial for the sidebar footer.
+
+    Returns 401 if no valid session — the auth middleware would normally
+    have already redirected, but the sidebar may render before the cookie
+    settles on a brand-new login, so we keep this best-effort.
+    """
+    from . import auth as auth_mod
+    token = request.cookies.get(auth_mod.COOKIE_NAME) or ""
+    payload = auth_mod.decode_jwt(token) if token else None
+    if not payload:
+        return JSONResponse({"error": "not authenticated"}, status_code=401)
+    email = (payload.get("email") or "").strip()
+    return JSONResponse({
+        "user_id": payload.get("sub"),
+        "email":   email,
+        "initial": (email[:1].upper() if email else "·"),
+    })
 
 
 async def _api_auth_logout(request: Request):
