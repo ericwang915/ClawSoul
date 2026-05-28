@@ -196,7 +196,7 @@
 
         <!-- ═══ Sanctum (landing) ═══════════════════════════════════════════ -->
         <div id="tab-dashboard" class="tab-content p-6 lg:p-8 fade-in">
-          <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 max-w-[1300px]">
+          <div class="grid grid-cols-1 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px] gap-6 max-w-[1500px] mx-auto">
 
             <!-- Left: Hero + Premium Tools -->
             <div class="space-y-6 min-w-0">
@@ -236,7 +236,7 @@
                   <h3 class="text-base font-semibold text-white">Premium Tools</h3>
                   <button onclick="switchTab('tools')" class="text-sm text-brand-400 hover:text-brand-300 transition">Manage Arsenal →</button>
                 </div>
-                <div id="sanctum-tools" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div id="sanctum-tools" class="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
                   <!-- Filled by JS — placeholder skeletons -->
                   <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
                   <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
@@ -319,7 +319,7 @@
         </div>
 
         <!-- ═══ Tools Tab (Syncore-style grid) ═══ -->
-        <div id="tab-tools" class="tab-content hidden p-8 fade-in max-w-[1200px]">
+        <div id="tab-tools" class="tab-content hidden p-8 fade-in max-w-[1500px] mx-auto">
           <div class="mb-6 flex items-start justify-between gap-4">
             <div>
               <h2 class="text-xl font-bold text-white tracking-tight">Arsenal</h2>
@@ -353,7 +353,7 @@
             <span id="tools-premium-count" class="text-xs text-gray-500"></span>
           </div>
           <p class="text-xs text-gray-500 mb-4">High-leverage integrations — connect to unlock superpowers.</p>
-          <div id="tools-premium-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-10"></div>
+          <div id="tools-premium-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mb-10"></div>
 
           <!-- Standard section -->
           <div class="mb-2 flex items-baseline justify-between">
@@ -361,12 +361,12 @@
             <span id="tools-standard-count" class="text-xs text-gray-500"></span>
           </div>
           <p class="text-xs text-gray-500 mb-4">Built-in capabilities — already ready when you are.</p>
-          <div id="tools-standard-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+          <div id="tools-standard-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3"></div>
         </div>
 
 
         <!-- ═══ Persona Tab ═══ -->
-        <div id="tab-persona" class="tab-content hidden p-8 fade-in max-w-[760px]">
+        <div id="tab-persona" class="tab-content hidden p-8 fade-in max-w-[760px] mx-auto">
           <div class="mb-8 flex items-start justify-between">
             <div>
               <h2 class="text-xl font-bold text-white tracking-tight">Your AI Partner</h2>
@@ -378,7 +378,7 @@
         </div>
 
         <!-- ═══ Integrations Tab ═══ -->
-        <div id="tab-integrations" class="tab-content hidden p-8 fade-in max-w-[760px]">
+        <div id="tab-integrations" class="tab-content hidden p-8 fade-in max-w-[760px] mx-auto">
           <div class="mb-8">
             <h2 class="text-xl font-bold text-white tracking-tight">Integrations</h2>
             <p class="text-sm text-gray-500 mt-1">Connect your ClawSoul to other places you live.</p>
@@ -1002,7 +1002,7 @@ async function loadSkills() {
           <span class="text-[.6875rem] text-gray-600">${skills.length}</span>
           <span class="text-[.625rem] text-gray-600 hidden sm:inline">${catDesc}</span>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mb-2">
           ${skills.map(s => {
             const emoji = s.emoji ? s.emoji + ' ' : '';
             return `
