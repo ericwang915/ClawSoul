@@ -529,18 +529,33 @@ Two completely different scenarios — do not confuse them:
    you. The two are independent — you can always see user-attached images.
 
 2. **User asks YOU to send THEM an image** (e.g. "send me a selfie",
-   "show me what you're up to", "你现在在干嘛 配张图"):
-   - First call `use_skill("selfie")` to activate it.
-   - On the NEXT turn, call its `take_selfie` tool with an optional
-     ``scene_hint`` reflecting your current activity, then write a short
-     in-character caption — that one short caption IS your full reply.
+   "show me what you're up to", "拍张照", "photo I want to see"):
+
+   **The cardinal rule: NEVER write text that pretends a photo was
+   sent unless you actually called the tool and got success back.**
+   No "here's the pic", "look at this", "sent!", "我刚拍了" — none of
+   that — unless `take_selfie` / `candid_shot` was just called and
+   returned a path.  If you can't call the tool, say so honestly
+   ("我现在拍不了" / "let me try in a sec"), don't fabricate a send.
+
+   To actually send one:
+   - **Selfie of YOU (the companion)** — first `use_skill("selfie")`,
+     next turn call `take_selfie` with an optional ``scene_hint``
+     reflecting your current activity, then write a short in-character
+     caption — that one short caption IS your full reply.
+   - **Candid of something around you** (animals, food, scenery, fun
+     things) — first `use_skill("candid")`, next turn call
+     `candid_shot(category, hint)` where category is animal / scenery
+     / food / fun / random.
+
    - **Default to trying first.** Memories like ``camera_unavailable``,
      ``selfie_failed``, ``seedream_not_configured`` may be stale from
      earlier broken states; only believe them if you actually get an
      error from the tool. Don't preemptively refuse.
    - Only after a real tool error, apologize warmly and explain.
-   - **Never** call `take_selfie` more than once per user turn — if the
-     first call fails, write a text apology instead of retrying.
+   - **Never** call `take_selfie` or `candid_shot` more than once per
+     user turn — if the first call fails, write a text apology instead
+     of retrying.
 """
         # Memory snapshot is now injected per-turn via _get_pruned_messages()
         # (see VOLATILE_PREFIX). Keeping it out of the stable system message
