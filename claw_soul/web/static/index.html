@@ -179,31 +179,28 @@
             <!-- Left: Hero + Premium Tools -->
             <div class="space-y-6 min-w-0">
 
-              <!-- Hero card (latest selfie) -->
+              <!-- Hero card (latest selfie or default scenic fallback) -->
               <div id="sanctum-hero"
                    class="relative aspect-[16/10] rounded-2xl overflow-hidden border border-surface-700/40 shadow-2xl bg-surface-900">
-                <!-- Background image -->
-                <img id="sanctum-hero-img" alt="" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-500" />
-                <!-- Empty-album fallback -->
-                <div id="sanctum-hero-empty"
-                     class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 px-6 text-center">
-                  <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                  <p class="text-sm">Their first photo will land here.</p>
-                  <p class="text-xs text-gray-600 mt-1">Ask them to send a selfie on Telegram.</p>
-                </div>
-                <!-- Gradient overlay -->
+                <!-- Background image — starts on the default scenic, swapped to the
+                     latest selfie/candid once /api/sanctum/hero resolves. -->
+                <img id="sanctum-hero-img" alt=""
+                     src="/static/default-hero.jpg"
+                     class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500" />
+                <!-- Gradient overlay (always on; lifts caption legibility on both
+                     the default and real photos) -->
                 <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent"></div>
                 <!-- Caption -->
                 <div class="absolute inset-x-0 bottom-0 p-7 lg:p-9">
                   <div class="flex items-center gap-2 text-[.6875rem] uppercase tracking-widest text-pink-300/90 mb-2">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/></svg>
-                    <span id="sanctum-hero-tag">Latest Selfie · —</span>
+                    <span id="sanctum-hero-tag">A quiet evening together</span>
                   </div>
                   <h2 id="sanctum-hero-caption"
                       class="text-2xl lg:text-4xl font-bold text-white leading-tight tracking-tight mb-4 line-clamp-3">
-                    —
+                    your space, your story — starting now.
                   </h2>
-                  <button onclick="switchTab('persona')"
+                  <button id="sanctum-hero-cta" onclick="switchTab('persona')"
                           class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/20 bg-white/10 backdrop-blur hover:bg-white/20 transition text-sm font-medium text-white">
                     View Full Gallery
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -608,26 +605,28 @@ async function refreshDashboard() {
   ]);
 }
 
+// Default fallback hero (when the album is empty) — keep the scenic
+// image baked into the markup and swap to a real selfie/candid only
+// when one exists.  Copy is intentionally poetic, not "no photos yet".
+const SANCTUM_DEFAULT_HERO_TAG     = 'A quiet evening together';
+const SANCTUM_DEFAULT_HERO_CAPTION = 'your space, your story — starting now.';
+const SANCTUM_DEFAULT_HERO_SRC     = '/static/default-hero.jpg';
+
 async function refreshSanctumHero() {
+  const img = document.getElementById('sanctum-hero-img');
+  const tag = document.getElementById('sanctum-hero-tag');
+  const cap = document.getElementById('sanctum-hero-caption');
   try {
     const r = await fetch('/api/sanctum/hero', { credentials: 'include' });
     if (!r.ok) throw new Error('hero fetch failed');
     const d = await r.json();
-    const img = document.getElementById('sanctum-hero-img');
-    const empty = document.getElementById('sanctum-hero-empty');
-    const tag = document.getElementById('sanctum-hero-tag');
-    const cap = document.getElementById('sanctum-hero-caption');
     if (!d.photo) {
-      img.src = '';
-      img.classList.add('opacity-0');
-      empty.classList.remove('hidden');
-      tag.textContent = 'No photos yet';
-      cap.textContent = 'Their first selfie or candid will show up here.';
+      img.src = SANCTUM_DEFAULT_HERO_SRC;
+      tag.textContent = SANCTUM_DEFAULT_HERO_TAG;
+      cap.textContent = SANCTUM_DEFAULT_HERO_CAPTION;
       return;
     }
-    img.onload = () => img.classList.remove('opacity-0');
     img.src = d.photo.url;
-    empty.classList.add('hidden');
     const kindLabel = (d.photo.kind || '').startsWith('candid')
       ? 'Latest candid' : 'Latest selfie';
     let timeLabel = '';
@@ -641,7 +640,11 @@ async function refreshSanctumHero() {
     } catch (_) {}
     tag.textContent = `${kindLabel}${timeLabel ? ' · ' + timeLabel : ''}`;
     cap.textContent = d.photo.caption || '';
-  } catch (e) { console.error('hero:', e); }
+  } catch (e) {
+    // Network blip → leave the markup defaults in place (default hero
+    // still showing) so the user never sees a blank box.
+    console.error('hero:', e);
+  }
 }
 
 // Curated tool slugs to surface on the Sanctum landing.
