@@ -437,11 +437,13 @@ async def _router_call(path: str, body: dict | None = None) -> tuple[int, str]:
 async def _api_setup_options():
     """Return the full option menu (labels + descriptions) for the wizard."""
     from .. import companion as comp
+    from ..onboard import _REGIONS_BY_COUNTRY
     return JSONResponse({
         "options":      comp.OPTIONS,
         "fields":       list(comp.ALL_FIELDS),
         "trait_groups": comp.TRAIT_GROUPS,
         "traits_range": {"min": comp.TRAITS_MIN, "max": comp.TRAITS_MAX},
+        "regions_by_country": _REGIONS_BY_COUNTRY,
     })
 
 

@@ -2050,7 +2050,7 @@ const WIZARD_STEPS = [
       { key: 'companionAge',        kind: 'choice', label: 'How old do they feel?' },
       { key: 'companionOccupation', kind: 'choice', label: 'What do they do?' },
       { key: 'companionCountry',    kind: 'choice', label: 'Where do they live?' },
-      { key: 'companionRegion',     kind: 'text',   label: 'City / region (optional)',
+      { key: 'companionRegion',     kind: 'region', label: 'City / region (optional)',
         placeholder: 'Leave blank to pick one randomly' },
     ],
   },
@@ -2228,6 +2228,39 @@ function renderWizardStep() {
 let _traitGroupsExpanded = false;
 
 function renderField(field) {
+  // Region selector: city dropdown driven by companionCountry, plus a
+  // "Custom…" item that flips to a free-text input.  Empty == let the
+  // server pick a default city for the country (random_region()).
+  if (field.kind === 'region') {
+    const country = (_wizardChoices.companionCountry || '').toUpperCase();
+    const cities = (_setupOptions.regions_by_country || {})[country] || [];
+    const val = _wizardChoices[field.key] || '';
+    // "Custom" mode = a free-form value not in the curated list.
+    const isCustom = val && !cities.includes(val);
+    const select = `
+      <select id="wiz-${field.key}-sel"
+        onchange="onRegionSelect('${field.key}', this.value)"
+        class="w-full px-3.5 py-2.5 bg-surface-950 border border-surface-700/60 rounded-lg text-sm text-white focus:outline-none focus:border-brand-500/60 transition">
+        <option value="">— ${field.placeholder || 'Leave blank for random'} —</option>
+        ${cities.map(c => `<option value="${escapeHTML(c)}" ${val === c ? 'selected' : ''}>${escapeHTML(c)}</option>`).join('')}
+        <option value="__CUSTOM__" ${isCustom ? 'selected' : ''}>Other / Custom…</option>
+      </select>`;
+    const customInput = `
+      <input id="wiz-${field.key}" type="text" value="${escapeHTML(isCustom ? val : '')}"
+        placeholder="Type a city or neighbourhood"
+        oninput="_wizardChoices['${field.key}'] = this.value"
+        class="mt-2 w-full px-3.5 py-2.5 bg-surface-950 border border-surface-700/60 rounded-lg text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-brand-500/60 transition ${isCustom ? '' : 'hidden'}" />`;
+    return `
+      <div class="mb-6">
+        <label class="block text-[.78rem] text-gray-300 font-medium mb-2">${field.label}</label>
+        ${select}
+        ${customInput}
+        ${cities.length === 0
+          ? '<p class="text-[.7rem] text-gray-500 mt-1.5">Pick a country above to see suggested cities.</p>'
+          : ''}
+      </div>`;
+  }
+
   if (field.kind === 'text') {
     const val = _wizardChoices[field.key] || '';
     return `
@@ -2317,6 +2350,21 @@ function renderField(field) {
         `).join('')}
       </div>
     </div>`;
+}
+
+function onRegionSelect(key, value) {
+  if (value === '__CUSTOM__') {
+    // Reveal the free-text box; keep any existing custom text.
+    _wizardChoices[key] = _wizardChoices[key] || '';
+  } else {
+    _wizardChoices[key] = value;
+  }
+  renderWizardStep();
+  // Re-focus the input if user picked Custom so they can type immediately
+  if (value === '__CUSTOM__') {
+    const el = document.getElementById('wiz-' + key);
+    if (el) el.focus();
+  }
 }
 
 function toggleTrait(key) {
