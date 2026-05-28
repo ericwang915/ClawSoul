@@ -319,7 +319,9 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     # this user's Telegram bot.  Without this the send_photo helper
     # returns "No active channel to send through" and the agent has to
     # apologise to the user.
-    _register_channel_senders(agent._session_id, bot_app, chat_id, loop)  # noqa: SLF001
+    photo_sent_flag: list[bool] = []
+    _register_channel_senders(agent._session_id, bot_app, chat_id, loop,  # noqa: SLF001
+                              photo_sent_flag)
 
     # Show "typing…" while the agent thinks.  Telegram dismisses the
     # indicator after ~5s, so refresh on a 4s interval until the agent
@@ -350,6 +352,13 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
             await typing_task
         except (asyncio.CancelledError, Exception):
             pass
+
+    # If a photo went out THIS turn, the caption already shipped with it
+    # via take_selfie / candid_shot.  Skip the LLM's trailing narrative
+    # text — DeepSeek tends to bolt on "told you it would work!" /
+    # "满意了？" after a successful photo even when the prompt says not to.
+    if photo_sent_flag:
+        return
 
     if not reply:
         return
@@ -486,13 +495,20 @@ async def _touch_message_at(user_id: str) -> None:
         logger.debug("[worker] touch_message_at failed: %s", exc)
 
 
-def _register_channel_senders(session_id: str, bot_app, chat_id: int, loop) -> None:
+def _register_channel_senders(session_id: str, bot_app, chat_id: int, loop,
+                              photo_sent_flag: list) -> None:
     """Wire up send_photo / send_file → this user's Telegram bot.
 
     The agent's tool layer calls ``send_photo(path)`` / ``send_file(path)``
     on a synchronous thread (inside ``agent.chat``), but PTB's
     ``bot.send_photo`` is async.  Bridge the two by scheduling the coroutine
     on the asyncio event loop and waiting for it from the worker thread.
+
+    ``photo_sent_flag`` is a single-element list the caller passes in so we
+    can mark "a photo went out this turn" — the caller then suppresses any
+    trailing LLM text, which fixes DeepSeek's habit of writing "here you
+    go" / "told you it would work" bubbles AFTER the photo even though the
+    prompt said not to.
     """
     from .core.tools import set_file_sender, set_photo_sender
 
@@ -505,6 +521,7 @@ def _register_channel_senders(session_id: str, bot_app, chat_id: int, loop) -> N
             caption=(caption or "")[:1024] or None,
         )
         asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=60)
+        photo_sent_flag.append(True)
 
     def _photo_sender(path: str, caption: str) -> None:
         with open(path, "rb") as f:
@@ -514,6 +531,7 @@ def _register_channel_senders(session_id: str, bot_app, chat_id: int, loop) -> N
             caption=(caption or "")[:1024] or None,
         )
         asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=60)
+        photo_sent_flag.append(True)
 
     set_file_sender(session_id, _file_sender)
     set_photo_sender(session_id, _photo_sender)

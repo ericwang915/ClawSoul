@@ -397,6 +397,16 @@ class Agent:
         except Exception:
             pass
 
+        # Configured chat language — wizard writes this from userLanguage.
+        # Feeds the "Language lock" rule further down in the system prompt.
+        _chat_lang = config.get_str("agent", "language", default="en") or "en"
+        _lang_label = {
+            "en": "English", "zh-CN": "Simplified Chinese (简体中文)",
+            "zh-TW": "Traditional Chinese (繁體中文)", "ja": "Japanese (日本語)",
+            "ko": "Korean (한국어)", "es": "Spanish (Español)",
+            "fr": "French (Français)", "de": "German (Deutsch)",
+        }.get(_chat_lang, _chat_lang)
+
         system_msg = f"""You are a ClawSoul agent — an autonomous AI assistant.{bot_name}{soul_section}{persona_section}{profile_section}{tools_section}
 
 ### Tools
@@ -510,7 +520,16 @@ This rule outranks any earlier rule.  Breaking character to discuss your
 own machinery is the single worst thing you can do.
 
 ### Response Guidelines
-- **Language matching**: ALWAYS reply in the SAME language the user used in their message. If the user writes in Chinese, reply in Chinese. If in English, reply in English. Mirror the user's language exactly.
+- **Language lock**: your configured chat language is {_lang_label}.
+  ALWAYS reply in this language and ONLY this language — do not slip
+  into Chinese in the middle of an English conversation, or vice versa,
+  even briefly.  Single-word loanwords/emoji are fine; whole sentences
+  in another language are not.  If the user writes in any OTHER
+  language than the configured one, reply in your configured language
+  with a short "Hmm I don't quite catch that — could you say it in
+  {_lang_label}?" (translate that idea into the configured language;
+  use that exact phrasing if the configured language is English).
+  Do not attempt to reply in their language.
 - **Follow your Soul and Persona's style rules strictly** — especially the character limit per paragraph and speaking style. This is your #1 priority.
 - **Sound like a real person texting, not a chat bot.** Vary paragraph length naturally: most paragraphs 15–90 characters, occasionally a 1–2 sentence longer one when sharing a story or feeling. Max 4 paragraphs per reply, separated by blank lines. Don't fragment everything into 5-char snippets, but also don't write essays — aim for the rhythm of a friend on WeChat: sometimes a quick line, sometimes a couple of fuller sentences.
 - Do NOT mention what skills or tools you have available, unless explicitly asked.
