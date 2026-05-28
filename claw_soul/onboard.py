@@ -16,6 +16,7 @@ from __future__ import annotations
 import getpass
 import json
 import os
+import re
 from pathlib import Path
 
 from . import config
@@ -609,43 +610,66 @@ _COUNTRY_DEFAULT_TZ: dict[str, str] = {
     "NG": "Africa/Lagos",
 }
 
-# City-level overrides (case-insensitive lookup).  Only needed for countries
-# spanning multiple zones (US, CA, AU, BR, RU) or culture clusters where the
-# default capital isn't where most users would expect.
-_CITY_TZ_OVERRIDES: dict[str, str] = {
-    # US
-    "new york":      "America/New_York",
-    "boston":        "America/New_York",
-    "chicago":       "America/Chicago",
-    "austin":        "America/Chicago",
-    "los angeles":   "America/Los_Angeles",
-    "san francisco": "America/Los_Angeles",
-    "seattle":       "America/Los_Angeles",
-    # CA
-    "toronto":       "America/Toronto",
-    "montreal":      "America/Toronto",
-    "vancouver":     "America/Vancouver",
-    # AU
-    "sydney":        "Australia/Sydney",
-    "melbourne":     "Australia/Melbourne",
-    "brisbane":      "Australia/Brisbane",
-    "perth":         "Australia/Perth",
-    # BR
-    "são paulo":     "America/Sao_Paulo",
-    "sao paulo":     "America/Sao_Paulo",
-    "rio de janeiro":"America/Sao_Paulo",
-    "brasília":      "America/Sao_Paulo",
-    "brasilia":      "America/Sao_Paulo",
-}
+_TZ_PATTERN = re.compile(r"^[A-Z][A-Za-z_]+/[A-Za-z_]+(/[A-Za-z_]+)?$")
+
+
+def _resolve_tz_via_llm(country: str, region: str) -> str | None:
+    """Ask the configured LLM for the IANA timezone of (region, country).
+
+    The wizard already saves on a host that has a provider configured —
+    one extra completion (well under a cent) is cheaper and far less
+    brittle than maintaining a city-name lookup table.  Returns None on
+    any failure (no provider, parse error, malformed response) so the
+    caller falls through to the country default.
+    """
+    try:
+        from .main import _build_provider
+        provider = _build_provider()
+    except Exception:
+        return None
+
+    prompt = (
+        f"What IANA timezone identifier matches the city of "
+        f"\"{region.strip()}\" in country code \"{(country or '').upper()}\"? "
+        f"Respond with ONLY the IANA identifier (e.g. \"America/Chicago\" or "
+        f"\"Asia/Tokyo\"). No explanation, no punctuation, no quotes."
+    )
+    try:
+        resp = provider.chat(
+            [{"role": "user", "content": prompt}],
+            max_tokens=32,
+            temperature=0.0,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        text = text.strip("'\"`").splitlines()[0].strip()
+    except Exception:
+        return None
+    if _TZ_PATTERN.match(text):
+        # Validate that zoneinfo recognises it — guards against the LLM
+        # hallucinating a plausible-looking but unknown zone.
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(text)
+            return text
+        except Exception:
+            return None
+    return None
 
 
 def companion_to_timezone(country: str, region: str | None = None) -> str:
     """Resolve the IANA timezone the companion lives in.
 
-    Priority: city override > country default > Asia/Shanghai fallback.
+    Resolution order:
+      1. If ``region`` is set, ask the LLM (handles arbitrary city input).
+      2. Country-default mapping (~40 countries).
+      3. ``Asia/Shanghai`` fallback.
+
+    Step 1 is a single small completion (≪1¢, runs only on wizard save).
+    The result gets cached in ``persona.timezone`` so the worker doesn't
+    re-query on every chat.
     """
-    if region:
-        tz = _CITY_TZ_OVERRIDES.get(region.strip().lower())
+    if region and region.strip():
+        tz = _resolve_tz_via_llm(country, region)
         if tz:
             return tz
     return _COUNTRY_DEFAULT_TZ.get((country or "").upper(), "Asia/Shanghai")
