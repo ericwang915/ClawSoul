@@ -51,6 +51,8 @@ class UserMachineRow:
     image_ref: str | None
     cpus: int
     memory_mb: int
+    onboarded: bool = False
+    last_message_at: str | None = None     # ISO-8601
 
 
 def _row(d: dict) -> UserMachineRow:
@@ -64,6 +66,8 @@ def _row(d: dict) -> UserMachineRow:
         image_ref=d.get("image_ref"),
         cpus=int(d.get("cpus") or 1),
         memory_mb=int(d.get("memory_mb") or 256),
+        onboarded=bool(d.get("onboarded") or False),
+        last_message_at=d.get("last_message_at"),
     )
 
 
@@ -136,6 +140,42 @@ async def upsert_user_machine(
 async def mark_user_machine_state(user_id: str, state: str) -> None:
     """Quick state transition without changing other fields."""
     await upsert_user_machine(user_id, state=state)
+
+
+async def touch_message_at(user_id: str) -> None:
+    """Bump last_message_at to now() — called on inbound and outbound
+    Telegram messages so the scheduler's proactive/selfie throttle can
+    skip ticks that would land in the middle of a conversation."""
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
+    async with httpx.AsyncClient(timeout=10) as c:
+        r = await c.patch(
+            f"{_url()}/rest/v1/user_machines",
+            params={"user_id": f"eq.{user_id}"},
+            headers={**_headers(), "Prefer": "return=minimal"},
+            json={"last_message_at": now_iso},
+        )
+    if not r.is_success:
+        logger.warning("[router-db] touch_message_at failed: %s %s",
+                       r.status_code, r.text[:200])
+
+
+async def mark_onboarded(user_id: str) -> None:
+    """Flip onboarded=true once the worker confirms the agent has a
+    bot_name in memory.  Idempotent — re-calling is cheap and harmless."""
+    async with httpx.AsyncClient(timeout=10) as c:
+        r = await c.patch(
+            f"{_url()}/rest/v1/user_machines",
+            params={"user_id": f"eq.{user_id}",
+                    "onboarded": "is.false"},  # only if currently false
+            headers={**_headers(), "Prefer": "return=minimal"},
+            json={"onboarded": True},
+        )
+    if r.is_success:
+        logger.info("[router-db] marked %s onboarded", user_id[:8])
+    else:
+        logger.warning("[router-db] mark_onboarded failed: %s %s",
+                       r.status_code, r.text[:200])
 
 
 async def list_user_machines(

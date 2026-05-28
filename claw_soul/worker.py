@@ -248,6 +248,11 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     if not text or chat_id is None:
         return  # non-text message types not supported in this phase
 
+    # Tell the scheduler we just got a fresh inbound — proactive/selfie
+    # ticks within the next quiet window get suppressed so the user
+    # doesn't get spammed mid-conversation.
+    asyncio.create_task(_touch_message_at(state.user_id))
+
     loop = asyncio.get_event_loop()
     agent = await state.get_agent()
 
@@ -284,6 +289,14 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
         await bot_app.bot.send_message(chat_id=chat_id, text=reply[:4096])
     except Exception as exc:
         logger.warning("[worker] send_message failed: %s", exc)
+        return
+
+    # Outbound succeeded — touch last_message_at, and if the agent has
+    # finished naming itself (memory has bot_name), promote the user
+    # from "still onboarding" to "onboarded" so the scheduler starts
+    # firing proactive/selfie/planner.
+    asyncio.create_task(_touch_message_at(state.user_id))
+    asyncio.create_task(_maybe_mark_onboarded(state.user_id, agent))
 
 
 async def _handle_proactive(state: _WorkerState) -> None:
@@ -385,6 +398,34 @@ async def _user_settings_lookup(user_id: str) -> dict | None:
     except Exception as exc:
         logger.warning("[worker] settings lookup failed: %s", exc)
         return None
+
+
+async def _touch_message_at(user_id: str) -> None:
+    """Fire-and-forget bump of user_machines.last_message_at."""
+    from .router.db import touch_message_at
+    try:
+        await touch_message_at(user_id)
+    except Exception as exc:
+        logger.debug("[worker] touch_message_at failed: %s", exc)
+
+
+async def _maybe_mark_onboarded(user_id: str, agent) -> None:
+    """If the agent's memory has a bot_name, flip onboarded=true so the
+    scheduler can begin firing proactive/selfie/planner.  Idempotent;
+    db helper is a no-op once the column is already true."""
+    try:
+        has_bot_name = bool(
+            (agent.memory.list_all() or {}).get("bot_name", "").strip()
+        )
+    except Exception:
+        return
+    if not has_bot_name:
+        return
+    from .router.db import mark_onboarded
+    try:
+        await mark_onboarded(user_id)
+    except Exception as exc:
+        logger.debug("[worker] mark_onboarded failed: %s", exc)
 
 
 # ── Entry point ──────────────────────────────────────────────────────

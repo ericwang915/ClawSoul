@@ -47,6 +47,11 @@ _RECONCILE_INTERVAL_MIN = 1
 # enough for any debugging on "who fired what" without growing forever.
 _PRUNE_OLDER_THAN_HOURS = 24
 
+# Skip proactive/selfie ticks that would fire within this window of the
+# user's last inbound/outbound message — avoids dogpiling check-ins on
+# top of an active conversation.
+_QUIET_AFTER_MESSAGE_MIN = 30
+
 # Default selfie slots — these become per-user once we expose a config UI.
 _DEFAULT_SELFIE_SLOTS = ["10:00", "16:00", "20:00"]
 
@@ -92,8 +97,11 @@ class RouterScheduler:
         """Re-read user_machines + user_settings, add jobs for new paid
         users, remove jobs for users no longer in scope.
 
-        Only ``tier='paid'`` (or higher) users get the proactive +
-        selfie + planner ticks; free tier is reactive-only.
+        Two gates:
+          - tier must be ``paid`` or higher (free is reactive-only).
+          - ``onboarded`` must be true; otherwise the worker hasn't
+            confirmed the user named the companion yet, and proactive/
+            selfie ticks would interrupt the onboarding chat.
         """
         try:
             rows = await db.list_user_machines()
@@ -104,6 +112,8 @@ class RouterScheduler:
         active_ids = set()
         for row in rows:
             if row.tier == "free":
+                continue
+            if not row.onboarded:
                 continue
             active_ids.add(row.user_id)
             self._ensure_user_jobs(row.user_id, row.tier)
@@ -128,9 +138,11 @@ class RouterScheduler:
             replace_existing=True,
         )
 
-        # Proactive tick — every 5 min, worker decides whether to send
+        # Proactive tick — every 30 min.  5 min was too tight to be
+        # human-rhythm; with the post-message quiet window most ticks
+        # would have been thrown away anyway.
         sched.add_job(
-            self._fire_proactive, CronTrigger(minute="*/5"),
+            self._fire_proactive, CronTrigger(minute="*/30"),
             id=f"proactive:{user_id}",
             kwargs={"user_id": user_id},
             replace_existing=True,
@@ -165,7 +177,24 @@ class RouterScheduler:
             logger.debug("[router-sched] lost claim for %s @ %s", job_id, minute)
         return won
 
+    async def _is_quiet_window(self, user_id: str) -> bool:
+        """True if the user has chatted within the last 30 min — we
+        shouldn't drop a proactive/selfie on top of an active session."""
+        row = await db.get_user_machine(user_id)
+        if not row or not row.last_message_at:
+            return False
+        try:
+            from datetime import datetime, timedelta, timezone
+            last = datetime.fromisoformat(row.last_message_at.replace("Z", "+00:00"))
+        except Exception:
+            return False
+        return (datetime.now(timezone.utc) - last) < timedelta(
+            minutes=_QUIET_AFTER_MESSAGE_MIN
+        )
+
     async def _fire_planner(self, user_id: str) -> None:
+        # Planner is internal state (today_plan.md), not an outbound
+        # message, so it doesn't need the quiet-window check.
         if not await self._claim(f"planner:{user_id}"):
             return
         await dispatch.dispatch(user_id, "planner_tick", {})
@@ -173,11 +202,19 @@ class RouterScheduler:
     async def _fire_proactive(self, user_id: str) -> None:
         if not await self._claim(f"proactive:{user_id}"):
             return
+        if await self._is_quiet_window(user_id):
+            logger.info("[router-sched] skip proactive for %s (quiet window)",
+                        user_id[:8])
+            return
         await dispatch.dispatch(user_id, "proactive_tick",
                                 {"ts": datetime.utcnow().isoformat()})
 
     async def _fire_selfie(self, user_id: str, slot: str) -> None:
         if not await self._claim(f"selfie:{user_id}:{slot}"):
+            return
+        if await self._is_quiet_window(user_id):
+            logger.info("[router-sched] skip selfie:%s for %s (quiet window)",
+                        slot, user_id[:8])
             return
         await dispatch.dispatch(user_id, "selfie_tick", {"slot": slot})
 
