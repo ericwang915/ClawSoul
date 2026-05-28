@@ -34,19 +34,41 @@
     .chat-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
     .chat-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-    .msg-user { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); }
-    .msg-bot  {
-      background: #232a3a;
-      border: 1px solid rgba(120, 135, 165, .25);
-      box-shadow: 0 1px 0 rgba(255,255,255,.03) inset;
+    /* Chat bubble styling — companion theme, generous padding, brand
+       gradients for the user side, soft glass for the assistant side. */
+    .msg-user {
+      background: linear-gradient(135deg, #f472b6 0%, #c084fc 100%);
+      color: white;
+      box-shadow: 0 4px 14px -4px rgba(192, 132, 252, .35);
+    }
+    .msg-bot {
+      background: rgba(40, 32, 56, .85);
+      border: 1px solid rgba(244, 114, 182, .12);
+      box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 4px 14px -4px rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+      color: #e9e4f0;
     }
     .msg-system {
       background: rgba(124, 117, 137, .12);
       border: 1px dashed rgba(124, 117, 137, .35);
       color: #b9b1c8;
       font-style: italic;
-      font-size: .78rem;
+      font-size: .8125rem;
     }
+    /* Asymmetric corner radius so bubbles look like dialogue, not boxes. */
+    .msg-bubble {
+      border-radius: 20px;
+      padding: 14px 18px;
+      font-size: .9375rem;
+      line-height: 1.7;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .msg-bubble.msg-user  { border-bottom-right-radius: 6px; }
+    .msg-bubble.msg-bot   { border-bottom-left-radius: 6px; }
+    /* Chinese-friendly tracking */
+    .msg-bubble p { margin: 0; }
+    .msg-bubble p + p { margin-top: .55em; }
 
     .skill-card { transition: all .2s ease; }
     .skill-card:hover { border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(59,130,246,.15); }
@@ -257,7 +279,7 @@
 
         <!-- ═══ Chat Tab ═══ -->
         <div id="tab-chat" class="tab-content hidden h-full flex flex-col">
-          <div id="chat-messages" class="flex-1 overflow-y-auto chat-scroll px-6 py-6 space-y-4">
+          <div id="chat-messages" class="flex-1 overflow-y-auto chat-scroll px-6 py-8 space-y-5">
             <div class="text-center py-16">
               <img src="/static/logo.png" alt="PythonClaw" class="w-14 h-14 mx-auto mb-4 rounded-xl opacity-50">
               <p class="text-gray-500 text-[.8125rem] mb-1">Send a message to start chatting.</p>
@@ -1190,13 +1212,13 @@ function appendStreamToken(text) {
     wrapper.id = 'stream-wrapper';
     wrapper.className = 'flex justify-start fade-in';
     const row = document.createElement('div');
-    row.className = 'flex items-end gap-2.5 max-w-[75%]';
+    row.className = 'flex items-end gap-3 max-w-[70%]';
     const avatar = document.createElement('div');
-    avatar.className = 'w-7 h-7 rounded-lg bg-surface-800 border border-surface-700 flex items-center justify-center shrink-0';
-    avatar.innerHTML = '<img src="/static/logo.png" class="w-4 h-4 rounded">';
+    avatar.className = 'w-9 h-9 rounded-full overflow-hidden shrink-0 ring-2 ring-pink-400/30 shadow-md';
+    avatar.innerHTML = '<img src="/static/logo.png" class="w-full h-full object-cover">';
     row.appendChild(avatar);
     const bubble = document.createElement('div');
-    bubble.className = 'msg-bot text-gray-200 rounded-2xl px-4 py-3 text-[.8125rem] leading-relaxed';
+    bubble.className = 'msg-bubble msg-bot';
     row.appendChild(bubble);
     wrapper.appendChild(row);
     container.appendChild(wrapper);
@@ -1242,18 +1264,17 @@ function addMessage(role, content) {
   wrapper.className = 'flex fade-in ' + (role === 'user' ? 'justify-end' : 'justify-start');
 
   const row = document.createElement('div');
-  row.className = 'flex items-end gap-2.5 max-w-[75%]';
+  row.className = 'flex items-end gap-3 max-w-[70%]';
 
   if (role === 'bot') {
     const avatar = document.createElement('div');
-    avatar.className = 'w-7 h-7 rounded-lg bg-surface-800 border border-surface-700 flex items-center justify-center shrink-0';
-    avatar.innerHTML = '<img src="/static/logo.png" class="w-4 h-4 rounded" alt="">';
+    avatar.className = 'w-9 h-9 rounded-full overflow-hidden shrink-0 ring-2 ring-pink-400/30 shadow-md';
+    avatar.innerHTML = '<img src="/static/logo.png" class="w-full h-full object-cover" alt="">';
     row.appendChild(avatar);
   }
 
   const bubble = document.createElement('div');
-  bubble.className = (role === 'user' ? 'msg-user text-white' : 'msg-bot text-gray-200') +
-    ' rounded-2xl px-4 py-3 text-[.8125rem] leading-relaxed';
+  bubble.className = 'msg-bubble ' + (role === 'user' ? 'msg-user' : 'msg-bot');
   if (role === 'user') bubble.textContent = text;
   else bubble.innerHTML = renderMarkdown(text);
 
@@ -1270,15 +1291,15 @@ function addThinking() {
   wrapper.id = 'thinking-indicator';
   wrapper.className = 'flex justify-start fade-in';
   wrapper.innerHTML = `
-    <div class="flex items-end gap-2.5">
-      <div class="w-7 h-7 rounded-lg bg-surface-800 border border-surface-700 flex items-center justify-center shrink-0">
-        <img src="/static/logo.png" class="w-4 h-4 rounded">
+    <div class="flex items-end gap-3">
+      <div class="w-9 h-9 rounded-full overflow-hidden shrink-0 ring-2 ring-pink-400/30 shadow-md">
+        <img src="/static/logo.png" class="w-full h-full object-cover">
       </div>
-      <div class="msg-bot rounded-2xl px-4 py-3 text-[.8125rem] text-gray-500">
+      <div class="msg-bubble msg-bot">
         <span class="flex items-center gap-1.5">
-          <span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-brand-400" style="animation-delay:0s"></span>
-          <span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-brand-400" style="animation-delay:.2s"></span>
-          <span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-brand-400" style="animation-delay:.4s"></span>
+          <span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-pink-400" style="animation-delay:0s"></span>
+          <span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-purple-400" style="animation-delay:.2s"></span>
+          <span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-pink-400" style="animation-delay:.4s"></span>
         </span>
       </div>
     </div>
