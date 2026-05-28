@@ -135,6 +135,7 @@ def create_worker_app() -> FastAPI:
         /api/setup/companion save) so wizard edits take effect without
         the user having to wait for an idle-restart.
         """
+        tenancy.set_current_user(user_id)
         try:
             _hydrate_persona_from_pg(user_id)
             async with state._lock:  # noqa: SLF001
@@ -149,6 +150,12 @@ def create_worker_app() -> FastAPI:
 
     @app.post("/dispatch")
     async def dispatch(request: Request) -> JSONResponse:
+        # ContextVars set in startup don't propagate into per-request
+        # tasks that FastAPI spawns, so re-bind tenancy here on every
+        # call.  Without this, config.CLAWSOUL_HOME / SessionStore /
+        # memory all fall back to single-tenant paths and skip the
+        # /data/users/<uid>/ directory the agent actually expects.
+        tenancy.set_current_user(user_id)
         try:
             body = await request.json()
         except Exception:
