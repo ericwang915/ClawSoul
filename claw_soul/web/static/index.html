@@ -367,16 +367,46 @@
         </div>
 
 
-        <!-- ═══ Persona Tab ═══ -->
-        <div id="tab-persona" class="tab-content hidden p-8 fade-in max-w-[760px] mx-auto">
-          <div class="mb-8 flex items-start justify-between">
+        <!-- ═══ Soul Bond Tab ═══ -->
+        <div id="tab-persona" class="tab-content hidden p-6 lg:p-10 fade-in max-w-[960px] mx-auto">
+          <div class="mb-7 flex items-start justify-between gap-4">
             <div>
-              <h2 class="text-xl font-bold text-white tracking-tight">Your AI Partner</h2>
-              <p class="text-sm text-gray-500 mt-1">How they look, talk, and care for you.</p>
+              <h2 class="text-3xl font-bold text-white tracking-tight">Your AI Partner</h2>
+              <p class="text-[.95rem] text-gray-400 mt-1.5">How they look, talk, and care for you.</p>
             </div>
-            <button id="persona-customize-btn" onclick="reopenSetupWizardForEdit()" class="btn-ghost text-sm hidden">Customize…</button>
+            <button id="persona-customize-btn" onclick="reopenSetupWizardForEdit()"
+                    class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-white shadow-md transition shrink-0"
+                    style="background: linear-gradient(135deg, #f472b6, #c084fc);">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+              Customize
+            </button>
           </div>
+
           <div id="persona-summary" class="text-sm text-gray-400">Loading…</div>
+
+          <!-- Memory Gallery (recent shared photos) -->
+          <section id="memory-gallery-section" class="mt-12 hidden">
+            <div class="mb-5 flex items-end justify-between">
+              <div>
+                <h3 class="text-xl font-semibold text-white tracking-tight">Memory Gallery</h3>
+                <p class="text-[.85rem] text-gray-500 mt-1">Moments they've shared with you.</p>
+              </div>
+              <span id="memory-gallery-count" class="text-[.75rem] text-gray-500"></span>
+            </div>
+            <div id="memory-gallery-grid"
+                 class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            </div>
+          </section>
+        </div>
+
+        <!-- Memory-gallery lightbox -->
+        <div id="memory-lightbox" class="hidden fixed inset-0 z-[110] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
+             onclick="closeMemoryLightbox(event)">
+          <div class="relative max-w-[90vw] max-h-[88vh] flex flex-col items-center">
+            <button onclick="closeMemoryLightbox(event, true)" class="absolute -top-10 right-0 text-gray-300 hover:text-white text-xl">✕</button>
+            <img id="memory-lightbox-img" alt="" class="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl" />
+            <div id="memory-lightbox-caption" class="mt-3 text-sm text-gray-300 text-center max-w-[80vw]"></div>
+          </div>
         </div>
 
         <!-- ═══ Integrations Tab ═══ -->
@@ -1586,45 +1616,122 @@ async function loadPersona() {
     const partnerHome = partnerHomeParts.join(', ') || null;
 
     const traitChips = (Array.isArray(c.traits) && c.traits.length)
-      ? `<div class="flex flex-wrap gap-1.5 mt-1">${c.traits.map(t => `
-          <span class="px-2.5 py-1 rounded-full text-[.7rem] border border-surface-700/60 bg-surface-900/40 text-gray-200">${escapeHTML(traitLabel(t))}</span>
+      ? `<div class="flex flex-wrap gap-2 mt-2">${c.traits.map(t => `
+          <span class="px-3 py-1.5 rounded-full text-[.8125rem] border border-pink-400/25 bg-gradient-to-br from-pink-500/8 to-purple-500/8 text-pink-100">${escapeHTML(traitLabel(t))}</span>
         `).join('')}</div>`
-      : `<span class="text-gray-500 italic text-sm">— none selected</span>`;
+      : `<span class="text-gray-500 italic text-[.85rem]">— none selected</span>`;
 
     const backstoryBlock = (c.backstory && c.backstory.length)
-      ? `<p class="text-sm text-gray-200 whitespace-pre-line leading-relaxed">${escapeHTML(c.backstory)}</p>`
-      : `<span class="text-gray-500 italic text-sm">— no backstory set</span>`;
+      ? `<p class="text-[.95rem] text-gray-100 whitespace-pre-line leading-relaxed">${escapeHTML(c.backstory)}</p>`
+      : `<span class="text-gray-500 italic text-[.85rem]">— no backstory set</span>`;
 
     box.innerHTML = `
-      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-        ${[
-          ['You',              youParts],
-          ['Your partner',     partnerParts],
-          ['They live in',     partnerHome],
-          ['Core archetype',   labelOf('archetype', c.archetype)],
-          ['Relationship',     labelOf('dynamic', c.dynamic)],
-          ['Tone',             labelOf('tone', c.tone)],
-          ['Proactivity',      labelOf('proactivity', c.proactivity)],
-          ['Under stress',     labelOf('stress', c.stress)],
-          ['Deep-talk topics', labelOf('deepTalk', c.deepTalk)],
-        ].map(([k, v]) => `
-          <div>
-            <dt class="text-[.6875rem] text-gray-500 uppercase tracking-wide mb-1">${k}</dt>
-            <dd class="text-sm text-white">${v || '—'}</dd>
-          </div>
-        `).join('')}
-      </dl>
-      <div class="mt-6 pt-5 border-t border-surface-800/60">
-        <dt class="text-[.6875rem] text-gray-500 uppercase tracking-wide mb-2">Key traits</dt>
-        <dd>${traitChips}</dd>
-      </div>
-      <div class="mt-5">
-        <dt class="text-[.6875rem] text-gray-500 uppercase tracking-wide mb-2">Backstory</dt>
-        <dd>${backstoryBlock}</dd>
+      <div class="rounded-2xl border border-pink-400/15 bg-gradient-to-br from-surface-900/80 to-purple-900/10 p-7 lg:p-9 shadow-xl backdrop-blur-sm">
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
+          ${[
+            ['You',              youParts,                                       '🪞'],
+            ['Your partner',     partnerParts,                                   '💗'],
+            ['They live in',     partnerHome,                                    '🏙️'],
+            ['Core archetype',   labelOf('archetype', c.archetype),              '✨'],
+            ['Relationship',     labelOf('dynamic', c.dynamic),                  '🤝'],
+            ['Tone',             labelOf('tone', c.tone),                        '🎙️'],
+            ['Proactivity',      labelOf('proactivity', c.proactivity),          '📡'],
+            ['Under stress',     labelOf('stress', c.stress),                    '🌧️'],
+            ['Deep-talk topics', labelOf('deepTalk', c.deepTalk),                '🌙'],
+          ].map(([k, v, emoji]) => `
+            <div>
+              <dt class="text-[.7rem] text-pink-300/70 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                <span aria-hidden="true">${emoji}</span>${k}
+              </dt>
+              <dd class="text-[1.0625rem] text-white leading-snug font-medium">${v || '<span class="text-gray-600">—</span>'}</dd>
+            </div>
+          `).join('')}
+        </dl>
+        <div class="mt-7 pt-6 border-t border-pink-400/10">
+          <dt class="text-[.7rem] text-pink-300/70 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+            <span aria-hidden="true">💫</span>Key traits
+          </dt>
+          <dd>${traitChips}</dd>
+        </div>
+        <div class="mt-6">
+          <dt class="text-[.7rem] text-pink-300/70 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+            <span aria-hidden="true">📖</span>Backstory
+          </dt>
+          <dd>${backstoryBlock}</dd>
+        </div>
       </div>`;
+
+    // Once persona has rendered, also load the Memory Gallery below.
+    loadMemoryGallery();
   } catch (e) {
     box.textContent = 'Failed to load. Try refreshing the page.';
   }
+}
+
+// ── Memory Gallery ─────────────────────────────────────────────────────────
+
+async function loadMemoryGallery() {
+  const section = document.getElementById('memory-gallery-section');
+  const grid = document.getElementById('memory-gallery-grid');
+  const countEl = document.getElementById('memory-gallery-count');
+  if (!section || !grid) return;
+  try {
+    const r = await fetch('/api/sanctum/photos?limit=24', { credentials: 'include' });
+    if (!r.ok) throw new Error('photos fetch failed');
+    const d = await r.json();
+    const items = d.items || [];
+    if (items.length === 0) {
+      section.classList.remove('hidden');
+      grid.innerHTML = `
+        <div class="col-span-full rounded-2xl border border-pink-400/15 bg-gradient-to-br from-surface-900/60 to-purple-900/10 p-10 text-center">
+          <div class="text-3xl mb-2">📷</div>
+          <p class="text-[.95rem] text-gray-300">No photos shared yet.</p>
+          <p class="text-[.8rem] text-gray-500 mt-1">Ask them to send a selfie or candid on Telegram — it'll show up here.</p>
+        </div>`;
+      if (countEl) countEl.textContent = '';
+      return;
+    }
+    section.classList.remove('hidden');
+    if (countEl) countEl.textContent = items.length + ' photo' + (items.length === 1 ? '' : 's');
+    grid.innerHTML = items.map((it, idx) => {
+      const cap = (it.caption || '').slice(0, 80);
+      const t = it.timestamp ? new Date(it.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+      const isCandid = (it.kind || '').startsWith('candid');
+      const kindEmoji = isCandid ? '📸' : '🤳';
+      return `
+        <button onclick="openMemoryLightbox(${idx})"
+                class="group relative aspect-square rounded-xl overflow-hidden border border-pink-400/15 bg-surface-900 shadow-md hover:shadow-pink-500/20 hover:border-pink-400/40 transition-all">
+          <img src="${it.url}" loading="lazy" alt=""
+               class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3 text-left">
+            <div class="text-[.65rem] text-pink-300/90 uppercase tracking-widest mb-1">${kindEmoji} ${t || ''}</div>
+            <div class="text-[.78rem] text-white leading-snug line-clamp-2">${escapeHTML(cap)}</div>
+          </div>
+        </button>`;
+    }).join('');
+    _galleryItems = items;
+  } catch (e) {
+    section.classList.add('hidden');
+    console.error('gallery:', e);
+  }
+}
+
+let _galleryItems = [];
+
+function openMemoryLightbox(idx) {
+  const item = _galleryItems[idx];
+  if (!item) return;
+  const img = document.getElementById('memory-lightbox-img');
+  const cap = document.getElementById('memory-lightbox-caption');
+  img.src = item.url;
+  cap.textContent = item.caption || '';
+  document.getElementById('memory-lightbox').classList.remove('hidden');
+}
+
+function closeMemoryLightbox(event, force) {
+  // Only close on backdrop click or explicit close button, not inner image clicks.
+  if (!force && event && event.target.tagName === 'IMG') return;
+  document.getElementById('memory-lightbox').classList.add('hidden');
 }
 
 async function ensureSetupOptions() {
@@ -2471,6 +2578,11 @@ document.addEventListener('keydown', (e) => {
   const ct = document.getElementById('connect-tool-modal');
   if (ct && !ct.classList.contains('hidden')) {
     closeConnectModal();
+    return;
+  }
+  const lb = document.getElementById('memory-lightbox');
+  if (lb && !lb.classList.contains('hidden')) {
+    closeMemoryLightbox(null, true);
   }
 });
 </script>

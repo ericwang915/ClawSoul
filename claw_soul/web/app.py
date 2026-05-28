@@ -147,6 +147,7 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     # Sanctum landing-page APIs
     from . import sanctum_api
     app.add_api_route("/api/sanctum/hero", sanctum_api.hero, methods=["GET"])
+    app.add_api_route("/api/sanctum/photos", sanctum_api.photos, methods=["GET"])
     app.add_api_route("/api/sanctum/photo/{filename}", sanctum_api.photo, methods=["GET"])
     app.add_api_route("/api/sanctum/status", sanctum_api.status, methods=["GET"])
     app.add_api_route("/api/sanctum/milestones", sanctum_api.milestones, methods=["GET"])

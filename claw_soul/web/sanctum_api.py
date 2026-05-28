@@ -83,6 +83,42 @@ async def hero(request) -> JSONResponse:
     })
 
 
+async def photos(request) -> JSONResponse:
+    """Return the user's recent in-album photos for the Memory Gallery.
+
+    Default cap is 24 — enough to fill a 4-column grid six rows deep on
+    a wide monitor.  Falls through to an empty list when the album is
+    fresh.
+    """
+    uid = tenancy.get_current_user()
+    if not uid:
+        return JSONResponse({"error": "not authenticated"}, status_code=401)
+
+    try:
+        limit = int(request.query_params.get("limit", "24"))
+    except Exception:
+        limit = 24
+    limit = max(1, min(limit, 60))
+
+    album = PhotoAlbum()
+    entries = album._load_index()  # noqa: SLF001 — internal helper, OK in same package
+    entries = list(reversed(entries))[:limit]
+
+    items: list[dict[str, Any]] = []
+    for e in entries:
+        filename = e.get("filename") or os.path.basename(e.get("path", ""))
+        if not filename:
+            continue
+        items.append({
+            "filename":  filename,
+            "url":       f"/api/sanctum/photo/{filename}",
+            "kind":      e.get("kind"),
+            "caption":   _build_hero_caption(e),
+            "timestamp": e.get("timestamp"),
+        })
+    return JSONResponse({"items": items, "total": len(items)})
+
+
 async def photo(filename: str, request) -> FileResponse:
     """Stream a photo file from the current tenant's album.
 
@@ -372,6 +408,7 @@ def compute_bonding_level(score: float) -> int:
 __all__ = [
     "hero",
     "photo",
+    "photos",
     "status",
     "milestones",
     "compute_bonding_score",
