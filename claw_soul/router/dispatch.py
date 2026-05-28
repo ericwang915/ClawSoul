@@ -17,6 +17,7 @@ user id and bubble back so callers can fall back gracefully.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -99,11 +100,24 @@ async def dispatch(user_id: str, kind: str, payload: dict[str, Any]) -> bool:
 
     url = _worker_url(row.machine_id) + "/dispatch"
     body = {"kind": kind, "payload": payload}
-    try:
-        async with httpx.AsyncClient(timeout=WORKER_DISPATCH_TIMEOUT) as c:
-            r = await c.post(url, json=body)
-    except httpx.HTTPError as exc:
-        logger.warning("[router] %s dispatch network err: %s", user_id[:8], exc)
+    # Fly reporting state='started' just means the container is up; the
+    # Python process still needs ~3-8s to import claw_soul and bind 7788.
+    # Retry connection errors a handful of times before giving up.
+    r = None
+    last_exc: Exception | None = None
+    for attempt in range(6):
+        try:
+            async with httpx.AsyncClient(timeout=WORKER_DISPATCH_TIMEOUT) as c:
+                r = await c.post(url, json=body)
+            break
+        except httpx.HTTPError as exc:
+            last_exc = exc
+            if attempt < 5:
+                await asyncio.sleep(1.5)
+                continue
+    if r is None:
+        logger.warning("[router] %s dispatch network err after retries: %s",
+                       user_id[:8], last_exc)
         return False
 
     if not r.is_success:
