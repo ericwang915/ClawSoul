@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 async def migrate(user_id: str, *, tier: str = "free", region: str | None = None,
-                  dry_run: bool = False) -> int:
+                  dry_run: bool = False, set_webhook: bool = True) -> int:
     # 1. Settings present?
     settings = await db.get_user_setting_row(user_id)
     if not settings:
@@ -84,6 +84,8 @@ async def migrate(user_id: str, *, tier: str = "free", region: str | None = None
     # 4. Webhook
     if not token:
         print("  · webhook: SKIPPED (no telegram_bot_token configured)")
+    elif not set_webhook:
+        print("  · webhook: SKIPPED (--no-webhook) — flip it manually once /data is copied")
     elif dry_run:
         print(f"  · DRY-RUN: would call setWebhook for token={token[:8]}…")
     else:
@@ -134,11 +136,16 @@ def main() -> int:
     parser.add_argument("--tier", default="free", choices=("free", "paid", "enterprise"))
     parser.add_argument("--region", default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--no-webhook", action="store_true",
+                        help="Provision the machine but don't flip the Telegram "
+                             "webhook (use this to do the /data copy first, then "
+                             "re-run without --no-webhook to cut traffic over).")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     return asyncio.run(migrate(
         args.user_id, tier=args.tier, region=args.region, dry_run=args.dry_run,
+        set_webhook=not args.no_webhook,
     ))
 
 

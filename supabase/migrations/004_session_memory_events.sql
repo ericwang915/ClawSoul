@@ -99,23 +99,31 @@ alter table public.memory_entries  enable row level security;
 alter table public.memory_daily    enable row level security;
 alter table public.events          enable row level security;
 
-create policy if not exists "user owns row sessions"
+-- Postgres 15 doesn't have CREATE POLICY IF NOT EXISTS — use the
+-- drop-then-create idiom so this migration is re-runnable.
+
+drop policy if exists "user owns row sessions"        on public.sessions;
+create policy "user owns row sessions"
     on public.sessions for all
     using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create policy if not exists "user owns row turns"
+drop policy if exists "user owns row turns"           on public.turns;
+create policy "user owns row turns"
     on public.turns for all
     using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create policy if not exists "user owns row memory_entries"
+drop policy if exists "user owns row memory_entries"  on public.memory_entries;
+create policy "user owns row memory_entries"
     on public.memory_entries for all
     using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create policy if not exists "user owns row memory_daily"
+drop policy if exists "user owns row memory_daily"    on public.memory_daily;
+create policy "user owns row memory_daily"
     on public.memory_daily for all
     using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create policy if not exists "user owns row events"
+drop policy if exists "user owns row events"          on public.events;
+create policy "user owns row events"
     on public.events for all
     using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
