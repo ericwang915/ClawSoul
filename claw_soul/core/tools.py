@@ -432,11 +432,51 @@ def send_file(path: str, caption: str = "", session_id: str = "") -> str:
         return f"Error sending file: {exc}"
 
 
+def _tool_take_selfie(scene_hint: str = "", session_id: str = "") -> str:
+    """LLM-callable selfie generator + sender.
+
+    Runs the Seedream pipeline in-process (NOT via the subprocess shim
+    that take_selfie.py uses), then sends the resulting photo through
+    the session's registered photo_sender.  The agent's dispatch layer
+    injects ``session_id`` automatically — see :meth:`Agent` tool routing.
+    """
+    try:
+        from .image_gen import take_selfie as _gen_selfie
+    except Exception as exc:
+        return f"Error importing selfie: {exc}"
+    try:
+        result = _gen_selfie(scene_hint=scene_hint or None)
+    except Exception as exc:
+        return f"Error generating selfie: {exc}"
+    return send_photo(result.path, caption="", session_id=session_id)
+
+
+def _tool_candid_shot(category: str = "random", hint: str = "",
+                      session_id: str = "") -> str:
+    """LLM-callable candid-shot generator + sender.
+
+    ``category`` is one of animal | scenery | food | fun | random.
+    Otherwise mirrors :func:`_tool_take_selfie`.
+    """
+    try:
+        from .image_gen import take_candid as _gen_candid
+    except Exception as exc:
+        return f"Error importing candid: {exc}"
+    try:
+        result = _gen_candid(category=category or "random", hint=hint or None)
+    except Exception as exc:
+        return f"Error generating candid: {exc}"
+    return send_photo(result.path, caption="", session_id=session_id)
+
+
 AVAILABLE_TOOLS: dict[str, callable] = {
     "run_command": run_command,
     "read_file": read_file,
     "write_file": write_file,
     "send_file": send_file,
+    "send_photo": send_photo,
+    "take_selfie": _tool_take_selfie,
+    "candid_shot": _tool_candid_shot,
 }
 
 

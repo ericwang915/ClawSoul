@@ -538,15 +538,15 @@ Two completely different scenarios — do not confuse them:
    returned a path.  If you can't call the tool, say so honestly
    ("我现在拍不了" / "let me try in a sec"), don't fabricate a send.
 
-   To actually send one:
-   - **Selfie of YOU (the companion)** — first `use_skill("selfie")`,
-     next turn call `take_selfie` with an optional ``scene_hint``
-     reflecting your current activity, then write a short in-character
-     caption — that one short caption IS your full reply.
+   To actually send one (both tools are always available — no
+   `use_skill` needed):
+   - **Selfie of YOU (the companion)** — call `take_selfie` directly
+     with an optional ``scene_hint`` reflecting your current activity,
+     then write a short in-character caption — that one short caption
+     IS your full reply.
    - **Candid of something around you** (animals, food, scenery, fun
-     things) — first `use_skill("candid")`, next turn call
-     `candid_shot(category, hint)` where category is animal / scenery
-     / food / fun / random.
+     things) — call `candid_shot(category, hint)` directly, where
+     category is one of: animal / scenery / food / fun / random.
 
    - **Default to trying first.** Memories like ``camera_unavailable``,
      ``selfie_failed``, ``seedream_not_configured`` may be stale from
@@ -825,9 +825,11 @@ Don't repeat this if `bot_name` already exists in memory.
                 result = AVAILABLE_TOOLS["create_skill"](**args)
                 self._refresh_skill_registry()
             elif func_name in AVAILABLE_TOOLS:
-                # Inject session_id for send_file/send_photo so they route to
-                # the correct channel callback (per-group isolation).
-                if func_name in ('send_file', 'send_photo'):
+                # Inject session_id for send_file/send_photo/photo-skill
+                # tools so they route to the correct channel callback
+                # (per-group isolation).
+                if func_name in ('send_file', 'send_photo',
+                                 'take_selfie', 'candid_shot'):
                     args.setdefault('session_id', self.session_id or "")
                 result = AVAILABLE_TOOLS[func_name](**args)
             else:

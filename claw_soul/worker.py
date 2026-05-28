@@ -314,6 +314,13 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
         logger.warning("[worker] no bot token configured; can't reply")
         return
 
+    # Register photo/file senders for the agent's session so when the LLM
+    # calls take_selfie → send_photo, the bytes actually flow through
+    # this user's Telegram bot.  Without this the send_photo helper
+    # returns "No active channel to send through" and the agent has to
+    # apologise to the user.
+    _register_channel_senders(agent._session_id, bot_app, chat_id, loop)  # noqa: SLF001
+
     # Show "typing…" while the agent thinks.  Telegram dismisses the
     # indicator after ~5s, so refresh on a 4s interval until the agent
     # task completes.  We also need a typing tick BEFORE the LLM call
@@ -477,6 +484,39 @@ async def _touch_message_at(user_id: str) -> None:
         await touch_message_at(user_id)
     except Exception as exc:
         logger.debug("[worker] touch_message_at failed: %s", exc)
+
+
+def _register_channel_senders(session_id: str, bot_app, chat_id: int, loop) -> None:
+    """Wire up send_photo / send_file → this user's Telegram bot.
+
+    The agent's tool layer calls ``send_photo(path)`` / ``send_file(path)``
+    on a synchronous thread (inside ``agent.chat``), but PTB's
+    ``bot.send_photo`` is async.  Bridge the two by scheduling the coroutine
+    on the asyncio event loop and waiting for it from the worker thread.
+    """
+    from .core.tools import set_file_sender, set_photo_sender
+
+    def _file_sender(path: str, caption: str) -> None:
+        with open(path, "rb") as f:
+            data = f.read()
+        coro = bot_app.bot.send_document(
+            chat_id=chat_id, document=data,
+            filename=os.path.basename(path),
+            caption=(caption or "")[:1024] or None,
+        )
+        asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=60)
+
+    def _photo_sender(path: str, caption: str) -> None:
+        with open(path, "rb") as f:
+            data = f.read()
+        coro = bot_app.bot.send_photo(
+            chat_id=chat_id, photo=data,
+            caption=(caption or "")[:1024] or None,
+        )
+        asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=60)
+
+    set_file_sender(session_id, _file_sender)
+    set_photo_sender(session_id, _photo_sender)
 
 
 async def _emit_milestones(user_id: str) -> None:
