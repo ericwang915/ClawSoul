@@ -171,6 +171,13 @@ def create_router_app() -> FastAPI:
         else:
             logger.warning("[router] provision setWebhook failed: %s", url_or_err)
 
+        # 2b. If the wizard was completed BEFORE this provision (user
+        # finished web onboarding then we created the row), the wizard's
+        # PATCH onboarded=true was a no-op on a non-existent row.  Catch
+        # that retroactively here.
+        if await db.user_companion_exists(user_id):
+            await db.mark_onboarded(user_id)
+
         # 3. Pull into scheduler (claim PK already dedupes ticks).
         if tier != "free":
             await scheduler.kick_reconcile()

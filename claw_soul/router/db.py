@@ -285,6 +285,20 @@ async def prune_scheduled_runs(older_than_hours: int = 24) -> int:
         return 0
 
 
+async def user_companion_exists(user_id: str) -> bool:
+    """True iff the user has completed the web wizard (saved a
+    user_companion row).  Used at provision time to retroactively flip
+    onboarded=true for users who finished the wizard before their
+    user_machines row existed."""
+    async with httpx.AsyncClient(timeout=10) as c:
+        r = await c.get(
+            f"{_url()}/rest/v1/user_companion",
+            params={"user_id": f"eq.{user_id}", "select": "user_id"},
+            headers=_headers(),
+        )
+    return r.is_success and bool(r.json() or [])
+
+
 async def get_user_setting_row(user_id: str) -> dict | None:
     async with httpx.AsyncClient(timeout=10) as c:
         r = await c.get(
