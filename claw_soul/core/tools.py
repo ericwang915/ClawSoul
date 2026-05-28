@@ -432,6 +432,26 @@ def send_file(path: str, caption: str = "", session_id: str = "") -> str:
         return f"Error sending file: {exc}"
 
 
+def _bind_tenancy_from_session(session_id: str) -> None:
+    """Belt-and-braces tenancy binding for tool entry points.
+
+    ContextVars don't always survive the thread boundary when the agent
+    runs inside loop.run_in_executor — the parent thread sets tenancy
+    but the executor's worker thread might miss it.  Tools that hit
+    per-tenant filesystem paths (selfie, candid, anything reading
+    config.CLAWSOUL_HOME) need tenancy bound to land in
+    /data/users/<uid>/ instead of falling back to the single-tenant
+    /data/ root and reading the wrong (or no) state.
+
+    The agent dispatcher already passes session_id="user:<uid>" for all
+    photo tools, so we recover the uid from there with no extra
+    plumbing.
+    """
+    if session_id and session_id.startswith("user:"):
+        from . import tenancy
+        tenancy.set_current_user(session_id[len("user:"):])
+
+
 def _tool_take_selfie(scene_hint: str = "", caption: str = "",
                       session_id: str = "") -> str:
     """LLM-callable selfie generator + sender.
@@ -443,6 +463,7 @@ def _tool_take_selfie(scene_hint: str = "", caption: str = "",
     so the user sees a single photo+caption message instead of three
     bubbles (pre-text + photo + post-text).
     """
+    _bind_tenancy_from_session(session_id)
     try:
         from .image_gen import take_selfie as _gen_selfie
     except Exception as exc:
@@ -461,6 +482,7 @@ def _tool_candid_shot(category: str = "random", hint: str = "",
     ``category`` is one of animal | scenery | food | fun | random.
     ``caption`` ships with the photo (see :func:`_tool_take_selfie`).
     """
+    _bind_tenancy_from_session(session_id)
     try:
         from .image_gen import take_candid as _gen_candid
     except Exception as exc:
