@@ -328,7 +328,15 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
 
     typing_task = asyncio.create_task(_typing_loop())
     try:
-        reply = await loop.run_in_executor(None, agent.chat, text)
+        # asyncio contextvars don't propagate into run_in_executor threads,
+        # so storage_pg / config.CLAWSOUL_HOME would lose the bound user_id
+        # and bail with "storage_pg called without a bound tenant".  Bind
+        # tenancy inside the worker thread before calling agent.chat.
+        pinned_uid = state.user_id
+        def _chat_in_thread():
+            tenancy.set_current_user(pinned_uid)
+            return agent.chat(text)
+        reply = await loop.run_in_executor(None, _chat_in_thread)
     finally:
         typing_task.cancel()
         try:
@@ -365,7 +373,11 @@ async def _handle_proactive(state: _WorkerState) -> None:
     loop = asyncio.get_event_loop()
     agent = await state.get_agent()
     prompt = _build_prompt(datetime.now())
-    text = await loop.run_in_executor(None, agent.chat, prompt)
+    pinned_uid = state.user_id
+    def _chat_proactive():
+        tenancy.set_current_user(pinned_uid)
+        return agent.chat(prompt)
+    text = await loop.run_in_executor(None, _chat_proactive)
     if not text:
         return
     bot_app = await state.get_bot_app()
@@ -387,8 +399,12 @@ async def _handle_selfie(state: _WorkerState, slot: str | None = None) -> None:
     if not is_enabled():
         return
     loop = asyncio.get_event_loop()
+    pinned_uid = state.user_id
+    def _gen_selfie():
+        tenancy.set_current_user(pinned_uid)
+        return take_selfie()
     try:
-        result = await loop.run_in_executor(None, take_selfie)
+        result = await loop.run_in_executor(None, _gen_selfie)
     except Exception as exc:
         logger.warning("[worker] selfie gen failed: %s", exc)
         return
