@@ -263,7 +263,7 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     if not _has_companion_in_pg(state.user_id):
         bot_app = await state.get_bot_app()
         if bot_app is not None:
-            url = os.environ.get("ROUTER_DASHBOARD_URL", "https://clawsoul.fly.dev")
+            url = os.environ.get("ROUTER_DASHBOARD_URL", "https://www.herandhim.ai")
             try:
                 await bot_app.bot.send_message(
                     chat_id=chat_id,
