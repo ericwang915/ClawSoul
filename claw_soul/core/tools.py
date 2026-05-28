@@ -558,6 +558,34 @@ PRIMITIVE_TOOLS: list[dict] = [
         },
         ["path"],
     ),
+    _fn(
+        "take_selfie",
+        "Take a selfie of YOU (the AI companion) and send it to the user in one Telegram message. "
+        "Use whenever the user asks to see you, asks for a selfie, or asks 'send me a photo'. "
+        "Put your short in-character caption in the `caption` arg — it ships WITH the photo. "
+        "Do NOT also write text outside this tool call.",
+        {
+            "scene_hint": {"type": "string", "description": "Optional one-line scene context (e.g. 'just made coffee', 'on the couch reading').", "default": ""},
+            "caption":    {"type": "string", "description": "Short in-character caption that ships with the photo (≤ 2 short phrases).", "default": ""},
+        },
+        [],
+    ),
+    _fn(
+        "candid_shot",
+        "Take a candid 'look what I saw' phone snapshot of the world around you (NOT a selfie) and "
+        "send it to the user in one Telegram message. Pick a category based on context.",
+        {
+            "category": {
+                "type": "string",
+                "enum": ["animal", "scenery", "food", "fun", "random"],
+                "description": "Subject category. Use 'random' if no specific category fits.",
+                "default": "random",
+            },
+            "hint": {"type": "string", "description": "Optional scene detail to bias the generation.", "default": ""},
+            "caption": {"type": "string", "description": "Short in-character caption that ships with the photo.", "default": ""},
+        },
+        [],
+    ),
 ]
 
 
