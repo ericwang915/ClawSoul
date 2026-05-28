@@ -111,20 +111,30 @@ def _request(method: str, path: str, *, json: dict | None = None,
 
 @dataclass
 class MachineSpec:
-    """Minimal launch spec for a per-user worker machine.
+    """Launch spec for a per-user worker machine.
 
-    Anything not set here uses sensible defaults: 1 shared cpu, 256 MB,
-    region from FLY_DEFAULT_REGION, auto-suspend on.
+    Memory defaults are tier-aware (see :meth:`__post_init__`): 256 MB on
+    free OOMs the moment one DeepSeek call lands, so paid users get
+    512 MB and enterprise 1 GB.  Cost delta per active user-month is
+    ~$1-2; OOM kills cost more in dropped messages.
     """
     user_id: str
     region: str = ""
     cpus: int = 1
     cpu_kind: str = "shared"
-    memory_mb: int = 256
+    memory_mb: int = 0            # 0 = pick a sensible tier default
     auto_suspend: bool = True
     image: str = ""               # defaults to FLY_WORKER_IMAGE
     extra_env: dict[str, str] = field(default_factory=dict)
     tier: str = "free"
+
+    def __post_init__(self) -> None:
+        if self.memory_mb <= 0:
+            self.memory_mb = {
+                "free":       512,    # 256 OOMs on first agent boot
+                "paid":       512,
+                "enterprise": 1024,
+            }.get(self.tier, 512)
 
 
 # ── Public API ─────────────────────────────────────────────────────────────
