@@ -2,17 +2,18 @@
 Wake-and-forward primitive used by both the Telegram webhook and the
 scheduler tick paths.
 
-Each per-user worker machine listens at ``http://user-<uid>.internal:7788``
-(Fly's internal DNS handles routing).  When we have an event for that user,
-we:
+We forward through Fly's flycast (the internal-only address that goes
+through Fly Proxy) rather than direct 6PN, because flycast triggers
+wake-on-request for suspended machines and re-attaches networking
+before delivering the request.  6PN direct (``<id>.vm.<app>.internal``)
+doesn't — it can resolve to a machine whose network stack hasn't come
+back yet, and we'd see "All connection attempts failed".
 
-  1. Make sure the machine is running — call Fly Machines API `start`
-     if its persisted state is `suspended` / `stopped`.
-  2. POST the event JSON to ``http://user-<uid>.internal/dispatch``.
-  3. Stamp ``last_active`` on user_machines.
-
-Failures (machine doesn't exist, refused, timeout) are logged with the
-user id and bubble back so callers can fall back gracefully.
+We still call the Fly Machines API ``start`` first as a belt-and-
+braces hint, then POST to ``http://<app>.flycast/dispatch`` with the
+``Fly-Force-Instance-Id`` header pinning the request to the per-user
+machine (the worker app is shared but each user's worker is a distinct
+machine_id).
 """
 
 from __future__ import annotations
@@ -37,12 +38,13 @@ class DispatchError(RuntimeError):
     """Raised when the wake / forward chain fails."""
 
 
-def _worker_url(machine_id: str) -> str:
-    """Fly's internal DNS lets us reach a specific machine by id.
-    ``http://<machine_id>.vm.<app>.internal:7788`` resolves only inside the
-    Fly network, which is exactly the boundary we want."""
+def _worker_flycast_base() -> str:
+    """Flycast routes through Fly Proxy: wakes suspended machines on
+    request and only forwards once networking is ready.  Use
+    ``Fly-Force-Instance-Id`` to pin to a specific worker machine
+    within the multi-machine worker app."""
     app = fly_client._app_name()  # noqa: SLF001 — internal helper, OK to use
-    return f"http://{machine_id}.vm.{app}.internal:7788"
+    return f"http://{app}.flycast"
 
 
 async def wake_if_needed(row: db.UserMachineRow) -> None:
@@ -98,17 +100,18 @@ async def dispatch(user_id: str, kind: str, payload: dict[str, Any]) -> bool:
         logger.warning("[router] %s wake failed: %s", user_id[:8], exc)
         return False
 
-    url = _worker_url(row.machine_id) + "/dispatch"
+    url = _worker_flycast_base() + "/dispatch"
     body = {"kind": kind, "payload": payload}
-    # Fly reporting state='started' just means the container is up; the
-    # Python process still needs ~3-8s to import claw_soul and bind 7788.
-    # Retry connection errors a handful of times before giving up.
+    headers = {"Fly-Force-Instance-Id": row.machine_id}
+    # Flycast handles the wake + network re-attach, but a freshly-
+    # resumed-from-suspend machine may still be re-binding 7788 for a
+    # second or two.  Retry connection errors a few times.
     r = None
     last_exc: Exception | None = None
     for attempt in range(6):
         try:
             async with httpx.AsyncClient(timeout=WORKER_DISPATCH_TIMEOUT) as c:
-                r = await c.post(url, json=body)
+                r = await c.post(url, json=body, headers=headers)
             break
         except httpx.HTTPError as exc:
             last_exc = exc
