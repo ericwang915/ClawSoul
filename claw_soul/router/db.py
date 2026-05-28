@@ -91,21 +91,42 @@ async def upsert_user_machine(
     webhook_url: str | None = None,
     image_ref: str | None = None,
 ) -> bool:
-    body: dict[str, Any] = {"user_id": user_id}
+    """Upsert or partial-update a user_machines row.
+
+    Full inserts (machine_id present) use POST + merge-duplicates so the
+    NOT NULL columns are populated.  Partial updates of an already-existing
+    row would otherwise fail the INSERT path's NOT NULL checks even though
+    ON CONFLICT would UPDATE — so we PATCH instead when machine_id is None.
+    """
+    body: dict[str, Any] = {}
     for k, v in (
-        ("machine_id", machine_id), ("region", region), ("state", state),
+        ("region", region), ("state", state),
         ("tier", tier), ("webhook_url", webhook_url), ("image_ref", image_ref),
     ):
         if v is not None:
             body[k] = v
-    async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.post(
-            f"{_url()}/rest/v1/user_machines",
-            params={"on_conflict": "user_id"},
-            headers={**_headers(),
-                     "Prefer": "resolution=merge-duplicates,return=minimal"},
-            json=body,
-        )
+    if machine_id is not None:
+        body["machine_id"] = machine_id
+        body["user_id"] = user_id
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.post(
+                f"{_url()}/rest/v1/user_machines",
+                params={"on_conflict": "user_id"},
+                headers={**_headers(),
+                         "Prefer": "resolution=merge-duplicates,return=minimal"},
+                json=body,
+            )
+    else:
+        if not body:
+            return True  # nothing to change
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.patch(
+                f"{_url()}/rest/v1/user_machines",
+                params={"user_id": f"eq.{user_id}"},
+                headers={**_headers(),
+                         "Prefer": "return=minimal"},
+                json=body,
+            )
     if not r.is_success:
         logger.warning("[router-db] upsert user_machines failed: %s %s",
                        r.status_code, r.text[:200])
