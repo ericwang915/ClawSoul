@@ -42,6 +42,7 @@ from .onboard import (
     _generate_profile_file,
     _generate_soul_file,
     _update_proactive_config,
+    companion_to_timezone,
     country_to_culture,
     random_region,
 )
@@ -236,6 +237,15 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
     culture_source = cleaned.get("companionCountry") or cleaned.get("userCountry") or ""
     cfg.setdefault("agent", {})["culture"] = country_to_culture(culture_source)
     cfg["agent"]["language"] = cleaned.get("userLanguage") or "en"
+
+    # Companion's home timezone — drives agent's "current local time" in the
+    # system prompt.  Without this the agent inherits the user's tz or UTC,
+    # which gives "it's 8pm here in Austin" while it's actually 6am in Austin.
+    cfg.setdefault("persona", {})["timezone"] = companion_to_timezone(
+        cleaned.get("companionCountry", ""),
+        cleaned.get("companionRegion") or "",
+    )
+
     _persist_config(cfg)
 
     # 3. Identity files.  In SaaS mode the dashboard host (legacy

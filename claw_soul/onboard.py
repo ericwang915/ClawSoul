@@ -559,6 +559,97 @@ def country_to_culture(country: str) -> str:
     }
     return mapping.get((country or "").upper(), "en")
 
+
+# ── Timezone resolution from companion country/region ──────────────────────
+#
+# Used by ``companion.apply_choices`` to set the bot's ``persona.timezone``
+# so the agent's "local time" reflects the city the companion lives in (not
+# the user's clock, not the worker container's UTC).
+
+# Country → default IANA tz when no specific city is matched.
+_COUNTRY_DEFAULT_TZ: dict[str, str] = {
+    "CN": "Asia/Shanghai",
+    "TW": "Asia/Taipei",
+    "HK": "Asia/Hong_Kong",
+    "MO": "Asia/Macau",
+    "JP": "Asia/Tokyo",
+    "KR": "Asia/Seoul",
+    "SG": "Asia/Singapore",
+    "MY": "Asia/Kuala_Lumpur",
+    "TH": "Asia/Bangkok",
+    "VN": "Asia/Ho_Chi_Minh",
+    "ID": "Asia/Jakarta",
+    "PH": "Asia/Manila",
+    "IN": "Asia/Kolkata",
+    "PK": "Asia/Karachi",
+    "BD": "Asia/Dhaka",
+    "US": "America/New_York",      # eastern default; overridden by city below
+    "CA": "America/Toronto",
+    "GB": "Europe/London",
+    "IE": "Europe/Dublin",
+    "AU": "Australia/Sydney",
+    "NZ": "Pacific/Auckland",
+    "DE": "Europe/Berlin",
+    "FR": "Europe/Paris",
+    "ES": "Europe/Madrid",
+    "IT": "Europe/Rome",
+    "NL": "Europe/Amsterdam",
+    "SE": "Europe/Stockholm",
+    "CH": "Europe/Zurich",
+    "PL": "Europe/Warsaw",
+    "PT": "Europe/Lisbon",
+    "AE": "Asia/Dubai",
+    "SA": "Asia/Riyadh",
+    "IL": "Asia/Jerusalem",
+    "TR": "Europe/Istanbul",
+    "BR": "America/Sao_Paulo",
+    "MX": "America/Mexico_City",
+    "AR": "America/Argentina/Buenos_Aires",
+    "ZA": "Africa/Johannesburg",
+    "NG": "Africa/Lagos",
+}
+
+# City-level overrides (case-insensitive lookup).  Only needed for countries
+# spanning multiple zones (US, CA, AU, BR, RU) or culture clusters where the
+# default capital isn't where most users would expect.
+_CITY_TZ_OVERRIDES: dict[str, str] = {
+    # US
+    "new york":      "America/New_York",
+    "boston":        "America/New_York",
+    "chicago":       "America/Chicago",
+    "austin":        "America/Chicago",
+    "los angeles":   "America/Los_Angeles",
+    "san francisco": "America/Los_Angeles",
+    "seattle":       "America/Los_Angeles",
+    # CA
+    "toronto":       "America/Toronto",
+    "montreal":      "America/Toronto",
+    "vancouver":     "America/Vancouver",
+    # AU
+    "sydney":        "Australia/Sydney",
+    "melbourne":     "Australia/Melbourne",
+    "brisbane":      "Australia/Brisbane",
+    "perth":         "Australia/Perth",
+    # BR
+    "são paulo":     "America/Sao_Paulo",
+    "sao paulo":     "America/Sao_Paulo",
+    "rio de janeiro":"America/Sao_Paulo",
+    "brasília":      "America/Sao_Paulo",
+    "brasilia":      "America/Sao_Paulo",
+}
+
+
+def companion_to_timezone(country: str, region: str | None = None) -> str:
+    """Resolve the IANA timezone the companion lives in.
+
+    Priority: city override > country default > Asia/Shanghai fallback.
+    """
+    if region:
+        tz = _CITY_TZ_OVERRIDES.get(region.strip().lower())
+        if tz:
+            return tz
+    return _COUNTRY_DEFAULT_TZ.get((country or "").upper(), "Asia/Shanghai")
+
 _ARCHETYPES = [
     ("healer",  "The Healer",
      "Warm, empathetic, always supportive"),
