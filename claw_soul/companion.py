@@ -14,37 +14,37 @@ regenerate SOUL.md / PERSONA.md / PROFILE.md under the active tenant's
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 from . import config
 from .onboard import (
+    _AGE_RANGES,
     _ARCHETYPES,
+    _COMPANION_GENDERS,
+    _COUNTRIES,
     _DEEP_TALKS,
     _DYNAMICS,
     _GENDERS,
-    _COMPANION_GENDERS,
-    _AGE_RANGES,
-    _COUNTRIES,
     _LANGUAGES,
+    _MAX_TRAITS,
+    _MIN_TRAITS,
     _OCCUPATIONS,
     _PROACTIVITIES,
-    random_region,
     _STRESSES,
     _TONES,
-    _TRAITS_PRIMARY,
-    _TRAITS_EXPRESSIVE,
-    _TRAITS_VALUES,
     _TRAITS_ADDITIONAL,
-    _MIN_TRAITS,
-    _MAX_TRAITS,
-    country_to_culture,
+    _TRAITS_EXPRESSIVE,
+    _TRAITS_PRIMARY,
+    _TRAITS_VALUES,
     _generate_persona_file,
     _generate_profile_file,
     _generate_soul_file,
     _update_proactive_config,
+    country_to_culture,
+    random_region,
 )
-
 
 # ── Option metadata (serializable) ─────────────────────────────────────────
 
@@ -188,44 +188,158 @@ def validate(choices: dict[str, Any]) -> dict[str, Any]:
 
 
 # ── Read / write current user's companion config ────────────────────────────
+#
+# Source of truth: Postgres (`public.user_companion`, migration 007), so
+# the web dashboard and the per-user worker — which live in different
+# Fly containers with different filesystems — share state.  We still
+# materialize the choices to local files (claw_soul.json + the three
+# identity .md files) because the Agent / persona pipeline reads from
+# disk; Postgres is the canonical store, local files are a cache.
+
 
 def load_choices() -> dict | None:
-    """Return the current tenant's saved companion choices, or None."""
+    """Return the current tenant's saved companion choices, or None.
+
+    Priority: Postgres → local config JSON.  Local cache is kept so
+    single-tenant / dev installs without Supabase configured still work.
+    """
+    pg = _load_choices_pg()
+    if pg is not None:
+        return pg
     cfg = config.load()
     return cfg.get("companion") if cfg else None
 
 
 def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
-    """Validate, persist, and regenerate SOUL/PERSONA/PROFILE files.
+    """Validate, persist (Pg + local), and regenerate identity files.
 
-    Writes to the active tenant's storage (resolved via the tenancy
-    contextvar — see ``claw_soul/core/tenancy.py``).
+    Order:
+      1. Validate.
+      2. Write to Postgres (the canonical store the worker reads).
+      3. Materialize claw_soul.json + SOUL.md / PERSONA.md / PROFILE.md
+         on the local filesystem — the Agent's persona loader reads
+         from there, and we want web-side preview features to stay
+         instant.
+      4. Flip user_machines.onboarded=true so the router scheduler
+         starts firing proactive/selfie/planner ticks (best-effort).
     """
     cleaned = validate(choices)
 
-    # Update + save config JSON
+    # 1. Postgres (the canonical store)
+    _save_choices_pg(cleaned)
+
+    # 2. Local cache (claw_soul.json) — keeps the Agent's existing
+    #    config-file reads working on whichever container saved this.
     cfg = config.load()
     cfg["companion"] = cleaned
     _update_proactive_config(cfg, cleaned["proactivity"])
-
-    # `agent.culture` powers the horoscope skill (cn 黄历 / en zodiac / jp 占い
-    # / in rashifal). It belongs to the *agent's* worldview, so prefer the
-    # companion's country and fall back to the user's only when the companion
-    # hasn't been placed.
     culture_source = cleaned.get("companionCountry") or cleaned.get("userCountry") or ""
     cfg.setdefault("agent", {})["culture"] = country_to_culture(culture_source)
     cfg["agent"]["language"] = cleaned.get("userLanguage") or "en"
-
     _persist_config(cfg)
 
-    # Regenerate the three identity files
+    # 3. Identity files
     context_dir = str(config.CLAWSOUL_HOME / "context")
     Path(context_dir).mkdir(parents=True, exist_ok=True)
     _generate_soul_file(cleaned, context_dir)
     _generate_persona_file(cleaned, context_dir)
     _generate_profile_file(cleaned, context_dir)
 
+    # 4. Best-effort: flip onboarded on the user's user_machines row so
+    #    the scheduler picks them up at the next reconcile.  Failure
+    #    here doesn't roll back — the data is already saved.
+    _flip_onboarded_pg()
+
     return cleaned
+
+
+# ── Postgres-backed companion store ────────────────────────────────────────
+
+def _pg_url() -> str:
+    return os.environ.get("SUPABASE_URL", "").rstrip("/")
+
+
+def _pg_key() -> str:
+    return os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+
+def _pg_configured() -> bool:
+    return bool(_pg_url() and _pg_key())
+
+
+def _pg_headers(prefer: str = "return=representation") -> dict[str, str]:
+    return {
+        "apikey": _pg_key(),
+        "Authorization": f"Bearer {_pg_key()}",
+        "Content-Type": "application/json",
+        "Prefer": prefer,
+    }
+
+
+def _current_user_id() -> str | None:
+    from .core import tenancy
+    return tenancy.get_current_user()
+
+
+def _load_choices_pg() -> dict | None:
+    if not _pg_configured():
+        return None
+    uid = _current_user_id()
+    if not uid:
+        return None
+    try:
+        import httpx
+        r = httpx.get(
+            f"{_pg_url()}/rest/v1/user_companion",
+            params={"user_id": f"eq.{uid}", "select": "choices"},
+            headers=_pg_headers(), timeout=10,
+        )
+        if not r.is_success:
+            return None
+        rows = r.json() or []
+        return rows[0]["choices"] if rows else None
+    except Exception:
+        return None
+
+
+def _save_choices_pg(cleaned: dict[str, Any]) -> bool:
+    if not _pg_configured():
+        return False
+    uid = _current_user_id()
+    if not uid:
+        return False
+    try:
+        import httpx
+        r = httpx.post(
+            f"{_pg_url()}/rest/v1/user_companion",
+            params={"on_conflict": "user_id"},
+            headers=_pg_headers("resolution=merge-duplicates,return=minimal"),
+            json={"user_id": uid, "choices": cleaned},
+            timeout=10,
+        )
+        return r.is_success
+    except Exception:
+        return False
+
+
+def _flip_onboarded_pg() -> None:
+    """Best-effort PATCH user_machines.onboarded=true once the wizard saves."""
+    if not _pg_configured():
+        return
+    uid = _current_user_id()
+    if not uid:
+        return
+    try:
+        import httpx
+        httpx.patch(
+            f"{_pg_url()}/rest/v1/user_machines",
+            params={"user_id": f"eq.{uid}"},
+            headers=_pg_headers("return=minimal"),
+            json={"onboarded": True},
+            timeout=5,
+        )
+    except Exception:
+        pass
 
 
 def _persist_config(cfg: dict) -> None:

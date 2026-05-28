@@ -109,7 +109,12 @@ def create_worker_app() -> FastAPI:
         logger.info("[worker] booted for user=%s tier=%s idle_exit=%ds",
                     user_id[:8], _tier(), _idle_exit_sec())
         state.touch()
-        # Provider + agent built lazily on first dispatch.
+        # Hydrate persona files from the canonical Postgres store so the
+        # Agent's persona loader (which reads from /data/context/*.md)
+        # picks them up.  Skipped silently when the user hasn't done
+        # the web wizard yet — _handle_telegram_update will refuse to
+        # chat until then.
+        _hydrate_persona_from_pg(user_id)
         # Idle watchdog
         asyncio.create_task(_idle_watchdog(state))
 
@@ -252,6 +257,26 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     # ticks within the next quiet window get suppressed so the user
     # doesn't get spammed mid-conversation.
     asyncio.create_task(_touch_message_at(state.user_id))
+
+    # Web wizard must be completed before the bot will chat — no chat-
+    # based onboarding fallback.  Direct the user to the dashboard.
+    if not _has_companion_in_pg(state.user_id):
+        bot_app = await state.get_bot_app()
+        if bot_app is not None:
+            url = os.environ.get("ROUTER_DASHBOARD_URL", "https://clawsoul.fly.dev")
+            try:
+                await bot_app.bot.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        "Welcome! 👋  Before we can chat, please finish the "
+                        "quick setup on the dashboard so I know who I am and "
+                        f"how to talk to you:\n\n{url}/\n\n"
+                        "Come back once you're done — I'll be ready."
+                    ),
+                )
+            except Exception as exc:
+                logger.warning("[worker] setup-link send failed: %s", exc)
+        return
 
     loop = asyncio.get_event_loop()
     agent = await state.get_agent()
@@ -426,6 +451,55 @@ async def _maybe_mark_onboarded(user_id: str, agent) -> None:
         await mark_onboarded(user_id)
     except Exception as exc:
         logger.debug("[worker] mark_onboarded failed: %s", exc)
+
+
+def _has_companion_in_pg(user_id: str) -> bool:
+    """Sync check: does this user have a saved companion in Postgres?
+
+    Used to gate the chat path — without it the worker refuses to engage
+    and tells the user to finish the web wizard.  Synchronous httpx call
+    is fine here; we already block on the agent's LLM call right after.
+    """
+    import httpx
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url or not key:
+        # Single-tenant / dev environment without Supabase — fall back
+        # to the legacy file check.
+        from . import companion as comp
+        return bool(comp.load_choices())
+    try:
+        r = httpx.get(
+            f"{url}/rest/v1/user_companion",
+            params={"user_id": f"eq.{user_id}", "select": "user_id"},
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+            },
+            timeout=5,
+        )
+        return r.is_success and bool(r.json() or [])
+    except Exception as exc:
+        logger.warning("[worker] companion lookup failed: %s", exc)
+        return False
+
+
+def _hydrate_persona_from_pg(user_id: str) -> None:
+    """On boot, materialize SOUL.md / PERSONA.md / PROFILE.md from the
+    Pg-stored choices so the Agent's persona loader (which reads from
+    /data/context/*.md) picks them up.  Silent no-op if the user hasn't
+    completed the wizard yet."""
+    from . import companion as comp
+    choices = comp.load_choices()
+    if not choices:
+        logger.info("[worker] no companion choices in Pg yet — chat blocked "
+                    "until user completes web wizard")
+        return
+    try:
+        comp.apply_choices(choices)
+        logger.info("[worker] hydrated persona from Pg for user=%s", user_id[:8])
+    except Exception as exc:
+        logger.warning("[worker] persona hydrate failed: %s", exc)
 
 
 # ── Entry point ──────────────────────────────────────────────────────
