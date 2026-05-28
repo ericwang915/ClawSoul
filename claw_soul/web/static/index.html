@@ -463,7 +463,7 @@
               <h2 class="text-xl font-bold text-white tracking-tight">Your AI Partner</h2>
               <p class="text-sm text-gray-500 mt-1">How they look, talk, and care for you.</p>
             </div>
-            <button onclick="openSetupWizard()" class="btn-ghost text-sm">Customize…</button>
+            <button onclick="reopenSetupWizardForEdit()" class="btn-ghost text-sm">Customize…</button>
           </div>
           <div id="persona-summary" class="text-sm text-gray-400">Loading…</div>
         </div>
@@ -2186,12 +2186,28 @@ async function openSetupWizard(existingChoices = null) {
   await ensureSetupOptions();
   _wizardChoices = existingChoices ? { ...existingChoices } : {};
   _wizardStep = 0;
+  // The close button is only shown for users who already completed onboarding
+  // and are re-opening to edit.  First-time users must finish the flow — the
+  // worker refuses to chat until user_companion has a row.
+  const closeBtn = document.getElementById('wiz-close');
+  if (closeBtn) closeBtn.classList.toggle('hidden', !existingChoices);
   document.getElementById('setup-modal').classList.remove('hidden');
   renderWizardStep();
 }
 
 function closeSetupWizard() {
   document.getElementById('setup-modal').classList.add('hidden');
+}
+
+async function reopenSetupWizardForEdit() {
+  // Re-edit path — load existing choices first so the close (✕) button shows.
+  try {
+    const r = await fetch('/api/setup/companion', { credentials: 'include' });
+    const data = await r.json();
+    openSetupWizard(data.choices || {});
+  } catch (_) {
+    openSetupWizard({});
+  }
 }
 
 function renderWizardStep() {
@@ -2579,7 +2595,7 @@ maybeOpenWizardOnFirstLoad();
       <!-- Header -->
       <div class="mb-1 flex items-baseline justify-between">
         <span id="wiz-progress" class="text-[.6875rem] text-gray-500 uppercase tracking-widest">Step 1 of 3</span>
-        <button onclick="closeSetupWizard()" class="text-gray-500 hover:text-white text-sm" title="Close">✕</button>
+        <button id="wiz-close" onclick="closeSetupWizard()" class="text-gray-500 hover:text-white text-sm hidden" title="Close">✕</button>
       </div>
 
       <!-- Progress bar -->
