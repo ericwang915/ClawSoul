@@ -38,6 +38,7 @@ from .onboard import (
     _TRAITS_EXPRESSIVE,
     _TRAITS_PRIMARY,
     _TRAITS_VALUES,
+    _generate_appearance_file,
     _generate_persona_file,
     _generate_profile_file,
     _generate_soul_file,
@@ -260,6 +261,7 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
         _generate_soul_file(cleaned, context_dir)
         _generate_persona_file(cleaned, context_dir)
         _generate_profile_file(cleaned, context_dir)
+        _generate_appearance_file(cleaned, context_dir)
 
     # 4. Best-effort: flip onboarded on the user's user_machines row so
     #    the scheduler picks them up at the next reconcile.  Failure

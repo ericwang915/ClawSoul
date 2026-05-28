@@ -1040,6 +1040,7 @@ def _generate_companion_files(choices: dict) -> None:
     _generate_soul_file(choices, context_dir)
     _generate_persona_file(choices, context_dir)
     _generate_profile_file(choices, context_dir)
+    _generate_appearance_file(choices, context_dir)
 
 
 def _generate_soul_file(ch: dict, context_dir: str) -> None:
@@ -1316,6 +1317,118 @@ _TONE_STYLE_HINTS = {
 }
 
 
+# Country → default appearance template for selfie generation.  The user
+# can always override by editing context/persona/appearance.md later, but
+# without this an Austin-based companion would inherit the East-Asian
+# fallback baked into persona_render.py.
+
+_APPEARANCE_BY_COUNTRY: dict[str, dict[str, str]] = {
+    # East Asia
+    "CN": {"female": "东亚女孩，长发，大眼睛，皮肤白皙，身材娇小",
+           "male":   "东亚男生，黑色短发，眉眼清秀，皮肤白皙，身形清瘦"},
+    "TW": {"female": "台湾女孩，长发，气质温柔，皮肤白皙",
+           "male":   "台湾男生，短发，五官清秀，气质斯文"},
+    "HK": {"female": "香港女孩，时髦短发或长发，干净利落，气质都市",
+           "male":   "香港男生，短发，硬朗五官，都市风"},
+    "JP": {"female": "日本女孩，黑色长发或棕色卷发，皮肤白皙，气质温柔治愈",
+           "male":   "日本男生，黑色或浅棕色短发，五官清秀，气质温和"},
+    "KR": {"female": "韩国女孩，齐肩长发，皮肤白皙，妆容精致，气质都市",
+           "male":   "韩国男生，染色短发，五官立体，时尚打扮"},
+    "SG": {"female": "新加坡女孩，混合东南亚特征，皮肤呈健康小麦色，气质大方",
+           "male":   "新加坡男生，亚裔特征，皮肤健康，都市风格"},
+    "MY": {"female": "马来西亚女孩，亚裔或混血特征，皮肤暖色调",
+           "male":   "马来西亚男生，亚裔或混血，气质放松"},
+    "TH": {"female": "泰国女孩，棕色长发，皮肤小麦色，气质柔和",
+           "male":   "泰国男生，黑色短发，皮肤健康小麦色"},
+    "VN": {"female": "越南女孩，黑色长发，五官精致，皮肤白皙",
+           "male":   "越南男生，短发，气质温和，皮肤白皙"},
+    "ID": {"female": "印尼女孩，深色长发，皮肤小麦色，气质开朗",
+           "male":   "印尼男生，深色短发，皮肤小麦色"},
+    "PH": {"female": "菲律宾女孩，深色长发或卷发，皮肤健康小麦色，五官立体",
+           "male":   "菲律宾男生，深色短发，皮肤小麦色，五官硬朗"},
+    # South Asia
+    "IN": {"female": "印度女孩，深色长发，眼睛大而深邃，皮肤小麦色，气质优雅",
+           "male":   "印度男生，深色短发或微卷发，眼睛深邃，皮肤小麦色"},
+    "PK": {"female": "巴基斯坦女孩，深色长发，眼睛深邃，皮肤小麦色",
+           "male":   "巴基斯坦男生，深色短发，眼睛深邃"},
+    "BD": {"female": "孟加拉女孩，深色长发，眼睛大而深邃，皮肤小麦色",
+           "male":   "孟加拉男生，深色短发，皮肤小麦色"},
+    # Anglosphere — Caucasian-leaning default (countries are diverse; user
+    # can edit appearance.md to specify another look)
+    "US": {"female": "American girl in her twenties, light brown wavy hair, fair skin with a hint of tan, blue or green eyes, casual stylish",
+           "male":   "American guy in his twenties, short brown or dirty-blond hair, fair skin, casual confident look"},
+    "CA": {"female": "Canadian girl in her twenties, soft features, fair skin, brown or blonde hair, warm friendly expression",
+           "male":   "Canadian guy in his twenties, short brown hair, fair skin, casual outdoorsy look"},
+    "GB": {"female": "British girl in her twenties, fair skin, brown or auburn hair, understated stylish look",
+           "male":   "British guy in his twenties, short brown or dark blond hair, fair skin, slim build"},
+    "IE": {"female": "Irish girl in her twenties, pale skin with light freckles, reddish or chestnut hair, soft features",
+           "male":   "Irish guy in his twenties, short auburn or brown hair, pale skin, friendly look"},
+    "AU": {"female": "Australian girl in her twenties, sun-kissed skin, dirty-blonde or light-brown hair, casual outdoorsy",
+           "male":   "Australian guy in his twenties, sun-kissed skin, short blond or brown hair, athletic outdoorsy"},
+    "NZ": {"female": "New Zealand girl in her twenties, fair skin with a tan, light-brown or blonde hair, relaxed outdoorsy",
+           "male":   "New Zealand guy in his twenties, sandy hair, sun-kissed skin, casual outdoorsy"},
+    # Europe
+    "DE": {"female": "German girl in her twenties, blonde or light brown hair, fair skin, blue or grey eyes, minimalist style",
+           "male":   "German guy in his twenties, short blond or light-brown hair, fair skin, clean-cut look"},
+    "FR": {"female": "French girl in her twenties, dark or chestnut hair, fair skin, effortless stylish look",
+           "male":   "French guy in her twenties, dark or brown hair, fair skin, smart casual style"},
+    "ES": {"female": "Spanish girl in her twenties, dark brown long hair, olive skin, warm brown eyes, expressive",
+           "male":   "Spanish guy in his twenties, dark hair, olive skin, expressive features"},
+    "IT": {"female": "Italian girl in her twenties, dark brown wavy hair, olive skin, brown eyes, lively expressive",
+           "male":   "Italian guy in his twenties, dark hair, olive skin, sharp features"},
+    "NL": {"female": "Dutch girl in her twenties, tall, blonde or light-brown hair, fair skin, casual confident",
+           "male":   "Dutch guy in his twenties, tall, blond or light-brown hair, fair skin, casual"},
+    "SE": {"female": "Swedish girl in her twenties, fair skin, blonde hair, blue eyes, minimalist style",
+           "male":   "Swedish guy in his twenties, blond or light-brown hair, fair skin, clean Scandinavian style"},
+    "CH": {"female": "Swiss girl in her twenties, light-brown or blonde hair, fair skin, refined understated style",
+           "male":   "Swiss guy in his twenties, brown or blond hair, fair skin, smart style"},
+    "PL": {"female": "Polish girl in her twenties, blonde or light-brown hair, fair skin, blue or green eyes",
+           "male":   "Polish guy in his twenties, light brown hair, fair skin, slim build"},
+    "PT": {"female": "Portuguese girl in her twenties, dark brown wavy hair, olive skin, warm expression",
+           "male":   "Portuguese guy in his twenties, dark hair, light olive skin, warm features"},
+    # Middle East
+    "AE": {"female": "young Emirati woman, dark eyes lined with kohl, olive skin, often with a hijab or modern modest attire",
+           "male":   "young Emirati man, dark hair and trimmed beard, olive skin, often in traditional kandura"},
+    "SA": {"female": "young Saudi woman, dark eyes, olive skin, often wearing hijab or modest modern attire",
+           "male":   "young Saudi man, dark hair and beard, olive skin, often in traditional thobe"},
+    "IL": {"female": "Israeli girl in her twenties, dark or light brown hair, olive skin, lively expression",
+           "male":   "Israeli guy in his twenties, dark hair, olive skin, casual relaxed style"},
+    "TR": {"female": "Turkish girl in her twenties, dark wavy hair, olive skin, dark eyes, warm features",
+           "male":   "Turkish guy in his twenties, dark hair, olive skin, expressive features"},
+    # Latin America
+    "BR": {"female": "Brazilian girl in her twenties, dark wavy hair, olive or tan skin, warm expressive features",
+           "male":   "Brazilian guy in his twenties, dark hair, tan skin, athletic warm look"},
+    "MX": {"female": "Mexican girl in her twenties, dark hair, warm olive skin, expressive brown eyes",
+           "male":   "Mexican guy in his twenties, dark hair, warm olive skin, friendly expressive"},
+    "AR": {"female": "Argentinian girl in her twenties, light olive skin, brown or dark hair, expressive features",
+           "male":   "Argentinian guy in his twenties, dark or brown hair, light olive skin, casual stylish"},
+    # Africa
+    "ZA": {"female": "young South African woman, warm-toned skin, dark hair, friendly features",
+           "male":   "young South African man, warm-toned skin, dark hair, athletic build"},
+    "NG": {"female": "young Nigerian woman, deep brown skin, expressive eyes, often with braided or natural hair",
+           "male":   "young Nigerian man, deep brown skin, short hair, warm features"},
+}
+
+
+def _appearance_for(country: str, gender: str, age: str = "") -> str:
+    """Resolve a sensible default appearance description from companion
+    country + gender (+ optional age range).  Returns Chinese for CJK
+    countries to stay consistent with Seedream's stronger zh prompting,
+    English otherwise."""
+    entry = _APPEARANCE_BY_COUNTRY.get((country or "").upper())
+    if not entry:
+        # Unknown country (e.g. "OTHER") → generic mixed default.
+        return "a friendly person in their twenties, casual modern style"
+    base = entry.get(gender, entry.get("female")) or ""
+    # Stitch the age range in only when it adds useful info.
+    if age in ("36-45", "45+"):
+        base = base.replace("in her twenties", "around 30 to 40").replace(
+            "in his twenties", "around 30 to 40")
+        base = base.replace("twenties", "thirties or forties")
+        base = base.replace("二十", "三十").replace("二十多", "三十多")
+    return base
+
+
 def _generate_persona_file(ch: dict, context_dir: str) -> None:
     """Generate persona based on archetype + tone + dynamic + stress + deepTalk."""
     comp_name = ch.get("companionName", "小爪")
@@ -1478,6 +1591,23 @@ def _generate_persona_file(ch: dict, context_dir: str) -> None:
     path = os.path.join(persona_dir, "persona.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write(content.strip() + "\n")
+
+
+def _generate_appearance_file(ch: dict, context_dir: str) -> None:
+    """Write context/persona/appearance.md so selfie generation reflects
+    the companion's country + gender + age instead of falling back to
+    the hard-coded East-Asian default in persona_render.py."""
+    country = ch.get("companionCountry") or ""
+    gender = ch.get("companionGender") or "female"
+    age = ch.get("companionAge") or ""
+    body = _appearance_for(country, gender, age)
+    if not body:
+        return
+    appearance_dir = os.path.join(context_dir, "persona")
+    os.makedirs(appearance_dir, exist_ok=True)
+    path = os.path.join(appearance_dir, "appearance.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# Appearance\n\n{body}\n")
 
 
 def _generate_profile_file(ch: dict, context_dir: str) -> None:
