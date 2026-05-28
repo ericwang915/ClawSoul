@@ -250,13 +250,35 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
 
     loop = asyncio.get_event_loop()
     agent = await state.get_agent()
-    reply = await loop.run_in_executor(None, agent.chat, text)
-    if not reply:
-        return
 
     bot_app = await state.get_bot_app()
     if bot_app is None:
         logger.warning("[worker] no bot token configured; can't reply")
+        return
+
+    # Show "typing…" while the agent thinks.  Telegram dismisses the
+    # indicator after ~5s, so refresh on a 4s interval until the agent
+    # task completes.  We also need a typing tick BEFORE the LLM call
+    # so the user sees it immediately.
+    async def _typing_loop() -> None:
+        while True:
+            try:
+                await bot_app.bot.send_chat_action(chat_id=chat_id, action="typing")
+            except Exception:
+                return
+            await asyncio.sleep(4)
+
+    typing_task = asyncio.create_task(_typing_loop())
+    try:
+        reply = await loop.run_in_executor(None, agent.chat, text)
+    finally:
+        typing_task.cancel()
+        try:
+            await typing_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    if not reply:
         return
     try:
         await bot_app.bot.send_message(chat_id=chat_id, text=reply[:4096])
