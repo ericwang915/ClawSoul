@@ -45,22 +45,43 @@ def _worker_url(machine_id: str) -> str:
 
 
 async def wake_if_needed(row: db.UserMachineRow) -> None:
-    """Idempotent wake — only call start_machine when the row says we're
-    not already running."""
-    if row.state in ("running", "started", "starting"):
-        return
+    """Idempotent wake.  Always asks Fly to start — ``row.state`` in our
+    DB can lag the real Fly state by minutes (we update it only on wake/
+    dispatch), and a stale 'starting' read here used to make us skip
+    the wake on a machine that was actually 'suspended', leading to DNS
+    resolution failures when we then POSTed to
+    ``<id>.vm.<app>.internal``.
+
+    Calling start on an already-running machine returns 409, treated as
+    success.  When we did wake a stopped/suspended machine, we poll
+    briefly for ``started`` so its internal DNS is live before the
+    caller dispatches.
+    """
     t0 = time.monotonic()
+    woke = False
     try:
         fly_client.start_machine(row.machine_id)
+        woke = True
     except fly_client.FlyAPIError as exc:
-        # 409 typically means "already started" — Fly API is racy here
         if exc.status not in (409,):
             raise DispatchError(f"wake failed: {exc}") from exc
+        # 409 = already started; nothing to wait for
     finally:
         latency_ms = int((time.monotonic() - t0) * 1000)
-        logger.info("[router] wake user=%s machine=%s latency=%dms",
-                    row.user_id[:8], row.machine_id, latency_ms)
-    await db.mark_user_machine_state(row.user_id, "starting")
+        logger.info("[router] wake user=%s machine=%s woke=%s latency=%dms",
+                    row.user_id[:8], row.machine_id, woke, latency_ms)
+
+    if woke:
+        # Wait for Fly to fully reattach networking before the caller
+        # tries to resolve the machine's internal DNS.
+        ok = fly_client.wait_for_state(
+            row.machine_id, "started", timeout_sec=15.0, poll_interval=0.5,
+        )
+        if not ok:
+            raise DispatchError(
+                f"machine {row.machine_id} did not reach 'started' within 15s"
+            )
+    await db.mark_user_machine_state(row.user_id, "running")
 
 
 async def dispatch(user_id: str, kind: str, payload: dict[str, Any]) -> bool:
