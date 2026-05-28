@@ -544,16 +544,18 @@ async def _api_tool_disconnect(name: str, request: Request):
 async def _api_chat_history(limit: int = 50):
     """Return the user's recent user+assistant turns for the chat UI.
 
-    Reads the saved Markdown session file (the source of truth for chat
-    persistence) and returns it as message dicts. System / tool-call /
-    tool-result entries are filtered out — the UI only renders human-readable
-    turns.
+    Honours ``CLAW_USE_POSTGRES`` via make_session_store — in SaaS mode
+    this reads from the shared Postgres ``turns`` table that the worker
+    also writes to, so Telegram conversations show up in the web Chat
+    tab and vice versa.  Single-tenant / dev installs still hit the
+    local Markdown file.
 
-    To preserve history across the recent session_id refactor, if the unified
-    ``user:<uid>`` session is empty AND a legacy ``web:<uid>`` file exists,
-    we transparently fall back to the legacy file.
+    Falls back to the legacy ``web:<uid>`` session file if the unified
+    one is empty, to preserve history across the older session_id
+    refactor.
     """
-    store = SessionStore()
+    from ..core.storage_pg import make_session_store
+    store = make_session_store()
     primary = _session_id_for_current_user()
     messages = store.load(primary)
 
