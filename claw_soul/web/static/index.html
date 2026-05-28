@@ -2136,22 +2136,136 @@ function toolCardHTML(t) {
   `;
 }
 
+// ── Connect-tool modal ──────────────────────────────────────────────────────
+// Replaces the ugly browser prompt() with a styled credentials sheet:
+// brand icon + steps + key-portal link + masked input + show/hide toggle.
+
+let _connectingTool = null;
+
+function openConnectModal(tool) {
+  _connectingTool = tool;
+  const svg = (typeof ICON_SVG !== 'undefined' && ICON_SVG[tool.iconKey])
+    ? ICON_SVG[tool.iconKey]
+    : `<span class="text-base">${tool.icon || '✨'}</span>`;
+  document.getElementById('ct-icon').innerHTML = svg;
+  document.getElementById('ct-icon-wrap').style.background = `${tool.accent || '#7c7589'}1f`;
+  document.getElementById('ct-icon-wrap').style.color = tool.accent || '#a3a3a3';
+  document.getElementById('ct-title').textContent = tool.displayName;
+  document.getElementById('ct-description').textContent = tool.description || '';
+
+  // Steps — generated dynamically.  If keyUrl is set, step 1 directs the
+  // user to the portal; step 2 names the typical action; step 3 is paste.
+  const stepsEl = document.getElementById('ct-steps');
+  const portal = tool.keyUrl ? new URL(tool.keyUrl).host.replace(/^www\./, '') : null;
+  stepsEl.innerHTML = portal ? `
+    <li class="flex gap-2.5">
+      <span class="text-pink-300 font-mono text-[.7rem] pt-0.5">1.</span>
+      <span>Go to <span class="text-brand-300">${portal}</span> and sign in.</span>
+    </li>
+    <li class="flex gap-2.5">
+      <span class="text-pink-300 font-mono text-[.7rem] pt-0.5">2.</span>
+      <span>Create a new API key for <span class="text-brand-300">${escapeHtml(tool.displayName)}</span>.</span>
+    </li>
+    <li class="flex gap-2.5">
+      <span class="text-pink-300 font-mono text-[.7rem] pt-0.5">3.</span>
+      <span>Paste the key below.</span>
+    </li>
+  ` : `
+    <li class="flex gap-2.5">
+      <span class="text-pink-300 font-mono text-[.7rem] pt-0.5">1.</span>
+      <span>Get an API key from <span class="text-brand-300">${escapeHtml(tool.displayName)}</span>.</span>
+    </li>
+    <li class="flex gap-2.5">
+      <span class="text-pink-300 font-mono text-[.7rem] pt-0.5">2.</span>
+      <span>Paste it below.</span>
+    </li>
+  `;
+
+  // Portal link — hidden when no keyUrl.
+  const portalBtn = document.getElementById('ct-portal');
+  if (tool.keyUrl) {
+    portalBtn.href = tool.keyUrl;
+    portalBtn.querySelector('span').textContent = `Open ${tool.displayName} Settings`;
+    portalBtn.classList.remove('hidden');
+  } else {
+    portalBtn.classList.add('hidden');
+  }
+
+  const input = document.getElementById('ct-input');
+  input.value = '';
+  input.type = 'password';
+  document.getElementById('ct-toggle').textContent = '👁 Show value';
+  document.getElementById('ct-status').textContent = '';
+  document.getElementById('ct-submit').disabled = false;
+  document.getElementById('ct-submit').textContent = 'Save & Connect';
+
+  document.getElementById('connect-tool-modal').classList.remove('hidden');
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeConnectModal() {
+  document.getElementById('connect-tool-modal').classList.add('hidden');
+  _connectingTool = null;
+}
+
+function toggleConnectValue() {
+  const input = document.getElementById('ct-input');
+  const btn = document.getElementById('ct-toggle');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '◎ Hide value';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁 Show value';
+  }
+}
+
+async function submitConnectModal() {
+  const tool = _connectingTool;
+  if (!tool) return;
+  const input = document.getElementById('ct-input');
+  const status = document.getElementById('ct-status');
+  const btn = document.getElementById('ct-submit');
+  const key = (input.value || '').trim();
+  if (!key) {
+    status.textContent = 'Paste your API key first.';
+    status.className = 'text-xs text-amber-400 min-h-[1.2em]';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  status.textContent = '';
+  try {
+    const r = await fetch(`/api/tools/${tool.name}/connect`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: key }),
+    });
+    const body = await r.json();
+    if (!r.ok) {
+      status.textContent = body.error || `Save failed (HTTP ${r.status})`;
+      status.className = 'text-xs text-red-400 min-h-[1.2em]';
+      btn.disabled = false;
+      btn.textContent = 'Save & Connect';
+      return;
+    }
+    status.textContent = '✓ Connected.';
+    status.className = 'text-xs text-emerald-400 min-h-[1.2em]';
+    setTimeout(() => { closeConnectModal(); loadTools(true); }, 700);
+  } catch (e) {
+    status.textContent = 'Network error.';
+    status.className = 'text-xs text-red-400 min-h-[1.2em]';
+    btn.disabled = false;
+    btn.textContent = 'Save & Connect';
+  }
+}
+
 async function connectTool(name) {
   const tool = _toolsCache.find(t => t.name === name);
   if (!tool) return;
 
   if (tool.authType === 'api_key') {
-    const link = tool.keyUrl ? ` Get one: ${tool.keyUrl}` : '';
-    const key = prompt(`Paste your ${tool.displayName} API key.${link}`);
-    if (!key) return;
-    const r = await fetch(`/api/tools/${name}/connect`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: key.trim() }),
-    });
-    const body = await r.json();
-    if (!r.ok) { alert(body.error || 'Save failed'); return; }
-    loadTools(true);
+    openConnectModal(tool);
     return;
   }
 
@@ -2214,6 +2328,66 @@ maybeOpenWizardOnFirstLoad();
 </div>
 
 <!-- ═══ Connect Telegram Modal ═══════════════════════════════════════════ -->
+<!-- ═══ Connect Tool (API-key) Modal ═══════════════════════════════════ -->
+<div id="connect-tool-modal" class="hidden fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-surface-900 border border-surface-700/60 rounded-2xl shadow-2xl">
+    <div class="p-6">
+      <!-- Header -->
+      <div class="flex items-start justify-between mb-1">
+        <div class="flex items-center gap-3 min-w-0">
+          <div id="ct-icon-wrap" class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+               style="background: rgba(124,117,137,.12); color: #a3a3a3;">
+            <span id="ct-icon" class="w-5 h-5 inline-flex items-center justify-center [&_svg]:w-full [&_svg]:h-full">✨</span>
+          </div>
+          <div class="min-w-0">
+            <div id="ct-title" class="text-base font-semibold text-white truncate">Tool</div>
+            <div class="text-[.6875rem] text-gray-500 uppercase tracking-widest">Credentials</div>
+          </div>
+        </div>
+        <button onclick="closeConnectModal()" class="text-gray-500 hover:text-white text-sm" title="Close">✕</button>
+      </div>
+
+      <p id="ct-description" class="text-[.78rem] text-gray-400 mt-3 leading-relaxed"></p>
+
+      <!-- Steps -->
+      <div class="mt-5">
+        <div class="text-[.6875rem] text-gray-400 uppercase tracking-widest mb-2">Setup steps</div>
+        <ol id="ct-steps" class="text-[.78rem] text-gray-300 space-y-2"></ol>
+      </div>
+
+      <!-- Portal link -->
+      <a id="ct-portal" target="_blank" rel="noopener"
+         class="hidden mt-4 w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg border border-surface-700/60 bg-surface-950 hover:bg-surface-800 text-sm text-gray-200 transition">
+        <svg class="w-3.5 h-3.5 text-pink-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 2l-9 9M15 3h6v6M10 14L3 21M3 14v7h7"/></svg>
+        <span>Open Settings</span>
+      </a>
+
+      <!-- API key input -->
+      <div class="mt-5">
+        <div class="text-[.78rem] text-gray-300 font-medium mb-1.5">API Token</div>
+        <input id="ct-input" type="password"
+               placeholder="Paste your API key…"
+               class="w-full px-3.5 py-2.5 bg-surface-950 border border-surface-700/60 rounded-lg text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:border-pink-400/60 transition" />
+        <button id="ct-toggle" onclick="toggleConnectValue()"
+                class="mt-2 text-[.6875rem] text-gray-500 hover:text-white transition">👁 Show value</button>
+        <p id="ct-status" class="text-xs text-gray-500 min-h-[1.2em] mt-2"></p>
+      </div>
+
+      <!-- Submit -->
+      <button id="ct-submit" onclick="submitConnectModal()"
+              class="mt-4 w-full py-2.5 rounded-lg text-sm font-medium text-white transition"
+              style="background: linear-gradient(135deg, #f472b6, #c084fc); box-shadow: 0 4px 14px -4px rgba(192,132,252,.4);">
+        Save &amp; Connect
+      </button>
+
+      <!-- Footnote -->
+      <p class="mt-4 text-center text-[.6875rem] text-gray-600">
+        Credentials are encrypted and stored securely.
+      </p>
+    </div>
+  </div>
+</div>
+
 <div id="connect-tg-modal" class="hidden fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
   <div class="w-full max-w-lg bg-surface-900 border border-surface-700/60 rounded-2xl shadow-2xl">
     <div class="p-8">
@@ -2269,6 +2443,11 @@ document.addEventListener('keydown', (e) => {
   const tg = document.getElementById('connect-tg-modal');
   if (tg && !tg.classList.contains('hidden')) {
     closeConnectTelegramPanel();
+    return;
+  }
+  const ct = document.getElementById('connect-tool-modal');
+  if (ct && !ct.classList.contains('hidden')) {
+    closeConnectModal();
   }
 });
 </script>
