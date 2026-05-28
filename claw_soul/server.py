@@ -84,6 +84,12 @@ async def start_telegram(
 ) -> list:
     """Start the Telegram bot(s) as background tasks.
 
+    Kill switch: when ``CLAW_BOTS_DISABLED=1`` we skip Telegram entirely.
+    Used by the legacy ``clawsoul`` Fly app once SaaS Phase 2 routes
+    Telegram traffic through ``clawsoul-router`` — the legacy still
+    serves the dashboard / Google OAuth, but starting bots here would
+    have PTB call deleteWebhook and steal traffic from the router.
+
     In **multi-tenant mode** (``SUPABASE_JWT_SECRET`` set): launches one bot
     per Supabase user that has a saved ``telegram_bot_token``. The cron
     scheduler / proactive / selfie features are skipped — they're not yet
@@ -92,6 +98,10 @@ async def start_telegram(
     In **single-tenant mode** (laptop / Eric's existing deploy): unchanged —
     one bot, full scheduler / proactive / heartbeat / selfies.
     """
+    if os.environ.get("CLAW_BOTS_DISABLED", "").strip() in ("1", "true", "yes"):
+        logger.info("[ClawSoul] CLAW_BOTS_DISABLED — skipping Telegram bot startup")
+        return []
+
     global _global_scheduler, _active_provider
     _active_provider = provider
 
