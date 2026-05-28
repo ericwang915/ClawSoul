@@ -142,10 +142,6 @@
           <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
           Integrations
         </button>
-        <button onclick="switchTab('config')" id="nav-config" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-          Config
-        </button>
       </nav>
 
       <!-- Connection Status -->
@@ -174,9 +170,6 @@
         <!-- ═══ Dashboard Tab ═══ -->
         <div id="tab-dashboard" class="tab-content p-8 fade-in max-w-[1200px]">
           <h2 class="text-xl font-bold text-white tracking-tight mb-6">Dashboard</h2>
-          <div id="dash-banner" class="hidden mb-5 bg-amber-500/10 border border-amber-500/20 rounded-lg px-5 py-3 text-sm text-amber-300 fade-in">
-            <strong>LLM provider not configured.</strong> Go to <a onclick="switchTab('config')" class="underline cursor-pointer text-amber-200 hover:text-white ml-1">Config</a> to set your API key.
-          </div>
 
           <!-- Stats Row -->
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -361,10 +354,6 @@
                   <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
                   Browse Tools
                 </button>
-                <button onclick="switchTab('config')" class="btn-ghost flex items-center gap-2 py-2 px-3 text-left">
-                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></svg>
-                  Settings
-                </button>
                 <button onclick="refreshDashboard()" class="btn-ghost flex items-center gap-2 py-2 px-3 text-left">
                   <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
                   Refresh
@@ -510,218 +499,6 @@
           </div>
         </div>
 
-        <!-- ═══ Config Tab ═══ -->
-        <div id="tab-config" class="tab-content hidden p-8 fade-in max-w-[900px]">
-          <div class="mb-8">
-            <h2 class="text-xl font-bold text-white tracking-tight">Configuration</h2>
-            <p id="config-path" class="text-sm text-gray-500 mt-1">Loading...</p>
-          </div>
-
-          <div id="config-banner" class="hidden mb-6 rounded-lg px-5 py-3 text-sm"></div>
-
-          <div id="config-sections">
-
-            <!-- LLM Provider -->
-            <div class="cfg-section">
-              <h3 class="cfg-title">LLM Provider</h3>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Provider</label>
-                  <select id="cfg-provider" class="input-field">
-                    <option value="deepseek">DeepSeek</option>
-                    <option value="grok">Grok</option>
-                    <option value="claude">Claude</option>
-                    <option value="gemini">Gemini</option>
-                    <option value="kimi">Kimi (Moonshot)</option>
-                    <option value="glm">GLM (Zhipu)</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">API Key</label>
-                  <input id="cfg-apikey" type="password" placeholder="Enter your API key" class="input-field">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Model</label>
-                  <input id="cfg-model" type="text" placeholder="e.g. deepseek-chat" class="input-field">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Base URL (optional)</label>
-                  <input id="cfg-baseurl" type="text" placeholder="https://api.deepseek.com/v1" class="input-field">
-                </div>
-              </div>
-            </div>
-
-            <!-- Tavily -->
-            <div class="cfg-section">
-              <h3 class="cfg-title">Web Search (Tavily)</h3>
-              <div>
-                <label class="block text-xs text-gray-500 mb-1.5">Tavily API Key</label>
-                <input id="cfg-tavily-key" type="password" placeholder="Get one at app.tavily.com" class="input-field">
-              </div>
-            </div>
-
-            <!-- ClawHub -->
-            <div class="cfg-section">
-              <h3 class="cfg-title">ClawHub Marketplace</h3>
-              <p class="text-xs text-gray-500">Free & open — no API key required. <a href="https://clawhub.com" target="_blank" class="text-brand-400 hover:underline">clawhub.com</a></p>
-            </div>
-
-            <!-- Deepgram -->
-            <div class="cfg-section">
-              <h3 class="cfg-title">Voice Input (Deepgram)</h3>
-              <div>
-                <label class="block text-xs text-gray-500 mb-1.5">Deepgram API Key</label>
-                <input id="cfg-deepgram-key" type="password" placeholder="Get one at console.deepgram.com" class="input-field">
-              </div>
-            </div>
-
-            <!-- Skills Credentials -->
-            <div class="cfg-section">
-              <h3 class="cfg-title">Skill Credentials</h3>
-              <p class="text-xs text-gray-500 -mt-3 mb-5">API keys used by built-in skills. Leave blank if unused.</p>
-
-              <div class="mb-6">
-                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Email (SMTP)</div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                  <div>
-                    <label class="block text-xs text-gray-500 mb-1.5">SMTP Server</label>
-                    <input id="cfg-email-smtp" type="text" placeholder="smtp.gmail.com" class="input-field">
-                  </div>
-                  <div>
-                    <label class="block text-xs text-gray-500 mb-1.5">Port</label>
-                    <input id="cfg-email-port" type="number" placeholder="587" class="input-field">
-                  </div>
-                  <div>
-                    <label class="block text-xs text-gray-500 mb-1.5">Sender Email</label>
-                    <input id="cfg-email-sender" type="email" placeholder="you@gmail.com" class="input-field">
-                  </div>
-                  <div>
-                    <label class="block text-xs text-gray-500 mb-1.5">App Password</label>
-                    <input id="cfg-email-password" type="password" placeholder="Enter app password" class="input-field">
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">GitHub</div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Personal Access Token</label>
-                  <input id="cfg-github-token" type="password" placeholder="ghp_xxxxxxxxxx" class="input-field">
-                </div>
-              </div>
-            </div>
-
-            <!-- Channels -->
-            <div class="cfg-section">
-              <h3 class="cfg-title flex items-center gap-2">
-                Channels
-                <span id="cfg-channel-status" class="text-[.625rem] font-normal text-gray-500"></span>
-              </h3>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <div class="sm:col-span-2">
-                  <label class="block text-xs text-gray-500 mb-1.5">Telegram Bot Token</label>
-                  <input id="cfg-tg-token" type="password" class="input-field">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Telegram Allowed Users</label>
-                  <input id="cfg-tg-users" type="text" placeholder="Comma-separated user IDs (blank = allow all)" class="input-field">
-                </div>
-                <div>
-                  <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer mt-2">
-                    <input type="checkbox" id="cfg-tg-mention" class="rounded">
-                    Require @mention in groups
-                  </label>
-                </div>
-                <div class="sm:col-span-2 mt-2">
-                  <label class="block text-xs text-gray-500 mb-1.5">Discord Bot Token</label>
-                  <input id="cfg-dc-token" type="password" class="input-field">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Discord Allowed Channels</label>
-                  <input id="cfg-dc-channels" type="text" placeholder="Comma-separated channel IDs (blank = allow all)" class="input-field">
-                </div>
-                <div>
-                  <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer mt-2">
-                    <input type="checkbox" id="cfg-dc-mention" class="rounded">
-                    Require @mention in servers
-                  </label>
-                </div>
-                <div class="sm:col-span-2 mt-2">
-                  <label class="block text-xs text-gray-500 mb-1.5">WhatsApp Phone Number ID</label>
-                  <input id="cfg-wa-phone" type="text" placeholder="e.g. 1234567890" class="input-field">
-                </div>
-                <div class="sm:col-span-2">
-                  <label class="block text-xs text-gray-500 mb-1.5">WhatsApp Access Token</label>
-                  <input id="cfg-wa-token" type="password" class="input-field">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">WhatsApp Verify Token</label>
-                  <input id="cfg-wa-verify" type="text" placeholder="claw_soul_verify" class="input-field">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">WhatsApp Callback URL</label>
-                  <input id="cfg-wa-callback" type="text" placeholder="https://your-domain/whatsapp/webhook" class="input-field">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">WhatsApp Allowed Numbers</label>
-                  <input id="cfg-wa-numbers" type="text" placeholder="Comma-separated numbers (blank = allow all)" class="input-field">
-                </div>
-                <div>
-                  <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer mt-2">
-                    <input type="checkbox" id="cfg-wa-mention" class="rounded">
-                    Require @mention in groups
-                  </label>
-                </div>
-              </div>
-              <p class="text-[.6875rem] text-gray-600 mt-3">Channels auto-start after saving. Tokens are stored securely.</p>
-            </div>
-
-            <!-- Agent Settings -->
-            <div class="cfg-section">
-              <h3 class="cfg-title">Agent</h3>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Max Parallel Skills</label>
-                  <input id="cfg-max-skills" type="number" min="1" max="10" placeholder="5" class="input-field">
-                  <p class="text-[.625rem] text-gray-600 mt-1">Max skills the LLM can activate simultaneously (1-10)</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Web Dashboard -->
-            <div class="cfg-section">
-              <h3 class="cfg-title">Web Dashboard</h3>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Host</label>
-                  <input id="cfg-web-host" type="text" placeholder="0.0.0.0" class="input-field">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1.5">Port</label>
-                  <input id="cfg-web-port" type="number" placeholder="7788" class="input-field">
-                </div>
-              </div>
-            </div>
-
-            <!-- Save -->
-            <div class="flex items-center gap-4 mb-8">
-              <button onclick="saveConfig()" id="config-save-btn" class="btn-primary !py-2.5 !px-8">Save & Apply</button>
-              <span id="config-save-status" class="text-sm text-gray-500"></span>
-            </div>
-
-            <!-- Advanced JSON -->
-            <details class="cfg-section !border-b-0">
-              <summary class="cfg-title cursor-pointer flex items-center gap-2 select-none hover:text-brand-400 transition-colors">
-                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                Advanced: Full JSON Editor
-              </summary>
-              <div class="mt-2">
-                <textarea id="cfg-json-raw" rows="20"
-                  class="input-field !rounded-lg font-mono !text-xs !leading-6 resize-y !p-5 !bg-surface-950"></textarea>
-              </div>
-            </details>
-          </div>
-        </div>
       </div>
     </main>
   </div>
@@ -767,14 +544,13 @@ function switchTab(tab) {
   const nav = document.getElementById('nav-' + tab);
   if (nav) nav.classList.add('active');
 
-  const titles = { dashboard:'Dashboard', chat:'Chat', tools:'Tools', persona:'Persona', integrations:'Integrations', config:'Configuration' };
+  const titles = { dashboard:'Dashboard', chat:'Chat', tools:'Tools', persona:'Persona', integrations:'Integrations' };
   document.getElementById('page-title').textContent = titles[tab] || tab;
 
   if (tab === 'dashboard') refreshDashboard();
   if (tab === 'tools') loadTools();
   if (tab === 'persona') loadPersona();
   if (tab === 'integrations') loadIntegrations();
-  if (tab === 'config') loadConfig();
   if (tab === 'chat') {
     document.getElementById('chat-input').focus();
     loadChatHistory();
@@ -944,8 +720,6 @@ async function refreshDashboard() {
     wsStatusEl.className = 'px-2 py-0.5 rounded-full text-[.6875rem] font-medium ' +
       (connected ? 'bg-emerald-500/15 text-accent-green' : 'bg-red-500/15 text-accent-red');
 
-    const banner = document.getElementById('dash-banner');
-    banner.classList.toggle('hidden', d.providerReady !== false);
   } catch (e) { console.error('Status fetch:', e); }
 
   try {
@@ -1456,250 +1230,6 @@ async function marketplaceInstall(skillId) {
     status.innerHTML = `<span class="text-red-400">✗ Failed:</span> ${_esc(e.message)}`;
     if (btn) { btn.disabled = false; btn.textContent = 'Install'; btn.classList.remove('opacity-50'); }
   }
-}
-
-// ── Config ───────────────────────────────────────────────────────────────────
-let _rawConfig = {};
-let _lastSecretsSet = {};
-
-async function loadConfig() {
-  try {
-    const res = await fetch('/api/config');
-    const data = await res.json();
-    _rawConfig = data.config || {};
-    _lastSecretsSet = data.secretsSet || {};
-
-    document.getElementById('config-path').textContent =
-      data.configPath ? 'Loaded from ' + data.configPath : 'No config file found';
-
-    const banner = document.getElementById('config-banner');
-    if (data.providerReady === false) {
-      banner.className = 'mb-6 rounded-lg px-5 py-3 text-sm bg-amber-500/10 border border-amber-500/20 text-amber-300';
-      banner.innerHTML = '<strong>LLM provider not configured.</strong> Enter your API key and click Save.';
-    } else {
-      banner.className = 'mb-6 rounded-lg px-5 py-3 text-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-300';
-      banner.innerHTML = '<strong>Provider active.</strong> Changes take effect after saving.';
-    }
-    banner.classList.remove('hidden');
-
-    const secretsSet = data.secretsSet || {};
-    const llm = _rawConfig.llm || {};
-    const providerName = llm.provider || 'deepseek';
-    document.getElementById('cfg-provider').value = providerName;
-
-    const providerCfg = llm[providerName] || {};
-    const apiKeyField = document.getElementById('cfg-apikey');
-    const apiKeyPath = 'llm.' + providerName + '.apiKey';
-    apiKeyField.value = '';
-    const isClaudeProvider = providerName === 'claude' || providerName === 'anthropic';
-    if (secretsSet[apiKeyPath]) {
-      apiKeyField.placeholder = '(key is set — leave blank to keep)';
-    } else if (isClaudeProvider) {
-      apiKeyField.placeholder = 'API key (sk-ant-...) or setup-token';
-    } else {
-      apiKeyField.placeholder = 'Enter your API key';
-    }
-
-    document.getElementById('cfg-model').value = providerCfg.model || '';
-    document.getElementById('cfg-baseurl').value = providerCfg.baseUrl || '';
-
-    const tavilyField = document.getElementById('cfg-tavily-key');
-    tavilyField.value = '';
-    tavilyField.placeholder = secretsSet['tavily.apiKey'] ? '(key is set — leave blank to keep)' : 'Get one at app.tavily.com';
-
-    const dgField = document.getElementById('cfg-deepgram-key');
-    dgField.value = '';
-    dgField.placeholder = secretsSet['deepgram.apiKey'] ? '(key is set — leave blank to keep)' : 'Get one at console.deepgram.com';
-
-    const skills = _rawConfig.skills || {};
-    const emailCfg = skills.email || {};
-    document.getElementById('cfg-email-smtp').value = emailCfg.smtpServer || '';
-    document.getElementById('cfg-email-port').value = emailCfg.smtpPort || '';
-    document.getElementById('cfg-email-sender').value = emailCfg.senderEmail || '';
-
-    const emailPwField = document.getElementById('cfg-email-password');
-    emailPwField.value = '';
-    emailPwField.placeholder = secretsSet['skills.email.senderPassword']
-      ? '(password is set — leave blank to keep)' : 'Enter app password';
-
-    const ghTokenField = document.getElementById('cfg-github-token');
-    ghTokenField.value = '';
-    ghTokenField.placeholder = secretsSet['skills.github.token']
-      ? '(token is set — leave blank to keep)' : 'ghp_xxxxxxxxxx';
-
-    const channels = _rawConfig.channels || {};
-    const tgCfg = channels.telegram || {};
-    const tgTokenField = document.getElementById('cfg-tg-token');
-    tgTokenField.value = '';
-    tgTokenField.placeholder = secretsSet['channels.telegram.token'] ? '(token is set — leave blank to keep)' : 'Enter Telegram bot token';
-    document.getElementById('cfg-tg-users').value = (tgCfg.allowedUsers || []).join(', ');
-    document.getElementById('cfg-tg-mention').checked = !!tgCfg.requireMention;
-
-    const dcCfg = channels.discord || {};
-    const dcTokenField = document.getElementById('cfg-dc-token');
-    dcTokenField.value = '';
-    dcTokenField.placeholder = secretsSet['channels.discord.token'] ? '(token is set — leave blank to keep)' : 'Enter Discord bot token';
-    document.getElementById('cfg-dc-channels').value = (dcCfg.allowedChannels || []).join(', ');
-    document.getElementById('cfg-dc-mention').checked = !!dcCfg.requireMention;
-
-    const waCfg = channels.whatsapp || {};
-    document.getElementById('cfg-wa-phone').value = waCfg.phoneNumberId || '';
-    const waTokenField = document.getElementById('cfg-wa-token');
-    waTokenField.value = '';
-    waTokenField.placeholder = secretsSet['channels.whatsapp.token'] ? '(token is set — leave blank to keep)' : 'Enter WhatsApp access token';
-    document.getElementById('cfg-wa-verify').value = waCfg.verifyToken || 'claw_soul_verify';
-    document.getElementById('cfg-wa-callback').value = waCfg.callbackUrl || '';
-    document.getElementById('cfg-wa-numbers').value = (waCfg.allowedNumbers || []).join(', ');
-    document.getElementById('cfg-wa-mention').checked = !!waCfg.requireMention;
-
-    const agentCfg = _rawConfig.agent || {};
-    document.getElementById('cfg-max-skills').value = agentCfg.maxParallelSkills || 5;
-
-    const web = _rawConfig.web || {};
-    document.getElementById('cfg-web-host').value = web.host || '0.0.0.0';
-    document.getElementById('cfg-web-port').value = web.port || 7788;
-
-    document.getElementById('cfg-json-raw').value = JSON.stringify(_rawConfig, null, 2);
-    document.getElementById('config-save-status').textContent = '';
-
-    // Channel status
-    try {
-      const chRes = await fetch('/api/channels');
-      const chData = await chRes.json();
-      const statusEl = document.getElementById('cfg-channel-status');
-      const running = (chData.channels || []).filter(c => c.running).map(c => c.type);
-      if (running.length > 0) {
-        statusEl.innerHTML = '<span class="text-accent-green">● ' + running.join(', ') + ' running</span>';
-      } else {
-        statusEl.textContent = '';
-      }
-    } catch (e) {}
-  } catch (e) { console.error('Config fetch:', e); }
-}
-
-document.getElementById('cfg-provider').addEventListener('change', () => {
-  const p = document.getElementById('cfg-provider').value;
-  const defaults = {
-    deepseek: { model:'deepseek-chat', baseUrl:'https://api.deepseek.com/v1' },
-    grok:     { model:'grok-3', baseUrl:'https://api.x.ai/v1' },
-    claude:   { model:'claude-sonnet-4-20250514', baseUrl:'' },
-    gemini:   { model:'gemini-2.0-flash', baseUrl:'' },
-    kimi:     { model:'moonshot-v1-128k', baseUrl:'https://api.moonshot.cn/v1' },
-    glm:      { model:'glm-4-flash', baseUrl:'https://open.bigmodel.cn/api/paas/v4/' },
-  };
-  const d = defaults[p] || {};
-  const existing = (_rawConfig.llm || {})[p] || {};
-  document.getElementById('cfg-model').value = existing.model || d.model || '';
-  document.getElementById('cfg-baseurl').value = existing.baseUrl || d.baseUrl || '';
-
-  const apiKeyField = document.getElementById('cfg-apikey');
-  const apiKeyPath = 'llm.' + p + '.apiKey';
-  apiKeyField.value = '';
-  apiKeyField.placeholder = (_lastSecretsSet && _lastSecretsSet[apiKeyPath])
-    ? '(key is set — leave blank to keep)' : 'Enter your API key';
-});
-
-async function saveConfig() {
-  const statusEl = document.getElementById('config-save-status');
-  const btn = document.getElementById('config-save-btn');
-  btn.disabled = true;
-  statusEl.textContent = 'Saving...';
-  statusEl.className = 'text-[.8125rem] text-gray-500';
-
-  try {
-    const providerName = document.getElementById('cfg-provider').value;
-    const apiKey = document.getElementById('cfg-apikey').value.trim();
-    const model = document.getElementById('cfg-model').value.trim();
-    const baseUrl = document.getElementById('cfg-baseurl').value.trim();
-
-    let cfg;
-    try { cfg = JSON.parse(document.getElementById('cfg-json-raw').value); }
-    catch (e) { cfg = Object.assign({}, _rawConfig); }
-
-    if (!cfg.llm) cfg.llm = {};
-    cfg.llm.provider = providerName;
-    if (!cfg.llm[providerName]) cfg.llm[providerName] = {};
-    if (apiKey) cfg.llm[providerName].apiKey = apiKey;
-    if (model) cfg.llm[providerName].model = model;
-    if (baseUrl) cfg.llm[providerName].baseUrl = baseUrl;
-
-    const tavilyKey = document.getElementById('cfg-tavily-key').value.trim();
-    if (!cfg.tavily) cfg.tavily = {};
-    if (tavilyKey) cfg.tavily.apiKey = tavilyKey;
-
-    const dgKey = document.getElementById('cfg-deepgram-key').value.trim();
-    if (!cfg.deepgram) cfg.deepgram = {};
-    if (dgKey) cfg.deepgram.apiKey = dgKey;
-
-    if (!cfg.skills) cfg.skills = {};
-    if (!cfg.skills.email) cfg.skills.email = {};
-    const emailSmtp = document.getElementById('cfg-email-smtp').value.trim();
-    const emailPort = document.getElementById('cfg-email-port').value.trim();
-    const emailSender = document.getElementById('cfg-email-sender').value.trim();
-    const emailPassword = document.getElementById('cfg-email-password').value.trim();
-    if (emailSmtp) cfg.skills.email.smtpServer = emailSmtp;
-    if (emailPort) cfg.skills.email.smtpPort = parseInt(emailPort);
-    if (emailSender) cfg.skills.email.senderEmail = emailSender;
-    if (emailPassword) cfg.skills.email.senderPassword = emailPassword;
-
-    if (!cfg.skills.github) cfg.skills.github = {};
-    const ghToken = document.getElementById('cfg-github-token').value.trim();
-    if (ghToken) cfg.skills.github.token = ghToken;
-
-    if (!cfg.channels) cfg.channels = {};
-    if (!cfg.channels.telegram) cfg.channels.telegram = {};
-    const tgToken = document.getElementById('cfg-tg-token').value.trim();
-    if (tgToken) cfg.channels.telegram.token = tgToken;
-    const tgUsers = document.getElementById('cfg-tg-users').value.trim();
-    cfg.channels.telegram.allowedUsers = tgUsers ? tgUsers.split(',').map(s => s.trim()).filter(Boolean) : [];
-    cfg.channels.telegram.requireMention = document.getElementById('cfg-tg-mention').checked;
-
-    if (!cfg.channels.discord) cfg.channels.discord = {};
-    const dcToken = document.getElementById('cfg-dc-token').value.trim();
-    if (dcToken) cfg.channels.discord.token = dcToken;
-    const dcChannels = document.getElementById('cfg-dc-channels').value.trim();
-    cfg.channels.discord.allowedChannels = dcChannels ? dcChannels.split(',').map(s => s.trim()).filter(Boolean) : [];
-    cfg.channels.discord.requireMention = document.getElementById('cfg-dc-mention').checked;
-
-    if (!cfg.channels.whatsapp) cfg.channels.whatsapp = {};
-    const waPhone = document.getElementById('cfg-wa-phone').value.trim();
-    if (waPhone) cfg.channels.whatsapp.phoneNumberId = waPhone;
-    const waToken = document.getElementById('cfg-wa-token').value.trim();
-    if (waToken) cfg.channels.whatsapp.token = waToken;
-    cfg.channels.whatsapp.verifyToken = document.getElementById('cfg-wa-verify').value.trim() || 'claw_soul_verify';
-    const waCallback = document.getElementById('cfg-wa-callback').value.trim();
-    if (waCallback) cfg.channels.whatsapp.callbackUrl = waCallback;
-    const waNumbers = document.getElementById('cfg-wa-numbers').value.trim();
-    cfg.channels.whatsapp.allowedNumbers = waNumbers ? waNumbers.split(',').map(s => s.trim()).filter(Boolean) : [];
-    cfg.channels.whatsapp.requireMention = document.getElementById('cfg-wa-mention').checked;
-
-    if (!cfg.agent) cfg.agent = {};
-    cfg.agent.maxParallelSkills = parseInt(document.getElementById('cfg-max-skills').value) || 5;
-
-    if (!cfg.web) cfg.web = {};
-    cfg.web.host = document.getElementById('cfg-web-host').value.trim() || '0.0.0.0';
-    cfg.web.port = parseInt(document.getElementById('cfg-web-port').value) || 7788;
-
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config: cfg }),
-    });
-    const result = await res.json();
-
-    if (result.ok) {
-      statusEl.textContent = result.providerReady ? 'Saved! Provider is active.' : 'Saved! Provider could not start — check your API key.';
-      statusEl.className = 'text-[.8125rem] ' + (result.providerReady ? 'text-accent-green' : 'text-accent-amber');
-      loadConfig();
-      refreshDashboard();
-    } else {
-      statusEl.textContent = 'Error: ' + (result.error || 'Unknown');
-      statusEl.className = 'text-[.8125rem] text-accent-red';
-    }
-  } catch (e) {
-    statusEl.textContent = 'Error: ' + e.message;
-    statusEl.className = 'text-[.8125rem] text-accent-red';
-  } finally { btn.disabled = false; }
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
