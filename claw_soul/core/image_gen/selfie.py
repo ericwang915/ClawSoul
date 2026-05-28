@@ -24,23 +24,53 @@ logger = logging.getLogger(__name__)
 
 
 # ── Prompt template ────────────────────────────────────────────────────────
+#
+# Style suffix is language-aware: with a Chinese appearance description
+# we keep the Chinese suffix (Seedream's strongest prompting language),
+# but for non-CJK personas (American, French, Indian, etc.) we use the
+# English suffix so Seedream isn't biased toward East-Asian features by
+# the surrounding Chinese context.
 
-_BASE_STYLE = (
+_BASE_STYLE_ZH = (
     "写实自拍风格，自然光线，画面温馨真实，"
     "表情自然，像是在用手机随手记录生活分享给男朋友。"
     "不要 NSFW，不要暴露，不要血腥。"
 )
 
+_BASE_STYLE_EN = (
+    "Realistic phone selfie, natural lighting, warm everyday vibe, "
+    "natural expression — like a candid moment captured to share with "
+    "their partner. No NSFW, no nudity, no violence."
+)
+
+
+def _looks_chinese(text: str) -> bool:
+    """Heuristic: does the appearance description contain CJK characters?"""
+    for ch in text or "":
+        if "一" <= ch <= "鿿":
+            return True
+    return False
+
 
 def _build_prompt(appearance: str, scene: Scene, extra_hint: str | None) -> str:
-    """Assemble the final Chinese prompt sent to Seedream."""
+    """Assemble the Seedream prompt in the same language as the appearance
+    description, so non-Asian personas don't get pulled back toward East-
+    Asian features by surrounding Chinese context.
+
+    For non-Chinese personas we also drop the auto-built scene block
+    (which is hard-coded Chinese in scene_builder) — any extra context
+    the LLM wants comes through ``extra_hint`` in whatever language the
+    LLM picked.
+    """
+    is_zh = _looks_chinese(appearance)
     chunks: list[str] = [appearance.strip()]
-    scene_block = scene.as_prompt_block()
-    if scene_block:
-        chunks.append(scene_block)
+    if is_zh:
+        scene_block = scene.as_prompt_block()
+        if scene_block:
+            chunks.append(scene_block)
     if extra_hint:
         chunks.append(extra_hint.strip())
-    chunks.append(_BASE_STYLE)
+    chunks.append(_BASE_STYLE_ZH if is_zh else _BASE_STYLE_EN)
     return "\n\n".join(c for c in chunks if c)
 
 

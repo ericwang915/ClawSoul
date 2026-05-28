@@ -432,13 +432,16 @@ def send_file(path: str, caption: str = "", session_id: str = "") -> str:
         return f"Error sending file: {exc}"
 
 
-def _tool_take_selfie(scene_hint: str = "", session_id: str = "") -> str:
+def _tool_take_selfie(scene_hint: str = "", caption: str = "",
+                      session_id: str = "") -> str:
     """LLM-callable selfie generator + sender.
 
-    Runs the Seedream pipeline in-process (NOT via the subprocess shim
-    that take_selfie.py uses), then sends the resulting photo through
-    the session's registered photo_sender.  The agent's dispatch layer
-    injects ``session_id`` automatically — see :meth:`Agent` tool routing.
+    Runs the Seedream pipeline in-process and sends the resulting photo
+    via the session's registered photo_sender.  ``caption`` ships with
+    the photo as the Telegram message text — the LLM should pass its
+    short in-character caption HERE and write no separate text reply,
+    so the user sees a single photo+caption message instead of three
+    bubbles (pre-text + photo + post-text).
     """
     try:
         from .image_gen import take_selfie as _gen_selfie
@@ -448,15 +451,15 @@ def _tool_take_selfie(scene_hint: str = "", session_id: str = "") -> str:
         result = _gen_selfie(scene_hint=scene_hint or None)
     except Exception as exc:
         return f"Error generating selfie: {exc}"
-    return send_photo(result.path, caption="", session_id=session_id)
+    return send_photo(result.path, caption=caption or "", session_id=session_id)
 
 
 def _tool_candid_shot(category: str = "random", hint: str = "",
-                      session_id: str = "") -> str:
+                      caption: str = "", session_id: str = "") -> str:
     """LLM-callable candid-shot generator + sender.
 
     ``category`` is one of animal | scenery | food | fun | random.
-    Otherwise mirrors :func:`_tool_take_selfie`.
+    ``caption`` ships with the photo (see :func:`_tool_take_selfie`).
     """
     try:
         from .image_gen import take_candid as _gen_candid
@@ -466,7 +469,7 @@ def _tool_candid_shot(category: str = "random", hint: str = "",
         result = _gen_candid(category=category or "random", hint=hint or None)
     except Exception as exc:
         return f"Error generating candid: {exc}"
-    return send_photo(result.path, caption="", session_id=session_id)
+    return send_photo(result.path, caption=caption or "", session_id=session_id)
 
 
 AVAILABLE_TOOLS: dict[str, callable] = {
