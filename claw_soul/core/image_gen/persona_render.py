@@ -1,13 +1,15 @@
 """
 Persona renderer — produce the character description block for selfie prompts.
 
-Source priority:
-  1. ``context/persona/appearance.md`` (user-curated visual description)
-  2. Fallback default (a generic 20-something East Asian girl description)
-
-We intentionally do *not* call an LLM to extract appearance from the persona
-file at every selfie generation — that would be slow and expensive. Users
-who want a custom look should edit ``appearance.md``.
+Sole source: ``<CLAWSOUL_HOME>/context/persona/appearance.md``, written by
+the wizard (``companion.apply_choices`` →
+``_generate_appearance_file``).  If the file is missing or empty we
+**raise**, because a silent fallback to a hardcoded default has bitten
+us multiple times — wrong tenancy binding, missing apply_choices on
+boot, etc. — and produced an East-Asian selfie for an American persona
+with no visible error.  Failing loud means the caller (selfie / candid
+tool) returns an explicit error string to the LLM, which then has to
+tell the user honestly instead of shipping a wrong-looking photo.
 """
 
 from __future__ import annotations
@@ -20,10 +22,13 @@ from ... import config
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_APPEARANCE = """\
-一位 20 岁出头的东亚女孩，长发，齐刘海，大眼睛，皮肤白皙，身材娇小。
-风格清新自然，气质温柔可爱。\
-"""
+class AppearanceNotConfigured(RuntimeError):
+    """No appearance.md exists for the current tenant.
+
+    Surfaces back through ``take_selfie`` / ``candid_shot`` so the LLM
+    sees an actionable error message instead of generating a photo with
+    the wrong ethnicity.
+    """
 
 
 def _appearance_path() -> str:
@@ -34,19 +39,32 @@ def _appearance_path() -> str:
 
 
 def load_appearance() -> str:
-    """Return the character's visual description (Chinese, suitable for prompt)."""
+    """Return the character's visual description, or raise.
+
+    Never returns a silent default — every selfie / candid generation
+    has to either succeed with the user-configured look or fail loudly.
+    """
     path = _appearance_path()
-    if os.path.isfile(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                text = f.read().strip()
-            if text:
-                # Strip markdown headers to keep the prompt clean
-                lines = [
-                    line for line in text.splitlines()
-                    if not line.lstrip().startswith("#")
-                ]
-                return "\n".join(lines).strip() or DEFAULT_APPEARANCE
-        except OSError as exc:
-            logger.warning("[persona_render] failed to read appearance.md: %s", exc)
-    return DEFAULT_APPEARANCE
+    if not os.path.isfile(path):
+        raise AppearanceNotConfigured(
+            f"appearance.md not found at {path} — make sure the companion "
+            "wizard ran and per-tenant CLAWSOUL_HOME is correctly bound."
+        )
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read().strip()
+    except OSError as exc:
+        raise AppearanceNotConfigured(
+            f"appearance.md exists but is unreadable: {exc}"
+        ) from exc
+    # Strip markdown headers
+    lines = [
+        line for line in text.splitlines()
+        if not line.lstrip().startswith("#")
+    ]
+    body = "\n".join(lines).strip()
+    if not body:
+        raise AppearanceNotConfigured(
+            f"appearance.md at {path} is empty after stripping headers."
+        )
+    return body
