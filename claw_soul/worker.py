@@ -33,6 +33,7 @@ semantics + idempotent agents already cover us).
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 import os
 import time
@@ -152,9 +153,21 @@ class _WorkerState:
         self._agent: PersistentAgent | None = None
         self._sm: SessionManager | None = None
         self._bot_app = None  # python-telegram-bot Application, lazy
+        # Telegram update_id ring buffer — guards against router retries
+        # (after a cold-start dispatch took too long) re-delivering the
+        # same message.  Window of 256 covers any realistic retry burst.
+        self._seen_update_ids: collections.deque[int] = collections.deque(maxlen=256)
 
     def touch(self) -> None:
         self.last_active = time.monotonic()
+
+    def mark_update_seen(self, update_id: int) -> bool:
+        """Return True if we've already processed this update_id, in which
+        case the caller should drop it.  Otherwise record it and return False."""
+        if update_id in self._seen_update_ids:
+            return True
+        self._seen_update_ids.append(update_id)
+        return False
 
     async def get_agent(self) -> PersistentAgent:
         async with self._lock:
@@ -224,6 +237,11 @@ async def _handle(kind: str, payload: dict, state: _WorkerState) -> None:
 
 
 async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
+    update_id = update.get("update_id")
+    if isinstance(update_id, int) and state.mark_update_seen(update_id):
+        logger.info("[worker] dedup: skipping replayed update_id=%s", update_id)
+        return
+
     msg = update.get("message") or update.get("edited_message") or {}
     text = (msg.get("text") or "").strip()
     chat_id = ((msg.get("chat") or {}).get("id"))

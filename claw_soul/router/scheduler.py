@@ -36,9 +36,16 @@ from . import db, dispatch
 logger = logging.getLogger(__name__)
 
 
-# Reconcile every 5 min so newly-onboarded users start receiving ticks
-# without us needing a webhook from Supabase.
-_RECONCILE_INTERVAL_MIN = 5
+# Reconcile every minute so newly-onboarded users start receiving ticks
+# from *all* router machines (not just the one that handled provision)
+# within at most 60 s.  The cost is tiny — one Supabase row read per
+# minute per router instance.
+_RECONCILE_INTERVAL_MIN = 1
+
+# How long scheduled_runs rows are kept before prune.  PK uniqueness is
+# only meaningful in the current minute, so a 24-h window is generous —
+# enough for any debugging on "who fired what" without growing forever.
+_PRUNE_OLDER_THAN_HOURS = 24
 
 # Default selfie slots — these become per-user once we expose a config UI.
 _DEFAULT_SELFIE_SLOTS = ["10:00", "16:00", "20:00"]
@@ -62,6 +69,13 @@ class RouterScheduler:
             self.reconcile, "interval",
             minutes=_RECONCILE_INTERVAL_MIN,
             id="_router_reconcile",
+            replace_existing=True,
+        )
+        # Daily prune of the scheduled_runs leader-claim table.  Wrapped
+        # in a claim so only one router actually runs the DELETE.
+        self._scheduler.add_job(
+            self._fire_prune, CronTrigger(hour=3, minute=0),
+            id="_router_prune_scheduled_runs",
             replace_existing=True,
         )
         self._scheduler.start()
@@ -166,6 +180,15 @@ class RouterScheduler:
         if not await self._claim(f"selfie:{user_id}:{slot}"):
             return
         await dispatch.dispatch(user_id, "selfie_tick", {"slot": slot})
+
+    async def _fire_prune(self) -> None:
+        if not await self._claim("prune:scheduled_runs"):
+            return
+        try:
+            deleted = await db.prune_scheduled_runs(_PRUNE_OLDER_THAN_HOURS)
+            logger.info("[router-sched] pruned %d scheduled_runs rows", deleted)
+        except Exception as exc:
+            logger.warning("[router-sched] prune failed: %s", exc)
 
 
 # Singleton — the router app initializes this on startup.

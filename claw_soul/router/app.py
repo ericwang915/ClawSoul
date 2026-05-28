@@ -19,10 +19,11 @@ they're authenticated by Fly's health checker / by the token in the path.
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from .. import fly_client
@@ -76,29 +77,45 @@ def create_router_app() -> FastAPI:
     # ── Telegram webhook ─────────────────────────────────────────────
 
     @app.post("/telegram/{bot_token}")
-    async def telegram_webhook(bot_token: str, request: Request) -> JSONResponse:
-        """Receive a Telegram update for one user's bot → forward to their
-        worker machine. The bot token in the path doubles as auth (only
-        Telegram + the dashboard ever learn it for this user)."""
+    async def telegram_webhook(
+        bot_token: str,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        x_telegram_bot_api_secret_token: str | None = Header(default=None),
+    ) -> JSONResponse:
+        """Receive a Telegram update → fan out to the worker.
+
+        Returns 200 immediately and dispatches in the background so cold-
+        starting a worker (5-10 s) doesn't trigger Telegram retries. The
+        worker dedupes by update_id so a retry that does happen is safe.
+
+        Auth: the bot_token in the path identifies the user; the
+        ``X-Telegram-Bot-Api-Secret-Token`` header proves the request is
+        actually from Telegram (HMAC of ROUTER_WEBHOOK_SALT + bot_token).
+        Backwards-compatible: if the env salt isn't set, we skip the
+        header check and rely on path-token obscurity only.
+        """
         try:
             payload = await request.json()
         except Exception:
             raise HTTPException(status_code=400, detail="invalid JSON")
 
+        expected_secret = telegram_api.webhook_secret_for(bot_token)
+        if expected_secret:
+            got = x_telegram_bot_api_secret_token or ""
+            if not hmac.compare_digest(got, expected_secret):
+                logger.warning("[router] webhook secret mismatch bot=%s…",
+                               bot_token[:8])
+                return JSONResponse({"ignored": True}, status_code=200)
+
         user_id = await db.find_user_id_by_bot_token(bot_token)
         if not user_id:
-            # Token doesn't match any user — either stale or attacker
-            # probing.  Don't leak that distinction.
             return JSONResponse({"ignored": True}, status_code=200)
 
-        ok = await dispatch.dispatch(user_id, "telegram_update",
-                                     {"update": payload})
-        if not ok:
-            # Worker unreachable — still 200 to Telegram so they don't
-            # retry; we'll catch it via reconcile.
-            logger.warning("[router] telegram_update for %s failed to forward",
-                           user_id[:8])
-        return JSONResponse({"forwarded": ok})
+        background_tasks.add_task(
+            dispatch.dispatch, user_id, "telegram_update", {"update": payload},
+        )
+        return JSONResponse({"queued": True})
 
     # ── Admin: per-user machine lifecycle ────────────────────────────
 
@@ -113,38 +130,55 @@ def create_router_app() -> FastAPI:
         tier = (body or {}).get("tier") or "free"
         region = (body or {}).get("region") or fly_client._default_region()  # noqa: SLF001
 
-        # Idempotent: if there's already a row + machine, return it.
+        # Need the bot token to set the webhook atomically.  Without one,
+        # the user can't receive any messages — refuse to provision
+        # rather than leaving them in a half-set-up state.
+        settings = await db.get_user_setting_row(user_id)
+        if not settings or not settings.get("telegram_bot_token"):
+            raise HTTPException(400, "user has no telegram_bot_token; "
+                                "save token via dashboard before provisioning")
+        bot_token = settings["telegram_bot_token"]
+
+        # 1. Machine (idempotent on user_machines.user_id PK).
         existing = await db.get_user_machine(user_id)
-        if existing is not None:
-            return JSONResponse({
-                "ok": True, "reused": True,
-                "machine_id": existing.machine_id, "state": existing.state,
-            })
-
-        try:
-            spec = fly_client.MachineSpec(
-                user_id=user_id, region=region, tier=tier,
+        if existing is None:
+            try:
+                spec = fly_client.MachineSpec(
+                    user_id=user_id, region=region, tier=tier,
+                )
+                machine = fly_client.create_user_machine(spec)
+            except fly_client.FlyConfigError as exc:
+                raise HTTPException(503, f"fly not configured: {exc}")
+            except fly_client.FlyAPIError as exc:
+                raise HTTPException(502, f"fly api error: {exc}")
+            await db.upsert_user_machine(
+                user_id,
+                machine_id=machine["id"],
+                region=machine.get("region", region),
+                state="starting",
+                tier=tier,
+                image_ref=spec.image or fly_client._worker_image(),  # noqa: SLF001
             )
-            machine = fly_client.create_user_machine(spec)
-        except fly_client.FlyConfigError as exc:
-            raise HTTPException(503, f"fly not configured: {exc}")
-        except fly_client.FlyAPIError as exc:
-            raise HTTPException(502, f"fly api error: {exc}")
+            machine_id = machine["id"]
+        else:
+            machine_id = existing.machine_id
 
-        await db.upsert_user_machine(
-            user_id,
-            machine_id=machine["id"],
-            region=machine.get("region", region),
-            state="starting",
-            tier=tier,
-            image_ref=spec.image or fly_client._worker_image(),  # noqa: SLF001
-        )
-        # Pull the new user into the scheduler if they're paid.
+        # 2. Webhook — AFTER machine exists so any inbound update finds a
+        # target.  Idempotent: calling setWebhook with the same URL is a no-op.
+        ok, url_or_err = await telegram_api.set_webhook(bot_token)
+        if ok:
+            await db.upsert_user_machine(user_id, webhook_url=url_or_err)
+        else:
+            logger.warning("[router] provision setWebhook failed: %s", url_or_err)
+
+        # 3. Pull into scheduler (claim PK already dedupes ticks).
         if tier != "free":
             await scheduler.kick_reconcile()
         return JSONResponse({
-            "ok": True, "reused": False,
-            "machine_id": machine["id"], "state": "starting",
+            "ok": True, "reused": existing is not None,
+            "machine_id": machine_id,
+            "state": (existing.state if existing else "starting"),
+            "webhook_ok": ok,
         })
 
     @app.post("/admin/users/{user_id}/destroy")

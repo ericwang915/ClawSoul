@@ -201,6 +201,29 @@ async def try_claim_tick(job_id: str, fire_minute: str,
     return False
 
 
+async def prune_scheduled_runs(older_than_hours: int = 24) -> int:
+    """DELETE scheduled_runs rows older than *older_than_hours*. Returns
+    the number of rows removed (best-effort; PostgREST returns the deleted
+    rows when Prefer: return=representation is set)."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=older_than_hours))
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.delete(
+            f"{_url()}/rest/v1/scheduled_runs",
+            params={"claimed_at": f"lt.{cutoff.isoformat()}"},
+            headers={**_headers(),
+                     "Prefer": "return=representation"},
+        )
+    if not r.is_success:
+        logger.warning("[router-db] prune_scheduled_runs failed: %s %s",
+                       r.status_code, r.text[:200])
+        return 0
+    try:
+        return len(r.json() or [])
+    except Exception:
+        return 0
+
+
 async def get_user_setting_row(user_id: str) -> dict | None:
     async with httpx.AsyncClient(timeout=10) as c:
         r = await c.get(
