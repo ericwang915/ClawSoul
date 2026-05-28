@@ -139,15 +139,32 @@ class RouterScheduler:
                 self._scheduler.remove_job(j.id)
 
     # ── tick handlers ──────────────────────────────────────────────────
+    # Each handler tries to claim (job_id, current_minute) in the
+    # scheduled_runs table before dispatching. With N router machines
+    # firing simultaneously, the unique PK guarantees exactly one
+    # actually sends the tick to the worker.
+
+    async def _claim(self, job_id: str) -> bool:
+        minute = datetime.utcnow().replace(second=0, microsecond=0).isoformat()
+        won = await db.try_claim_tick(job_id, minute)
+        if not won:
+            logger.debug("[router-sched] lost claim for %s @ %s", job_id, minute)
+        return won
 
     async def _fire_planner(self, user_id: str) -> None:
+        if not await self._claim(f"planner:{user_id}"):
+            return
         await dispatch.dispatch(user_id, "planner_tick", {})
 
     async def _fire_proactive(self, user_id: str) -> None:
+        if not await self._claim(f"proactive:{user_id}"):
+            return
         await dispatch.dispatch(user_id, "proactive_tick",
                                 {"ts": datetime.utcnow().isoformat()})
 
     async def _fire_selfie(self, user_id: str, slot: str) -> None:
+        if not await self._claim(f"selfie:{user_id}:{slot}"):
+            return
         await dispatch.dispatch(user_id, "selfie_tick", {"slot": slot})
 
 

@@ -164,6 +164,43 @@ async def find_user_id_by_bot_token(token: str) -> str | None:
     return rows[0]["user_id"] if rows else None
 
 
+# ── Per-tick leader election (scheduled_runs) ───────────────────────────
+
+async def try_claim_tick(job_id: str, fire_minute: str,
+                         *, machine_id: str | None = None) -> bool:
+    """Insert a (job_id, fire_minute) row; return True iff THIS process
+    won the race. The PK constraint guarantees exactly one winner across
+    all router machines firing the same job at the same minute.
+
+    fire_minute must be an ISO-8601 timestamp truncated to the minute so
+    two machines whose clocks differ by sub-second still compute the
+    same key. Callers should pass datetime.utcnow().replace(second=0,
+    microsecond=0).isoformat().
+    """
+    body = {
+        "job_id":      job_id,
+        "fire_minute": fire_minute,
+        "machine_id":  machine_id or os.environ.get("FLY_MACHINE_ID", ""),
+    }
+    async with httpx.AsyncClient(timeout=5) as c:
+        r = await c.post(
+            f"{_url()}/rest/v1/scheduled_runs",
+            headers={**_headers(),
+                     "Prefer": "return=minimal"},
+            json=body,
+        )
+    if r.status_code in (200, 201, 204):
+        return True
+    # 409 (Conflict) — other machine got it. Anything else = real error.
+    if r.status_code != 409:
+        # PostgREST surfaces unique-violation as 23505 in the body.
+        if "23505" in r.text:
+            return False
+        logger.warning("[router-db] try_claim_tick unexpected %s: %s",
+                       r.status_code, r.text[:200])
+    return False
+
+
 async def get_user_setting_row(user_id: str) -> dict | None:
     async with httpx.AsyncClient(timeout=10) as c:
         r = await c.get(
