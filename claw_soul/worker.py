@@ -344,12 +344,13 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
         logger.warning("[worker] send_message failed: %s", exc)
         return
 
-    # Outbound succeeded — touch last_message_at, and if the agent has
-    # finished naming itself (memory has bot_name), promote the user
-    # from "still onboarding" to "onboarded" so the scheduler starts
-    # firing proactive/selfie/planner.
+    # Outbound succeeded — touch last_message_at, mark onboarded once
+    # bot_name lands in memory, and emit any milestones that just
+    # tripped (first chat, day-streak, message-count, bonding level up).
+    # All three are background tasks so they never block the reply.
     asyncio.create_task(_touch_message_at(state.user_id))
     asyncio.create_task(_maybe_mark_onboarded(state.user_id, agent))
+    asyncio.create_task(_emit_milestones(state.user_id))
 
 
 async def _handle_proactive(state: _WorkerState) -> None:
@@ -460,6 +461,16 @@ async def _touch_message_at(user_id: str) -> None:
         await touch_message_at(user_id)
     except Exception as exc:
         logger.debug("[worker] touch_message_at failed: %s", exc)
+
+
+async def _emit_milestones(user_id: str) -> None:
+    """Trip any newly-reached milestone rows in Pg.  Idempotent — the
+    emitter dedupes on payload.key so repeated calls are cheap."""
+    from .core.milestones import maybe_emit_after_turn
+    try:
+        await maybe_emit_after_turn(user_id)
+    except Exception as exc:
+        logger.debug("[worker] milestone emit failed: %s", exc)
 
 
 async def _maybe_mark_onboarded(user_id: str, agent) -> None:

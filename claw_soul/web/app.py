@@ -142,6 +142,13 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app.add_api_route("/api/marketplace/search", _api_marketplace_search, methods=["POST"])
     app.add_api_route("/api/marketplace/browse", _api_marketplace_browse, methods=["GET"])
     app.add_api_route("/api/marketplace/install", _api_marketplace_install, methods=["POST"])
+
+    # Sanctum landing-page APIs
+    from . import sanctum_api
+    app.add_api_route("/api/sanctum/hero", sanctum_api.hero, methods=["GET"])
+    app.add_api_route("/api/sanctum/photo/{filename}", sanctum_api.photo, methods=["GET"])
+    app.add_api_route("/api/sanctum/status", sanctum_api.status, methods=["GET"])
+    app.add_api_route("/api/sanctum/milestones", sanctum_api.milestones, methods=["GET"])
     app.add_api_route("/api/marketplace/stats", _api_marketplace_stats, methods=["GET"])
     # Legacy aliases
     app.add_api_route("/api/skillhub/search", _api_marketplace_search, methods=["POST"])

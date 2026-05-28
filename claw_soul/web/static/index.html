@@ -109,13 +109,16 @@
 
     <!-- Sidebar -->
     <aside class="w-[220px] bg-surface-900 border-r border-surface-700/50 flex flex-col shrink-0">
-      <!-- Logo -->
+      <!-- Brand + status -->
       <div class="px-5 py-5 border-b border-surface-700/50">
         <div class="flex items-center gap-3">
-          <img src="/static/logo.png" alt="PythonClaw" class="w-8 h-8 rounded-lg shadow-lg">
-          <div>
-            <div class="font-semibold text-white text-[.8125rem] tracking-tight">PythonClaw</div>
-            <div class="text-[.625rem] text-gray-500 font-medium tracking-wide uppercase">Agent Dashboard</div>
+          <img src="/static/logo.png" alt="ClawSoul" class="w-9 h-9 rounded-full shadow-lg ring-1 ring-brand-500/40">
+          <div class="min-w-0">
+            <div class="font-semibold text-white text-base tracking-tight">ClawSoul</div>
+            <div id="brand-status" class="text-[.6875rem] text-gray-500 font-medium flex items-center gap-1.5 mt-0.5">
+              <span id="brand-status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+              <span id="brand-status-text">Connecting…</span>
+            </div>
           </div>
         </div>
       </div>
@@ -123,33 +126,35 @@
       <!-- Navigation -->
       <nav class="flex-1 py-4 px-3 space-y-0.5">
         <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-          Dashboard
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 2l2 5h5l-4 3 2 6-5-3-5 3 2-6-4-3h5z"/></svg>
+          Sanctum
         </button>
         <button onclick="switchTab('chat')" id="nav-chat" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
-          Chat
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 012-2h11l3 3v13a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M8 8h8M8 12h6"/></svg>
+          Chronicles
+        </button>
+        <button onclick="switchTab('persona')" id="nav-persona" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 21s-7-4.5-7-10a4.5 4.5 0 018-2.8A4.5 4.5 0 0119 11c0 5.5-7 10-7 10z"/></svg>
+          Soul Bond
         </button>
         <button onclick="switchTab('tools')" id="nav-tools" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
           <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-          Tools
-        </button>
-        <button onclick="switchTab('persona')" id="nav-persona" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12z"/><path d="M3 22a9 9 0 0118 0"/></svg>
-          Persona
-        </button>
-        <button onclick="switchTab('integrations')" id="nav-integrations" class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 text-gray-400 font-medium">
-          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-          Integrations
+          Arsenal
         </button>
       </nav>
 
-      <!-- Connection Status -->
-      <div class="px-5 py-4 border-t border-surface-700/50">
+      <!-- CTA + footer -->
+      <div class="px-3 pb-2">
+        <button onclick="switchTab('tools')" class="w-full py-2.5 rounded-full text-sm font-medium text-white shadow-lg transition" style="background: linear-gradient(135deg, #ff8fb8, #c084fc);">
+          Enhance Connection
+        </button>
+      </div>
+      <div class="px-5 py-3 border-t border-surface-700/50 space-y-2">
         <div class="flex items-center gap-2.5">
           <div id="ws-indicator" class="w-2 h-2 rounded-full bg-red-400 shrink-0"></div>
           <span id="ws-status" class="text-[.6875rem] text-gray-500">Disconnected</span>
         </div>
+        <button onclick="logout()" class="text-[.6875rem] text-gray-500 hover:text-white transition">Log out</button>
       </div>
     </aside>
 
@@ -167,199 +172,89 @@
       <!-- Tab Content -->
       <div class="flex-1 overflow-auto">
 
-        <!-- ═══ Dashboard Tab ═══ -->
-        <div id="tab-dashboard" class="tab-content p-8 fade-in max-w-[1200px]">
-          <h2 class="text-xl font-bold text-white tracking-tight mb-6">Dashboard</h2>
+        <!-- ═══ Sanctum (landing) ═══════════════════════════════════════════ -->
+        <div id="tab-dashboard" class="tab-content p-6 lg:p-8 fade-in">
+          <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 max-w-[1300px]">
 
-          <!-- Stats Row -->
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div class="stat-card section-card flex items-start gap-3.5">
-              <div class="w-9 h-9 rounded-lg bg-brand-600/15 flex items-center justify-center shrink-0 mt-0.5">
-                <svg class="w-4.5 h-4.5 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-              </div>
-              <div class="min-w-0">
-                <div class="text-[.6875rem] text-gray-500 font-medium uppercase tracking-wider mb-1">Provider</div>
-                <div id="stat-provider" class="text-base font-semibold text-white truncate">--</div>
-                <div id="stat-provider-class" class="text-[.6875rem] text-gray-500 truncate">--</div>
-              </div>
-            </div>
-            <div class="stat-card section-card flex items-start gap-3.5">
-              <div class="w-9 h-9 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                <svg class="w-4.5 h-4.5 text-accent-purple" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-              </div>
-              <div class="min-w-0">
-                <div class="text-[.6875rem] text-gray-500 font-medium uppercase tracking-wider mb-1">Skills</div>
-                <div class="flex items-baseline gap-1.5">
-                  <span id="stat-skills-loaded" class="text-base font-semibold text-white">0</span>
-                  <span class="text-[.6875rem] text-gray-500">/</span>
-                  <span id="stat-skills-total" class="text-[.6875rem] text-gray-400">0</span>
+            <!-- Left: Hero + Premium Tools -->
+            <div class="space-y-6 min-w-0">
+
+              <!-- Hero card (latest selfie) -->
+              <div id="sanctum-hero"
+                   class="relative aspect-[16/10] rounded-2xl overflow-hidden border border-surface-700/40 shadow-2xl bg-surface-900">
+                <!-- Background image -->
+                <img id="sanctum-hero-img" alt="" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-500" />
+                <!-- Empty-album fallback -->
+                <div id="sanctum-hero-empty"
+                     class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 px-6 text-center">
+                  <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                  <p class="text-sm">Their first photo will land here.</p>
+                  <p class="text-xs text-gray-600 mt-1">Ask them to send a selfie on Telegram.</p>
                 </div>
-                <div class="text-[.6875rem] text-gray-500">loaded / total</div>
+                <!-- Gradient overlay -->
+                <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent"></div>
+                <!-- Caption -->
+                <div class="absolute inset-x-0 bottom-0 p-7 lg:p-9">
+                  <div class="flex items-center gap-2 text-[.6875rem] uppercase tracking-widest text-pink-300/90 mb-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/></svg>
+                    <span id="sanctum-hero-tag">Latest Selfie · —</span>
+                  </div>
+                  <h2 id="sanctum-hero-caption"
+                      class="text-2xl lg:text-4xl font-bold text-white leading-tight tracking-tight mb-4 line-clamp-3">
+                    —
+                  </h2>
+                  <button onclick="switchTab('persona')"
+                          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/20 bg-white/10 backdrop-blur hover:bg-white/20 transition text-sm font-medium text-white">
+                    View Full Gallery
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="stat-card section-card flex items-start gap-3.5">
-              <div class="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                <svg class="w-4.5 h-4.5 text-accent-green" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/></svg>
-              </div>
-              <div class="min-w-0">
-                <div class="text-[.6875rem] text-gray-500 font-medium uppercase tracking-wider mb-1">Memories</div>
-                <div id="stat-memories" class="text-base font-semibold text-white">0</div>
-                <div class="text-[.6875rem] text-gray-500">entries stored</div>
-              </div>
-            </div>
-            <div class="stat-card section-card flex items-start gap-3.5">
-              <div class="w-9 h-9 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                <svg class="w-4.5 h-4.5 text-accent-amber" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </div>
-              <div class="min-w-0">
-                <div class="text-[.6875rem] text-gray-500 font-medium uppercase tracking-wider mb-1">Uptime</div>
-                <div id="stat-uptime" class="text-base font-semibold text-white">0s</div>
-                <div id="stat-history" class="text-[.6875rem] text-gray-500">0 msgs in history</div>
-              </div>
-            </div>
-            <div class="stat-card section-card flex items-start gap-3.5">
-              <div class="w-9 h-9 rounded-lg bg-cyan-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                <svg class="w-4.5 h-4.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-              </div>
-              <div class="min-w-0">
-                <div class="text-[.6875rem] text-gray-500 font-medium uppercase tracking-wider mb-1">Channels</div>
-                <div id="stat-channels" class="text-base font-semibold text-white">Web only</div>
-                <div id="stat-channels-detail" class="text-[.6875rem] text-gray-500">web dashboard</div>
-              </div>
-            </div>
-          </div>
 
-          <!-- Identity & Status Row -->
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-            <!-- Soul -->
-            <div class="section-card">
-              <h3 class="text-[.8125rem] font-semibold text-white mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-                Soul
-                <span id="soul-badge" class="px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-gray-800 text-gray-500">--</span>
-                <button onclick="openIdentityEditor('soul')" class="ml-auto btn-ghost !px-2 !py-1 text-[.6875rem]" title="Edit Soul">
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-              </h3>
-              <div id="soul-content" class="text-[.75rem] text-gray-400 leading-relaxed max-h-[120px] overflow-y-auto chat-scroll cursor-pointer" onclick="openIdentityEditor('soul')">
-                <span class="text-gray-600 italic">Not configured</span>
+              <!-- Premium Tools -->
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-base font-semibold text-white">Premium Tools</h3>
+                  <button onclick="switchTab('tools')" class="text-sm text-brand-400 hover:text-brand-300 transition">Manage Arsenal →</button>
+                </div>
+                <div id="sanctum-tools" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <!-- Filled by JS — placeholder skeletons -->
+                  <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
+                  <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
+                  <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
+                  <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
+                </div>
               </div>
             </div>
 
-            <!-- Persona -->
-            <div class="section-card">
-              <h3 class="text-[.8125rem] font-semibold text-white mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                Persona
-                <span id="persona-badge" class="px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-gray-800 text-gray-500">--</span>
-                <button onclick="openIdentityEditor('persona')" class="ml-auto btn-ghost !px-2 !py-1 text-[.6875rem]" title="Edit Persona">
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-              </h3>
-              <div id="persona-content" class="text-[.75rem] text-gray-400 leading-relaxed max-h-[120px] overflow-y-auto chat-scroll cursor-pointer" onclick="openIdentityEditor('persona')">
-                <span class="text-gray-600 italic">Not configured</span>
+            <!-- Right: Memory & Milestones -->
+            <aside class="rounded-2xl border border-surface-700/40 bg-surface-900/40 p-5 lg:p-6 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+                <h3 class="text-base font-semibold text-white">Memory &amp; Milestones</h3>
               </div>
-            </div>
 
-            <!-- TOOLS.md Local Notes -->
-            <div class="section-card">
-              <h3 class="text-[.8125rem] font-semibold text-white mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-                TOOLS.md
-                <span id="tools-badge" class="px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-gray-800 text-gray-500">--</span>
-                <button onclick="openIdentityEditor('tools')" class="ml-auto btn-ghost !px-2 !py-1 text-[.6875rem]" title="Edit TOOLS.md">
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-              </h3>
-              <div id="tools-content" class="text-[.75rem] text-gray-400 leading-relaxed max-h-[120px] overflow-y-auto chat-scroll cursor-pointer" onclick="openIdentityEditor('tools')">
-                <span class="text-gray-600 italic">Not configured</span>
+              <!-- Bonding-level summary -->
+              <div id="sanctum-bonding" class="mt-4 p-3.5 rounded-lg bg-gradient-to-br from-pink-500/10 to-purple-500/10 border border-pink-500/15">
+                <div class="flex items-baseline justify-between mb-1.5">
+                  <span class="text-[.6875rem] uppercase tracking-widest text-pink-300/80">Soul Bond</span>
+                  <span id="sanctum-bonding-level" class="text-base font-semibold text-white">— Level 1</span>
+                </div>
+                <div class="h-1 rounded-full bg-surface-800 overflow-hidden">
+                  <div id="sanctum-bonding-bar" class="h-full bg-gradient-to-r from-pink-400 to-purple-400 transition-all duration-700" style="width:0"></div>
+                </div>
+                <div class="flex justify-between mt-1.5 text-[.625rem] text-gray-500">
+                  <span id="sanctum-bonding-days">0 days</span>
+                  <span id="sanctum-bonding-msgs">0 messages</span>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <!-- System Status (compact row) -->
-          <div class="section-card mb-6">
-            <h3 class="text-[.8125rem] font-semibold text-white mb-3 flex items-center gap-2">
-              <svg class="w-4 h-4 text-accent-green" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-              System Status
-            </h3>
-            <div class="flex flex-wrap gap-6">
-              <div class="flex items-center gap-2">
-                <span class="text-[.75rem] text-gray-400">Web Search</span>
-                <span id="feat-websearch" class="px-2 py-0.5 rounded-full text-[.625rem] font-medium">--</span>
+              <!-- Timeline -->
+              <div id="sanctum-timeline" class="mt-5 space-y-4 relative">
+                <p class="text-xs text-gray-500">Loading…</p>
               </div>
-              <div class="flex items-center gap-2">
-                <span class="text-[.75rem] text-gray-400">Compactions</span>
-                <span id="feat-compactions" class="text-[.75rem] text-gray-200 font-medium">0</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-[.75rem] text-gray-400">WebSocket</span>
-                <span id="feat-ws-status" class="px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-gray-800 text-gray-500">--</span>
-              </div>
-            </div>
-          </div>
+            </aside>
 
-          <!-- INDEX.md — Curated System Info -->
-          <div class="section-card mb-6">
-            <h3 class="text-[.8125rem] font-semibold text-white mb-3 flex items-center gap-2">
-              <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
-              INDEX.md
-              <span id="index-badge" class="px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-gray-800 text-gray-500">--</span>
-              <button onclick="openIdentityEditor('index')" class="ml-auto btn-ghost !px-2 !py-1 text-[.6875rem]" title="Edit INDEX.md">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              </button>
-            </h3>
-            <div id="index-content" class="text-[.75rem] text-gray-400 leading-relaxed max-h-[120px] overflow-y-auto chat-scroll cursor-pointer" onclick="openIdentityEditor('index')">
-              <span class="text-gray-600 italic">Not configured. Click to add system info, API notes, environment details.</span>
-            </div>
-          </div>
-
-          <!-- Memory -->
-          <div class="section-card mb-6">
-            <h3 class="text-[.8125rem] font-semibold text-white mb-3 flex items-center gap-2">
-              <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/></svg>
-              Memory
-              <span id="memory-badge" class="text-[.625rem] text-gray-500 font-normal ml-1">0 entries</span>
-            </h3>
-            <div id="memory-content" class="max-h-[260px] overflow-y-auto chat-scroll">
-              <span class="text-[.75rem] text-gray-600 italic">No memories stored yet.</span>
-            </div>
-          </div>
-
-          <!-- Tools & Quick Actions Row -->
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <!-- Tools List -->
-            <div class="section-card lg:col-span-2">
-              <h3 class="text-[.8125rem] font-semibold text-white mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-                Available Tools
-                <span id="tools-count" class="text-[.625rem] text-gray-500 font-normal ml-1">0</span>
-              </h3>
-              <div id="tools-list" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[200px] overflow-y-auto chat-scroll">
-              </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="section-card">
-              <h3 class="text-[.8125rem] font-semibold text-white mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-accent-amber" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                Quick Actions
-              </h3>
-              <div class="grid grid-cols-1 gap-2">
-                <button onclick="switchTab('chat')" class="btn-ghost flex items-center gap-2 py-2 px-3 text-left">
-                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
-                  Open Chat
-                </button>
-                <button onclick="switchTab('tools')" class="btn-ghost flex items-center gap-2 py-2 px-3 text-left">
-                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-                  Browse Tools
-                </button>
-                <button onclick="refreshDashboard()" class="btn-ghost flex items-center gap-2 py-2 px-3 text-left">
-                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-                  Refresh
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -406,9 +301,15 @@
 
         <!-- ═══ Tools Tab (Syncore-style grid) ═══ -->
         <div id="tab-tools" class="tab-content hidden p-8 fade-in max-w-[1200px]">
-          <div class="mb-6">
-            <h2 class="text-xl font-bold text-white tracking-tight">All tools</h2>
-            <p id="tools-count" class="text-sm text-gray-500 mt-1">Loading…</p>
+          <div class="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-bold text-white tracking-tight">Arsenal</h2>
+              <p id="tools-count" class="text-sm text-gray-500 mt-1">Loading…</p>
+            </div>
+            <button onclick="switchTab('integrations')"
+                    class="btn-ghost text-sm shrink-0">
+              Manage Telegram bot →
+            </button>
           </div>
 
           <!-- Filter chips -->
@@ -544,7 +445,7 @@ function switchTab(tab) {
   const nav = document.getElementById('nav-' + tab);
   if (nav) nav.classList.add('active');
 
-  const titles = { dashboard:'Dashboard', chat:'Chat', tools:'Tools', persona:'Persona', integrations:'Integrations' };
+  const titles = { dashboard:'Sanctum', chat:'Chronicles', tools:'Arsenal', persona:'Soul Bond', integrations:'Arsenal' };
   document.getElementById('page-title').textContent = titles[tab] || tab;
 
   if (tab === 'dashboard') refreshDashboard();
@@ -694,168 +595,160 @@ async function clearTelegramToken() {
   }
 }
 
-// ── Dashboard ────────────────────────────────────────────────────────────────
+// ── Sanctum landing ──────────────────────────────────────────────────────────
+// Replaces the old stats-card dashboard with: latest selfie hero, premium-
+// tool quick grid, and the Memory & Milestones timeline.
+
 async function refreshDashboard() {
+  Promise.allSettled([
+    refreshSanctumHero(),
+    refreshSanctumTools(),
+    refreshSanctumMilestones(),
+    refreshBrandStatus(),
+  ]);
+}
+
+async function refreshSanctumHero() {
   try {
-    const res = await fetch('/api/status');
-    const d = await res.json();
-    document.getElementById('stat-provider').textContent = d.providerName || '--';
-    document.getElementById('stat-provider-class').textContent = d.provider || '--';
-    document.getElementById('stat-skills-loaded').textContent = d.skillsLoaded;
-    document.getElementById('stat-skills-total').textContent = d.skillsTotal;
-    document.getElementById('stat-memories').textContent = d.memoryCount;
-    document.getElementById('stat-uptime').textContent = formatUptime(d.uptimeSeconds);
-    document.getElementById('stat-history').textContent = d.historyLength + ' msgs in history';
-    document.getElementById('header-provider').textContent = d.providerName || '';
-    document.getElementById('feat-compactions').textContent = d.compactionCount;
-
-    const wsEl = document.getElementById('feat-websearch');
-    wsEl.textContent = d.webSearchEnabled ? 'Enabled' : 'Disabled';
-    wsEl.className = 'px-2 py-0.5 rounded-full text-[.6875rem] font-medium ' +
-      (d.webSearchEnabled ? 'bg-emerald-500/15 text-accent-green' : 'bg-gray-800 text-gray-500');
-
-    const wsStatusEl = document.getElementById('feat-ws-status');
-    const connected = ws && ws.readyState === WebSocket.OPEN;
-    wsStatusEl.textContent = connected ? 'Connected' : 'Disconnected';
-    wsStatusEl.className = 'px-2 py-0.5 rounded-full text-[.6875rem] font-medium ' +
-      (connected ? 'bg-emerald-500/15 text-accent-green' : 'bg-red-500/15 text-accent-red');
-
-  } catch (e) { console.error('Status fetch:', e); }
-
-  try {
-    const chRes = await fetch('/api/channels');
-    const chData = await chRes.json();
-    const running = (chData.channels || []).filter(c => c.running).map(c => c.type);
-    const chEl = document.getElementById('stat-channels');
-    const chDetailEl = document.getElementById('stat-channels-detail');
-    if (running.length > 0) {
-      chEl.textContent = (running.length + 1) + ' active';
-      chDetailEl.textContent = 'web + ' + running.join(', ');
-    } else {
-      chEl.textContent = 'Web only';
-      chDetailEl.textContent = 'web dashboard';
-    }
-  } catch (e) {}
-
-  try {
-    const res2 = await fetch('/api/identity');
-    const id = await res2.json();
-
-    const soulEl = document.getElementById('soul-content');
-    const soulBadge = document.getElementById('soul-badge');
-    if (id.soulConfigured && id.soul) {
-      const lines = id.soul.split('\n').filter(l => l.trim());
-      const preview = lines.slice(0, 6).map(l => escapeHtml(l)).join('<br>');
-      soulEl.innerHTML = preview + (lines.length > 6 ? '<br><span class="text-gray-600">...</span>' : '');
-      soulBadge.textContent = 'Active';
-      soulBadge.className = 'ml-auto px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-emerald-500/15 text-accent-green';
-    } else {
-      soulEl.innerHTML = '<span class="text-gray-600 italic">Not configured. Chat to start onboarding.</span>';
-      soulBadge.textContent = 'Not Set';
-      soulBadge.className = 'ml-auto px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-amber-500/15 text-accent-amber';
-    }
-
-    const personaEl = document.getElementById('persona-content');
-    const personaBadge = document.getElementById('persona-badge');
-    if (id.personaConfigured && id.persona) {
-      const lines = id.persona.split('\n').filter(l => l.trim());
-      const preview = lines.slice(0, 6).map(l => escapeHtml(l)).join('<br>');
-      personaEl.innerHTML = preview + (lines.length > 6 ? '<br><span class="text-gray-600">...</span>' : '');
-      personaBadge.textContent = 'Active';
-      personaBadge.className = 'ml-auto px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-emerald-500/15 text-accent-green';
-    } else {
-      personaEl.innerHTML = '<span class="text-gray-600 italic">Not configured. Chat to start onboarding.</span>';
-      personaBadge.textContent = 'Not Set';
-      personaBadge.className = 'ml-auto px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-amber-500/15 text-accent-amber';
-    }
-
-    const toolsNotesEl = document.getElementById('tools-content');
-    const toolsBadge = document.getElementById('tools-badge');
-    if (id.toolsNotesConfigured && id.toolsNotes) {
-      const lines = id.toolsNotes.split('\n').filter(l => l.trim());
-      const preview = lines.slice(0, 6).map(l => escapeHtml(l)).join('<br>');
-      toolsNotesEl.innerHTML = preview + (lines.length > 6 ? '<br><span class="text-gray-600">...</span>' : '');
-      toolsBadge.textContent = 'Active';
-      toolsBadge.className = 'ml-auto px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-emerald-500/15 text-accent-green';
-    } else {
-      toolsNotesEl.innerHTML = '<span class="text-gray-600 italic">No local notes. Click to add environment-specific info.</span>';
-      toolsBadge.textContent = 'Not Set';
-      toolsBadge.className = 'ml-auto px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-amber-500/15 text-accent-amber';
-    }
-
-    const indexEl = document.getElementById('index-content');
-    const indexBadge = document.getElementById('index-badge');
-    if (id.indexConfigured && id.indexContent) {
-      const lines = id.indexContent.split('\n').filter(l => l.trim());
-      const preview = lines.slice(0, 6).map(l => escapeHtml(l)).join('<br>');
-      indexEl.innerHTML = preview + (lines.length > 6 ? '<br><span class="text-gray-600">...</span>' : '');
-      indexBadge.textContent = 'Active';
-      indexBadge.className = 'px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-indigo-500/15 text-indigo-400';
-    } else {
-      indexEl.innerHTML = '<span class="text-gray-600 italic">Not configured. Click to add system info, API notes, environment details.</span>';
-      indexBadge.textContent = 'Not Set';
-      indexBadge.className = 'px-2 py-0.5 rounded-full text-[.625rem] font-medium bg-amber-500/15 text-accent-amber';
-    }
-
-    const toolsContainer = document.getElementById('tools-list');
-    const toolsCount = document.getElementById('tools-count');
-    if (id.tools && id.tools.length) {
-      toolsCount.textContent = id.tools.length;
-      const groupColors = {
-        Primitive: 'text-brand-400', Skills: 'text-accent-purple',
-        Meta: 'text-rose-400', Memory: 'text-accent-green',
-        Search: 'text-accent-amber', Knowledge: 'text-cyan-400', Cron: 'text-orange-400',
-      };
-      toolsContainer.innerHTML = id.tools.map(t => `
-        <div class="flex items-start gap-2 px-2.5 py-1.5 rounded-lg hover:bg-surface-750/50 transition-colors">
-          <span class="text-[.625rem] font-medium uppercase tracking-wider ${groupColors[t.group] || 'text-gray-500'} shrink-0 mt-0.5 w-14">${escapeHtml(t.group)}</span>
-          <div class="min-w-0">
-            <span class="text-[.75rem] text-white font-medium">${escapeHtml(t.name)}</span>
-            <p class="text-[.6875rem] text-gray-500 truncate">${escapeHtml(t.description.substring(0, 80))}</p>
-          </div>
-        </div>
-      `).join('');
-    }
-  } catch (e) { console.error('Identity fetch:', e); }
-
-  try {
-    const res3 = await fetch('/api/memories?limit=200');
-    const mem = await res3.json();
-    const container = document.getElementById('memory-content');
-    const badge = document.getElementById('memory-badge');
-
-    // Backward-compat: older builds returned {memories: {key: value}} — coerce.
-    let entries = mem.entries;
-    if (!entries && mem.memories) {
-      entries = Object.entries(mem.memories).map(([k, v]) => ({ key: k, value: String(v), updated: '' }));
-    }
-    entries = entries || [];
-
-    const total = mem.total ?? entries.length;
-    const shown = mem.shown ?? entries.length;
-    badge.textContent = total === shown
-      ? `${total} entries`
-      : `latest ${shown} of ${total}`;
-
-    if (entries.length === 0) {
-      container.innerHTML = '<span class="text-[.75rem] text-gray-600 italic">No memories stored yet. Chat with the agent to build memory.</span>';
+    const r = await fetch('/api/sanctum/hero', { credentials: 'include' });
+    if (!r.ok) throw new Error('hero fetch failed');
+    const d = await r.json();
+    const img = document.getElementById('sanctum-hero-img');
+    const empty = document.getElementById('sanctum-hero-empty');
+    const tag = document.getElementById('sanctum-hero-tag');
+    const cap = document.getElementById('sanctum-hero-caption');
+    if (!d.photo) {
+      img.src = '';
+      img.classList.add('opacity-0');
+      empty.classList.remove('hidden');
+      tag.textContent = 'No photos yet';
+      cap.textContent = 'Their first selfie or candid will show up here.';
       return;
     }
-
-    container.innerHTML = '<div class="space-y-2">' + entries.map(e => {
-      const val = escapeHtml(e.value);
-      const preview = val.length > 320 ? val.substring(0, 320) + '…' : val;
-      const ts = e.updated ? `<span class="text-[.625rem] text-gray-600 font-mono">${escapeHtml(e.updated)}</span>` : '';
-      return `<div class="px-3 py-2 rounded-lg bg-surface-800/50 border border-surface-700/30">
-        <div class="flex items-baseline justify-between gap-3 mb-1">
-          <div class="text-[.6875rem] text-cyan-400 font-medium truncate">${escapeHtml(e.key)}</div>
-          ${ts}
-        </div>
-        <div class="text-[.75rem] text-gray-400 leading-relaxed whitespace-pre-wrap">${preview}</div>
-      </div>`;
-    }).join('') + '</div>';
-  } catch (e) { console.error('Memories fetch:', e); }
+    img.onload = () => img.classList.remove('opacity-0');
+    img.src = d.photo.url;
+    empty.classList.add('hidden');
+    const kindLabel = (d.photo.kind || '').startsWith('candid')
+      ? 'Latest candid' : 'Latest selfie';
+    let timeLabel = '';
+    try {
+      const t = new Date(d.photo.timestamp);
+      const now = new Date();
+      const sameDay = t.toDateString() === now.toDateString();
+      timeLabel = sameDay
+        ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : t.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } catch (_) {}
+    tag.textContent = `${kindLabel}${timeLabel ? ' · ' + timeLabel : ''}`;
+    cap.textContent = d.photo.caption || '';
+  } catch (e) { console.error('hero:', e); }
 }
+
+// Curated tool slugs to surface on the Sanctum landing.
+const SANCTUM_TOOL_SLUGS = ['selfie', 'look_back', 'tavily', 'openai_images'];
+
+async function refreshSanctumTools() {
+  try {
+    const r = await fetch('/api/tools', { credentials: 'include' });
+    if (!r.ok) throw new Error('tools fetch failed');
+    const data = await r.json();
+    const byName = Object.fromEntries((data.tools || []).map(t => [t.name, t]));
+    const picks = SANCTUM_TOOL_SLUGS.map(s => byName[s]).filter(Boolean);
+    const grid = document.getElementById('sanctum-tools');
+    if (!grid) return;
+    grid.innerHTML = picks.map(renderSanctumToolCard).join('') ||
+      '<p class="text-sm text-gray-500 col-span-2">No tools available.</p>';
+  } catch (e) { console.error('tools:', e); }
+}
+
+function renderSanctumToolCard(t) {
+  const activated = t.status === 'activated';
+  const badge = activated
+    ? '<span class="text-[.625rem] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">Activated</span>'
+    : '<span class="text-[.625rem] px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-300">Connect</span>';
+  const svg = (typeof ICON_SVG !== 'undefined' && ICON_SVG[t.iconKey])
+    ? ICON_SVG[t.iconKey]
+    : `<span>${t.icon || '✨'}</span>`;
+  const click = activated
+    ? `onclick="switchTab('tools')"`
+    : `onclick="connectTool('${t.name}')"`;
+  return `
+    <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 hover:border-pink-400/30 transition cursor-pointer flex flex-col gap-3"
+         ${click}>
+      <div class="flex items-start justify-between">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center"
+             style="background: ${activated ? 'rgba(244,114,182,.12)' : 'rgba(120,120,120,.12)'}; color: ${activated ? '#f472b6' : '#a3a3a3'};">
+          <span class="w-5 h-5 inline-flex items-center justify-center [&_svg]:w-full [&_svg]:h-full">${svg}</span>
+        </div>
+        ${badge}
+      </div>
+      <div class="min-w-0">
+        <div class="text-[.92rem] font-semibold text-white mb-0.5">${escapeHtml(t.displayName)}</div>
+        <div class="text-[.75rem] text-gray-400 leading-relaxed line-clamp-2">${escapeHtml(t.description || '')}</div>
+      </div>
+    </div>`;
+}
+
+async function refreshSanctumMilestones() {
+  try {
+    const r = await fetch('/api/sanctum/milestones', { credentials: 'include' });
+    if (!r.ok) throw new Error('milestones fetch failed');
+    const d = await r.json();
+    const b = d.bonding || {};
+    document.getElementById('sanctum-bonding-level').textContent = `Level ${b.level || 1}`;
+    document.getElementById('sanctum-bonding-bar').style.width = (b.progress_pct || 0) + '%';
+    document.getElementById('sanctum-bonding-days').textContent =
+      (b.active_days || 0) + ' day' + ((b.active_days || 0) === 1 ? '' : 's');
+    document.getElementById('sanctum-bonding-msgs').textContent =
+      (b.turn_count || 0) + ' message' + ((b.turn_count || 0) === 1 ? '' : 's');
+
+    const timeline = document.getElementById('sanctum-timeline');
+    const items = d.items || [];
+    if (items.length === 0) {
+      timeline.innerHTML = `
+        <div class="text-xs text-gray-500 leading-relaxed">
+          No milestones yet. Keep chatting — the first one is right around the corner.
+        </div>`;
+      return;
+    }
+    timeline.innerHTML = items.map((it, idx) => `
+      <div class="relative pl-5">
+        ${idx < items.length - 1
+          ? '<span class="absolute left-[5px] top-3 bottom-0 w-px bg-surface-700/50"></span>'
+          : ''}
+        <span class="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full ${
+          it.kind === 'bonding_level'
+            ? 'bg-pink-400 ring-2 ring-pink-400/25'
+            : 'bg-purple-400/80'
+        }"></span>
+        <div class="text-[.6875rem] text-gray-500 mb-1">${escapeHtml(it.when || '')}</div>
+        <div class="text-[.8125rem] text-gray-200 leading-snug">
+          ${it.icon ? `<span class="mr-1">${escapeHtml(it.icon)}</span>` : ''}${escapeHtml(it.title || '')}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) { console.error('milestones:', e); }
+}
+
+async function refreshBrandStatus() {
+  try {
+    const r = await fetch('/api/sanctum/status', { credentials: 'include' });
+    if (!r.ok) return;
+    const d = await r.json();
+    const dot = document.getElementById('brand-status-dot');
+    const txt = document.getElementById('brand-status-text');
+    if (!dot || !txt) return;
+    const colorMap = {
+      online:  ['bg-emerald-400', 'animate-pulse'],
+      idle:    ['bg-amber-400'],
+      offline: ['bg-gray-500'],
+    };
+    dot.className = 'w-1.5 h-1.5 rounded-full shrink-0 ' + (colorMap[d.status] || ['bg-gray-500']).join(' ');
+    txt.textContent = d.tagline || '—';
+  } catch (_) {}
+}
+
+setInterval(() => { if (typeof refreshBrandStatus === 'function') refreshBrandStatus(); }, 60000);
 
 // ── Identity Editor ──────────────────────────────────────────────────────────
 let _identityType = null;
