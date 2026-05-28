@@ -134,6 +134,62 @@ CATALOG: list[Tool] = [
         accent="#94a3b8",
     ),
 
+    # ── Always-on companion skills (shipped, no auth) ──────────────────────
+    Tool(
+        name="horoscope",
+        display_name="Horoscope",
+        description="Daily reading in your culture — Chinese 黄历, Western zodiac, 占い, rashifal.",
+        icon="🔮", icon_key="horoscope",
+        auth_type="none",
+        category="Standard",
+        accent="#a855f7",
+    ),
+    Tool(
+        name="look_back",
+        display_name="Photo Album Recap",
+        description="Look through past selfies together — milestones, anniversaries, throwbacks.",
+        icon="🖼️", icon_key="look_back",
+        auth_type="none",
+        category="Premium",
+        accent="#ec4899",
+    ),
+    Tool(
+        name="now_playing",
+        display_name="Now Playing",
+        description="They share what they're listening to right now — in character.",
+        icon="🎧", icon_key="now_playing",
+        auth_type="none",
+        category="Standard",
+        accent="#22d3ee",
+    ),
+    Tool(
+        name="bucket_list",
+        display_name="Couple Bucket List",
+        description='"WE" aspirations — places, foods, milestones to chase together.',
+        icon="✨", icon_key="bucket_list",
+        auth_type="none",
+        category="Standard",
+        accent="#facc15",
+    ),
+    Tool(
+        name="letter",
+        display_name="Long-form Letter",
+        description="A heartfelt long letter on milestones, hard moments, or big news.",
+        icon="💌", icon_key="letter",
+        auth_type="none",
+        category="Premium",
+        accent="#f472b6",
+    ),
+    Tool(
+        name="mood_share",
+        display_name="Mood Share",
+        description="A passing emotional beat — lyric, quote, one-line poem they're feeling.",
+        icon="💭", icon_key="mood_share",
+        auth_type="none",
+        category="Standard",
+        accent="#c084fc",
+    ),
+
     # ── User-provided API keys ─────────────────────────────────────────────
     Tool(
         name="tavily",
