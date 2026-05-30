@@ -2304,7 +2304,7 @@ async function wizardNext() {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choices: _wizardChoices }),
+      body: JSON.stringify({ choices: { ..._wizardChoices, userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
     });
     const data = await r.json();
     if (!r.ok) {

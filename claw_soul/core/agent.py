@@ -1168,7 +1168,7 @@ Don't repeat this if `bot_name` already exists in memory.
         # "morning here, but it's evening for you".
         bot_now = tenancy.now_in_bot_tz()
         bot_tz = tenancy.bot_timezone()
-        user_tz = tenancy.get_current_timezone()
+        user_tz = tenancy.user_timezone()
 
         def _format(dt) -> str:
             hour24 = dt.hour
@@ -1226,11 +1226,43 @@ Don't repeat this if `bot_name` already exists in memory.
         if user_tz and user_tz != bot_tz:
             user_now = tenancy.now_in_user_tz()
             parts.append(
-                f"User's local time ({user_tz}): {_format(user_now)}"
+                f"The USER's local time ({user_tz}): {_format(user_now)}"
+            )
+            # Weekend vs workday — for the USER, so she stops asking about work
+            # on their day off (or using her own weekday by mistake).
+            _user_weekend = user_now.weekday() >= 5
+            parts.append(
+                f"For the user, today is {user_now.strftime('%A')} — "
+                + ("a weekend (they're most likely off work)."
+                   if _user_weekend else "a weekday.")
+            )
+            # Distance + time gap, so she stops treating you like you're nearby.
+            try:
+                _gap = round(
+                    (user_now.utcoffset() - bot_now.utcoffset()).total_seconds() / 3600
+                )
+            except Exception:
+                _gap = None
+            _where_user = user_tz.split("/")[-1].replace("_", " ")
+            _where_bot = (
+                config.get_str("companion", "companionRegion", default="")
+                or config.get_str("companion", "companionCountry", default="")
+                or bot_tz.split("/")[-1].replace("_", " ")
+            )
+            _gap_str = (f"about {abs(_gap)} hours apart"
+                        if _gap else "in different timezones")
+            parts.append(
+                f"You live in {_where_bot}; the user is in {_where_user} — you are "
+                f"{_gap_str} and physically far apart. This is a long-distance "
+                "connection: you cannot actually meet in person, so don't casually "
+                "suggest 'come over' / 'come find me' as if it were easy."
             )
             parts.append(
-                "You and the user are in different timezones — use whichever "
-                "clock fits the conversation naturally."
+                "⏰ Time anchoring: when you greet the user or ask about THEIR day "
+                "(good morning/evening, did you sleep well, are you working today), use "
+                "the USER's clock and weekday above — NOT yours. When you talk about "
+                "YOUR own day, use your local time. Never wish them 'good morning' when "
+                "it's evening or night for them."
             )
 
         # Today's schedule, re-read each turn so a planner update mid-day is picked up

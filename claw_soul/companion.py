@@ -90,7 +90,7 @@ TRAITS_MAX = _MAX_TRAITS
 # Fields that are validated against OPTIONS, plus the free-text ones.
 _CHOICE_FIELDS = set(OPTIONS.keys())
 _TEXT_FIELDS = {"userName", "companionName", "companionRegion"}
-ALL_FIELDS = _CHOICE_FIELDS | _TEXT_FIELDS | {"traits", "backstory"}
+ALL_FIELDS = _CHOICE_FIELDS | _TEXT_FIELDS | {"traits", "backstory", "userTimezone"}
 
 # Fields that may be missing on legacy configs — fall back to a sensible
 # default rather than 400-ing existing users when they re-open the wizard.
@@ -178,6 +178,13 @@ def validate(choices: dict[str, Any]) -> dict[str, Any]:
     backstory = (choices.get("backstory") or "").strip()
     cleaned["backstory"] = backstory[:1000]
 
+    # User's IANA timezone (captured from the browser). Persisted so the real
+    # human's clock drives greetings/weekday on Telegram + proactive too, not a
+    # country-default guess. Kept only if it looks like a "Region/City" name.
+    utz = (choices.get("userTimezone") or "").strip()
+    if utz and "/" in utz and len(utz) <= 64:
+        cleaned["userTimezone"] = utz
+
     # Companion region — free text, optional.  If blank, pick a default city
     # from the chosen country.  Stored on the cleaned dict so the persona/
     # profile generators don't have to re-randomize each run.
@@ -253,8 +260,11 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
     # ``userCountry`` (no user region), so we resolve via the same helper
     # but with an empty region — falling through to the country-default
     # tz, which is good enough until we add a user-city field.
-    cfg.setdefault("user", {})["timezone"] = companion_to_timezone(
-        cleaned.get("userCountry", ""), "",
+    # Prefer the browser-captured IANA timezone (real human's clock); fall back
+    # to the country default only when we don't have it.
+    cfg.setdefault("user", {})["timezone"] = (
+        cleaned.get("userTimezone")
+        or companion_to_timezone(cleaned.get("userCountry", ""), "")
     )
 
     _persist_config(cfg)
