@@ -692,11 +692,16 @@ async def _handle_selfie(state: _WorkerState, slot: str | None = None) -> None:
         return
     loop = asyncio.get_event_loop()
     pinned_uid = state.user_id
+    agent = await state.get_agent()
     def _gen_selfie():
         tenancy.set_current_user(pinned_uid)
-        return take_selfie()
+        res = take_selfie()
+        # In-character caption (not the raw plan slot, which leaks the schedule
+        # format + meta actions like "sent a message").
+        cap = agent.caption_for_selfie(res.scene.activity or "") if agent else ""
+        return res, cap
     try:
-        result = await loop.run_in_executor(None, _gen_selfie)
+        result, caption = await loop.run_in_executor(None, _gen_selfie)
     except Exception as exc:
         logger.warning("[worker] selfie gen failed: %s", exc)
         return
@@ -709,7 +714,7 @@ async def _handle_selfie(state: _WorkerState, slot: str | None = None) -> None:
         with open(result.path, "rb") as f:
             await bot_app.bot.send_photo(
                 chat_id=int(chat_id), photo=f,
-                caption=result.caption()[:1024] or None,
+                caption=(caption or None),
             )
 
 

@@ -1607,6 +1607,38 @@ Don't repeat this if `bot_name` already exists in memory.
 
     # ── Main chat loop ────────────────────────────────────────────────────────
 
+    def caption_for_selfie(self, activity_hint: str = "") -> str:
+        """One short, in-character caption for a just-taken selfie.
+
+        No tools, no chat history — just the persona voice.  Used by scheduled /
+        proactive selfies so the caption is natural, NOT the raw plan slot
+        ("15:30 · …") which leaks the internal schedule format and meta actions.
+        """
+        sys_msgs = [m for m in self.messages if m.get("role") == "system"]
+        req = (
+            "You just took a selfie to send to them. Write ONE short caption in "
+            "your own voice — casual and warm, like a real person texting a photo "
+            "(max ~12 words). Do NOT include a timestamp, do NOT narrate your "
+            "schedule or actions (e.g. 'sent a message', 'paused the screen'), and "
+            "no quotation marks. Reply with ONLY the caption, in your configured "
+            "language."
+        )
+        if activity_hint:
+            req += (
+                "\nWhat you're doing right now (rephrase naturally; if it describes "
+                "an action rather than a visible scene, just caption the mood "
+                f"instead): {activity_hint[:120]}"
+            )
+        try:
+            resp = self.provider.chat(
+                messages=sys_msgs + [{"role": "user", "content": req}], tools=[],
+            )
+            cap = (resp.choices[0].message.content or "").strip().strip('"').strip()
+            return cap.splitlines()[0][:120] if cap else ""
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[Agent] caption_for_selfie failed: %s", exc)
+            return ""
+
     def _safety_guard(self, user_input) -> str | None:
         """Two-tier crisis guardrail, run before the companion model sees the turn.
 
