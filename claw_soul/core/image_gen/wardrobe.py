@@ -235,12 +235,121 @@ def _is_zh(lang: str | None) -> bool:
     return bool(lang) and lang.lower().startswith("zh")
 
 
+# ── Occasion (场合): work / sport / school / social / casual ─────────────────
+# Inferred from the current activity, on top of indoor/outdoor. Work and sport
+# need structurally different clothes (a blazer / activewear), so they get their
+# own garment sets; school/social/casual reuse the base wardrobe but bias which
+# persona style shows up.
+_WORK_GARMENTS: dict[str, dict[str, list[tuple[str, str]]]] = {
+    "female": {
+        "hot": [("短袖衬衫配西装短裤", "a short-sleeve blouse and tailored shorts"),
+                ("利落的过膝连衣裙", "a sleek knee-length work dress")],
+        "warm": [("衬衫配西装裤", "a blouse and tailored trousers"),
+                 ("简约的衬衫裙", "a simple shirtdress")],
+        "mild": [("衬衫外搭西装外套", "a blouse under a blazer"),
+                 ("针织衫配西装裤", "a knit top and tailored trousers")],
+        "cool": [("西装外套配长裤", "a blazer over trousers"),
+                 ("高领针织配西装外套", "a turtleneck under a tailored coat")],
+        "cold": [("大衣内搭西装通勤装", "a wool coat over office wear")],
+        "freezing": [("厚大衣配西装、围巾", "a heavy coat over office wear, with a scarf")],
+    },
+    "male": {
+        "hot": [("短袖衬衫配西裤", "a short-sleeve dress shirt and slacks")],
+        "warm": [("衬衫配西裤", "a button-up shirt and chinos")],
+        "mild": [("衬衫外搭西装外套", "a shirt under a blazer")],
+        "cool": [("西装外套配长裤", "a blazer and trousers")],
+        "cold": [("大衣内搭西装", "a wool coat over a blazer")],
+        "freezing": [("厚大衣、围巾配西装", "a heavy overcoat over a suit, with a scarf")],
+    },
+}
+_WORK_GARMENTS["other"] = _WORK_GARMENTS["female"]
+
+_SPORT_GARMENTS: dict[str, dict[str, list[tuple[str, str]]]] = {
+    "female": {
+        "hot": [("运动背心配紧身短裤", "a sports-bra top and bike shorts")],
+        "warm": [("运动T恤配紧身裤", "an athletic tee and leggings")],
+        "mild": [("长袖运动衫配紧身裤", "a long-sleeve training top and leggings")],
+        "cool": [("运动卫衣配紧身裤", "a sporty hoodie and leggings")],
+        "cold": [("加绒运动套装", "a fleece training set")],
+        "freezing": [("保暖跑步外套配紧身裤、运动帽", "a thermal running jacket, leggings and a beanie")],
+    },
+    "male": {
+        "hot": [("运动背心配运动短裤", "a tank top and gym shorts")],
+        "warm": [("速干T恤配运动短裤", "a dri-fit tee and shorts")],
+        "mild": [("长袖训练衫配运动裤", "a long-sleeve training top and joggers")],
+        "cool": [("运动卫衣配运动裤", "a sport hoodie and joggers")],
+        "cold": [("加绒训练套装", "a fleece training set")],
+        "freezing": [("保暖跑步外套配运动裤、帽", "a thermal running jacket, joggers and a beanie")],
+    },
+}
+_SPORT_GARMENTS["other"] = _SPORT_GARMENTS["female"]
+
+_OCC_WORK = ("上班", "工作", "开会", "通勤", "公司", "办公", "客户", "提案", "加班", "出差",
+             "work", "office", "meeting", "commut", "client", "deadline", "shift")
+_OCC_SPORT = ("健身", "运动", "跑步", "瑜伽", "球", "游泳", "爬山", "骑车", "撸铁",
+              "gym", "workout", "run", "jog", "yoga", "swim", "sport", "fitness", "hike", "lifting")
+_OCC_SCHOOL = ("上学", "上课", "大学", "课", "讲座", "图书馆", "校园", "自习", "考试",
+               "class", "lecture", "campus", "university", "college", "school", "library", "study", "exam")
+_OCC_SOCIAL = ("朋友", "聚会", "聚", "喝", "咖啡", "酒吧", "派对", "逛街", "约饭", "brunch", "看展",
+               "friend", "party", "hang", "bar", "drinks", "brunch", "meet", "gathering", "dinner with")
+
+# Which persona styles fit each occasion (intersected with the persona's lane).
+_OCC_STYLE_PREFER = {
+    "work":   ("office", "minimal", "elegant", "chic", "preppy"),
+    "school": ("casual", "preppy", "sweet", "y2k", "sporty"),
+    "social": (),       # social → use the persona's full lane (her nicest)
+    "casual": (),
+}
+
+
+def _occasion(activity: str) -> str:
+    a = (activity or "").lower()
+    if any(w in a for w in _OCC_SPORT):
+        return "sport"
+    if any(w in a for w in _OCC_WORK):
+        return "work"
+    if any(w in a for w in _OCC_SCHOOL):
+        return "school"
+    if any(w in a for w in _OCC_SOCIAL):
+        return "social"
+    return "casual"
+
+
+def _pick_style(lane: list[str], prefer: tuple[str, ...], ordinal: int) -> str:
+    cand = [s for s in lane if s in prefer] if prefer else lane
+    cand = cand or lane
+    return cand[ordinal % len(cand)]
+
+
+# ── Festival (节日) overlay — appended when today is a known holiday ──────────
+_FESTIVE = [
+    (("圣诞", "christmas", "xmas"),            ("，节日感的红绿配色", ", with a festive red-and-green touch")),
+    (("春节", "新年", "除夕", "元旦", "new year"), ("，应景的喜庆红色", ", in a festive red for the new year")),
+    (("情人节", "valentine"),                   ("，甜美的粉色系", ", in soft romantic pinks")),
+    (("万圣", "halloween"),                     ("，带一点万圣节小元素", ", with a playful Halloween touch")),
+    (("感恩", "thanksgiving"),                  ("，温暖的秋日配色", ", in warm autumn tones")),
+    (("复活", "easter"),                        ("，柔和的春日色彩", ", in soft pastel colors")),
+    (("中秋", "端午", "mid-autumn"),            ("，应景的雅致配色", ", in tasteful seasonal tones")),
+]
+
+
+def _festive(holiday: str, zh: bool) -> str:
+    h = (holiday or "").lower()
+    if not h:
+        return ""
+    for keys, (zh_s, en_s) in _FESTIVE:
+        if any(k.lower() in h for k in keys):
+            return zh_s if zh else en_s
+    return ""
+
+
 def outfit_today(
     now: datetime,
     weather: str | None,
     lang: str | None = "en",
     choices: dict | None = None,
     activity: str = "",
+    holiday: str = "",
 ) -> str:
     """A deterministic, weather- AND setting-coupled, persona-appropriate outfit.
 
@@ -266,6 +375,9 @@ def outfit_today(
     # Day ordinal increments by exactly 1 each day, so indices rotate daily;
     # the *7 on the garment decorrelates it from the style pick.
     ordinal = now.toordinal()
+    zh = _is_zh(lang)
+    fest_zh = _festive(holiday, True)
+    fest_en = _festive(holiday, False)
     setting = _setting(activity, now.hour)
 
     if setting == "home":
@@ -273,15 +385,34 @@ def outfit_today(
         # and no loud style label — it's what she lounges in at home.
         homes = _HOME_GARMENTS[gender][band]
         home_zh, home_en = homes[(ordinal * 7) % len(homes)]
-        return f"{home_zh}（在家）" if _is_zh(lang) else f"{home_en}, lounging at home"
+        return (f"{home_zh}（在家）{fest_zh}" if zh
+                else f"{home_en}, lounging at home{fest_en}")
 
-    styles = persona_styles(choices)
-    style_key = styles[ordinal % len(styles)]
-    garms = _GARMENTS[gender][band]
-    garm_zh, garm_en = garms[(ordinal * 7) % len(garms)]
-    style_zh, style_en, palette = _STYLES[style_key]
+    occ = _occasion(activity)
     extra_zh, extra_en = _condition_extra(condition, band)
 
-    if _is_zh(lang):
-        return f"{garm_zh}，{style_zh}风格{extra_zh}"
-    return f"{garm_en}, {style_en} style ({palette}){extra_en}"
+    # Sport: activewear, no style label, no weather accessories (you don't take
+    # an umbrella to the gym), no festive overlay.
+    if occ == "sport":
+        garms = _SPORT_GARMENTS[gender][band]
+        g_zh, g_en = garms[(ordinal * 7) % len(garms)]
+        return f"{g_zh}（运动）" if zh else f"{g_en}, dressed for a workout"
+
+    # Work uses smart-casual garments; school/social/casual use the base wardrobe.
+    if occ == "work":
+        garms = _WORK_GARMENTS[gender][band]
+        occ_zh, occ_en = "通勤", "for work"
+    else:
+        garms = _GARMENTS[gender][band]
+        occ_zh, occ_en = "", ""
+    g_zh, g_en = garms[(ordinal * 7) % len(garms)]
+
+    style_key = _pick_style(persona_styles(choices),
+                            _OCC_STYLE_PREFER.get(occ, ()), ordinal)
+    style_zh, style_en, palette = _STYLES[style_key]
+
+    if zh:
+        occ_tag = f"，{occ_zh}风" if occ_zh else ""
+        return f"{g_zh}，{style_zh}风格{occ_tag}{extra_zh}{fest_zh}"
+    occ_tag = f", {occ_en}" if occ_en else ""
+    return f"{g_en}, {style_en} style ({palette}){occ_tag}{extra_en}{fest_en}"

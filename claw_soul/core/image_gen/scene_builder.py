@@ -143,7 +143,10 @@ def build_scene(now: datetime | None = None) -> Scene:
     try:
         from . import wardrobe
         lang = config.get_str("agent", "language", default="en") or "en"
-        outfit = wardrobe.outfit_today(now, weather, lang, activity=activity)
+        outfit = wardrobe.outfit_today(
+            now, weather, lang, activity=activity,
+            holiday=header.get("节日", ""),
+        )
     except Exception as exc:
         logger.debug("[scene_builder] outfit skipped: %s", exc)
 
