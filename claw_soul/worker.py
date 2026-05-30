@@ -615,6 +615,16 @@ async def _handle_proactive(state: _WorkerState) -> None:
     so the next tick can see what happened.
     """
     from .scheduler.proactive import _build_prompt
+
+    # Self-heal the daily plan if it's missing/stale (e.g. the 00:01 planner
+    # tick was missed because the worker was suspended). Runs on every proactive
+    # tick but is a cheap no-op once the plan is fresh for today.
+    try:
+        from .scheduler.planner import ensure_fresh_plan
+        await ensure_fresh_plan(_build_provider())
+    except Exception as exc:
+        logger.debug("[worker] plan self-heal skipped: %s", exc)
+
     row = await _user_settings_lookup(state.user_id)
     chat_id = (row or {}).get("telegram_chat_id")
     if chat_id is None:
