@@ -23,10 +23,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..core import tenancy
+from ..core.image_gen import tigris
 from ..core.image_gen.photo_album import PhotoAlbum
 
 logger = logging.getLogger(__name__)
@@ -58,13 +59,32 @@ def _build_hero_caption(entry: dict) -> str:
     return "snapshot from earlier"
 
 
-async def hero(request) -> JSONResponse:
-    """Return the most recent in-album photo (selfie OR candid) for the
-    Sanctum hero card.  Falls back to {photo: null} when the album is
-    empty — frontend then shows a static "no photo yet" placeholder."""
+async def hero(request: Request) -> JSONResponse:
+    """Return the most recent photo (selfie OR candid) for the Sanctum
+    hero card.  Cloud mode (Tigris + Pg ``photos``) reads the latest
+    row across machines; legacy single-tenant mode falls through to the
+    local album.  Returns ``{photo: null}`` if neither has anything,
+    so the frontend can show the "no photo yet" placeholder.
+    """
     uid = tenancy.get_current_user()
     if not uid:
         return JSONResponse({"error": "not authenticated"}, status_code=401)
+
+    if _pg_configured() and tigris.is_configured():
+        latest = await _fetch_latest_photo_row(uid)
+        if latest:
+            url = tigris.presign_get(latest["object_key"]) or ""
+            return JSONResponse({
+                "photo": {
+                    "filename":  latest["filename"],
+                    "url":       url,
+                    "caption":   latest.get("caption") or "snapshot from earlier",
+                    "kind":      latest.get("kind"),
+                    "timestamp": latest.get("ts"),
+                },
+            })
+        # Fall through to local-album lookup if cloud has nothing yet
+        # (e.g. first photo just generated, Pg insert raced the read).
 
     album = PhotoAlbum()
     latest = album.latest()  # any kind, just the newest
@@ -83,12 +103,17 @@ async def hero(request) -> JSONResponse:
     })
 
 
-async def photos(request) -> JSONResponse:
-    """Return the user's recent in-album photos for the Memory Gallery.
+async def photos(request: Request) -> JSONResponse:
+    """Return the user's recent photos for the Memory Gallery.
 
-    Default cap is 24 — enough to fill a 4-column grid six rows deep on
-    a wide monitor.  Falls through to an empty list when the album is
-    fresh.
+    Cloud mode (Tigris + Pg ``photos``) is the SaaS path: photos
+    generated on the per-user worker get uploaded to Tigris and
+    indexed in Pg, and we surface them here with fresh presigned URLs
+    so the legacy web app — running on a different Fly machine — can
+    show them without touching the worker's filesystem.
+
+    Falls through to the local on-disk album when Tigris/Pg aren't
+    configured (dev / single-tenant), keeping the original behaviour.
     """
     uid = tenancy.get_current_user()
     if not uid:
@@ -99,6 +124,22 @@ async def photos(request) -> JSONResponse:
     except Exception:
         limit = 24
     limit = max(1, min(limit, 60))
+
+    if _pg_configured() and tigris.is_configured():
+        rows = await _fetch_photo_rows(uid, limit=limit)
+        items: list[dict[str, Any]] = []
+        for r in rows:
+            url = tigris.presign_get(r["object_key"]) or ""
+            if not url:
+                continue
+            items.append({
+                "filename":  r["filename"],
+                "url":       url,
+                "kind":      r.get("kind"),
+                "caption":   r.get("caption") or "",
+                "timestamp": r.get("ts"),
+            })
+        return JSONResponse({"items": items, "total": len(items)})
 
     album = PhotoAlbum()
     entries = album._load_index()  # noqa: SLF001 — internal helper, OK in same package
@@ -119,7 +160,7 @@ async def photos(request) -> JSONResponse:
     return JSONResponse({"items": items, "total": len(items)})
 
 
-async def photo(filename: str, request) -> FileResponse:
+async def photo(filename: str, request: Request) -> FileResponse:
     """Stream a photo file from the current tenant's album.
 
     Validates the filename can't escape the album dir (no path traversal)
@@ -160,7 +201,7 @@ def _status_for_gap(seconds_since_last: float | None) -> tuple[str, str, str]:
     return ("offline", "gray", "Resting")
 
 
-async def status(request) -> JSONResponse:
+async def status(request: Request) -> JSONResponse:
     uid = tenancy.get_current_user()
     if not uid:
         return JSONResponse({"error": "not authenticated"}, status_code=401)
@@ -215,7 +256,7 @@ def _format_milestone_when(ts_str: str, *, now: datetime | None = None) -> str:
     return ts.strftime("%b %d, %Y")
 
 
-async def milestones(request) -> JSONResponse:
+async def milestones(request: Request) -> JSONResponse:
     uid = tenancy.get_current_user()
     if not uid:
         return JSONResponse({"error": "not authenticated"}, status_code=401)
@@ -331,37 +372,55 @@ async def _fetch_turn_count(uid: str) -> int:
 
 
 async def _fetch_active_days(uid: str) -> int:
-    """Count distinct calendar days the user has had any turn — proxy
-    for relationship continuity.  We approximate by reading the last
-    365 days of turns and de-duplicating by date in Python; full SQL
-    distinct-count via PostgREST would need an RPC."""
+    """Count distinct calendar days the user has had any turn — proxy for
+    relationship continuity.  Uses the ``count_active_days`` SQL RPC
+    (migration 012) so Postgres does the COUNT(DISTINCT date) instead of
+    shipping up to 5000 rows to the dashboard to de-dup in Python."""
     if not _pg_configured():
         return 0
     try:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
         async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.post(
+                f"{_pg_url()}/rest/v1/rpc/count_active_days",
+                json={"p_user_id": uid, "p_since": cutoff},
+                headers={**_pg_headers(), "Content-Type": "application/json"},
+            )
+        if not r.is_success:
+            logger.warning("[sanctum_api] active-days RPC failed: %s", r.status_code)
+            return 0
+        return int(r.json())
+    except Exception as exc:
+        logger.warning("[sanctum_api] active-days RPC errored: %s", exc)
+        return 0
+
+
+async def _fetch_photo_rows(uid: str, *, limit: int = 24) -> list[dict]:
+    if not _pg_configured():
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
             r = await c.get(
-                f"{_pg_url()}/rest/v1/turns",
+                f"{_pg_url()}/rest/v1/photos",
                 params={
                     "user_id": f"eq.{uid}",
-                    "ts":      f"gte.{cutoff}",
-                    "select":  "ts",
-                    "limit":   "5000",   # bounded — heaviest user shouldn't exceed
+                    "select":  "filename,object_key,kind,caption,ts",
+                    "order":   "ts.desc",
+                    "limit":   str(limit),
                 },
                 headers=_pg_headers(),
             )
         if not r.is_success:
-            return 0
-        days = set()
-        for row in r.json() or []:
-            try:
-                d = datetime.fromisoformat(row["ts"].replace("Z", "+00:00")).date()
-                days.add(d.isoformat())
-            except Exception:
-                continue
-        return len(days)
-    except Exception:
-        return 0
+            return []
+        return r.json() or []
+    except Exception as exc:
+        logger.warning("[sanctum_api] photos fetch failed: %s", exc)
+        return []
+
+
+async def _fetch_latest_photo_row(uid: str) -> dict | None:
+    rows = await _fetch_photo_rows(uid, limit=1)
+    return rows[0] if rows else None
 
 
 async def _fetch_last_message_at(uid: str) -> datetime | None:

@@ -55,7 +55,9 @@ logger = logging.getLogger(__name__)
 # users get a longer grace window in case the user comes back mid-stream.
 _IDLE_DEFAULTS_BY_TIER: dict[str, int] = {
     "free":       180,    # 3 min — wake on incoming TG webhook
-    "paid":       600,    # 10 min — proactive ticks land every 5 min
+    "pro":        600,    # 10 min — proactive ticks keep it warm
+    "ultra":      600,
+    "paid":       600,    # legacy alias for pro
     "enterprise": 0,      # 0 == never auto-exit
 }
 
@@ -90,7 +92,8 @@ def _idle_exit_sec() -> int:
 
 def _proactive_enabled() -> bool:
     """Free tier is reactive-only — no proactive / planner / selfie ticks."""
-    return _tier() in ("paid", "enterprise")
+    from .core import plans
+    return plans.proactive_enabled(_tier())
 
 
 # ── App factory ────────────────────────────────────────────────────────
@@ -201,6 +204,13 @@ class _WorkerState:
             return True
         self._seen_update_ids.append(update_id)
         return False
+
+    def sm(self) -> SessionManager:
+        """The SessionManager owning per-session locks.  Only valid after
+        ``get_agent()`` has run (both dispatch paths call it first)."""
+        if self._sm is None:
+            raise RuntimeError("session manager not initialized; call get_agent() first")
+        return self._sm
 
     async def get_agent(self) -> PersistentAgent:
         async with self._lock:
@@ -314,59 +324,96 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
         logger.warning("[worker] no bot token configured; can't reply")
         return
 
-    # Register photo/file senders for the agent's session so when the LLM
-    # calls take_selfie → send_photo, the bytes actually flow through
-    # this user's Telegram bot.  Without this the send_photo helper
-    # returns "No active channel to send through" and the agent has to
-    # apologise to the user.
-    photo_sent_flag: list[bool] = []
-    _register_channel_senders(agent._session_id, bot_app, chat_id, loop,  # noqa: SLF001
-                              photo_sent_flag)
-
-    # Show "typing…" while the agent thinks.  Telegram dismisses the
-    # indicator after ~5s, so refresh on a 4s interval until the agent
-    # task completes.  We also need a typing tick BEFORE the LLM call
-    # so the user sees it immediately.
-    async def _typing_loop() -> None:
-        while True:
-            try:
-                await bot_app.bot.send_chat_action(chat_id=chat_id, action="typing")
-            except Exception:
-                return
-            await asyncio.sleep(4)
-
-    typing_task = asyncio.create_task(_typing_loop())
+    # First-ever conversation? Send a one-time, out-of-character AI disclaimer
+    # before the companion's first words — Telegram has no chrome for the
+    # standing web in-chat disclaimer. Durable signal: zero persisted turns.
     try:
-        # asyncio contextvars don't propagate into run_in_executor threads,
-        # so storage_pg / config.CLAWSOUL_HOME would lose the bound user_id
-        # and bail with "storage_pg called without a bound tenant".  Bind
-        # tenancy inside the worker thread before calling agent.chat.
-        pinned_uid = state.user_id
-        def _chat_in_thread():
-            tenancy.set_current_user(pinned_uid)
-            return agent.chat(text)
-        reply = await loop.run_in_executor(None, _chat_in_thread)
-    finally:
-        typing_task.cancel()
-        try:
-            await typing_task
-        except (asyncio.CancelledError, Exception):
-            pass
-
-    # If a photo went out THIS turn, the caption already shipped with it
-    # via take_selfie / candid_shot.  Skip the LLM's trailing narrative
-    # text — DeepSeek tends to bolt on "told you it would work!" /
-    # "满意了？" after a successful photo even when the prompt says not to.
-    if photo_sent_flag:
-        return
-
-    if not reply:
-        return
-    try:
-        await bot_app.bot.send_message(chat_id=chat_id, text=reply[:4096])
+        from .core.milestones import _count_turns
+        if (await _count_turns(state.user_id)) == 0:
+            tenancy.set_current_user(state.user_id)
+            from .core import safety as _safety
+            _lang0 = config.get_str("agent", "language", default="en") or "en"
+            await bot_app.bot.send_message(
+                chat_id=chat_id, text=_safety.first_contact_notice(_lang0))
     except Exception as exc:
-        logger.warning("[worker] send_message failed: %s", exc)
-        return
+        logger.warning("[worker] first-contact notice skipped: %s", exc)
+
+    # Serialize the whole turn on the per-session lock so a proactive tick
+    # or a fast second message can't interleave on the shared Agent's
+    # mutable `messages` list — and so the module-global photo/file senders
+    # (keyed by session_id) registered just below aren't clobbered by an
+    # overlapping turn mid-flight.  See SessionManager.acquire.
+    sid = agent._session_id  # noqa: SLF001
+    async with state.sm().acquire(sid):
+        # Register photo/file senders for the agent's session so when the LLM
+        # calls take_selfie → send_photo, the bytes actually flow through
+        # this user's Telegram bot.  Without this the send_photo helper
+        # returns "No active channel to send through" and the agent has to
+        # apologise to the user.
+        #
+        # photo_sent_flag tracks "did a photo go out this turn?" so we can
+        # suppress the LLM's redundant tail text on TG.  captions_sent keeps
+        # the actual caption that shipped — used after the turn to overwrite
+        # whatever rambling text the agent saved to Pg, so web Chronicles
+        # shows the same caption instead of the LLM's tail narrative.
+        photo_sent_flag: list[bool] = []
+        captions_sent: list[str] = []
+        _register_channel_senders(sid, bot_app, chat_id, loop,
+                                  photo_sent_flag, captions_sent)
+
+        # Show "typing…" while the agent thinks.  Telegram dismisses the
+        # indicator after ~5s, so refresh on a 4s interval until the agent
+        # task completes.  We also need a typing tick BEFORE the LLM call
+        # so the user sees it immediately.
+        async def _typing_loop() -> None:
+            while True:
+                try:
+                    await bot_app.bot.send_chat_action(chat_id=chat_id, action="typing")
+                except Exception:
+                    return
+                await asyncio.sleep(4)
+
+        typing_task = asyncio.create_task(_typing_loop())
+        try:
+            # asyncio contextvars don't propagate into run_in_executor threads,
+            # so storage_pg / config.CLAWSOUL_HOME would lose the bound user_id
+            # and bail with "storage_pg called without a bound tenant".  Bind
+            # tenancy inside the worker thread before calling agent.chat.
+            pinned_uid = state.user_id
+            def _chat_in_thread():
+                tenancy.set_current_user(pinned_uid)
+                return agent.chat(text)
+            reply = await loop.run_in_executor(None, _chat_in_thread)
+        finally:
+            typing_task.cancel()
+            try:
+                await typing_task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+        # If a photo went out THIS turn, the caption already shipped with it
+        # via take_selfie / candid_shot.  Skip the LLM's trailing narrative
+        # text — DeepSeek tends to bolt on "told you it would work!" /
+        # "满意了？" after a successful photo even when the prompt says not to.
+        if photo_sent_flag:
+            # Pg already has the LLM's rambling tail text saved to the turns
+            # table; overwrite it with the actual caption that shipped on TG
+            # so web Chronicles shows the same text the user saw on TG.
+            if captions_sent:
+                asyncio.create_task(_overwrite_last_assistant_turn(
+                    user_id=state.user_id,
+                    session_id=sid,
+                    new_content="\n\n".join(c for c in captions_sent if c),
+                ))
+            return
+
+        if not reply:
+            return
+        try:
+            await bot_app.bot.send_message(chat_id=chat_id, text=reply[:4096])
+        except Exception as exc:
+            logger.warning("[worker] send_message failed: %s", exc)
+            return
 
     # Outbound succeeded — touch last_message_at, mark onboarded once
     # bot_name lands in memory, and emit any milestones that just
@@ -377,28 +424,247 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     asyncio.create_task(_emit_milestones(state.user_id))
 
 
+# ── Proactive throttling ──────────────────────────────────────────────
+# Router cron fires every 30 min. Without these gates, the worker would
+# send a guaranteed message each tick (~48/day) — way more than the
+# 4–6 the original ProactiveMessenger was designed for.
+
+# Minimum spacing between two proactive messages, regardless of
+# probability rolls. Without this, two ticks 30 min apart could both
+# fire and the user sees a wall of check-ins.
+_MIN_PROACTIVE_GAP_MIN = 90
+
+# Hard daily cap. Old default was 6 per ProactiveMessenger.maxDaily;
+# 4 feels closer to "thoughtful partner" than "needy bot".
+_DEFAULT_MAX_PROACTIVE_DAILY = 4
+
+# Quiet hours in persona-local time (companion's home tz, not user's).
+# Defaults match the original ProactiveMessenger range.
+_PROACTIVE_QUIET_START_HOUR = 23   # 23:00 inclusive
+_PROACTIVE_QUIET_END_HOUR   = 8    # 08:00 exclusive
+
+# Per-tick probability so even "in window" ticks aren't auto-fire —
+# spreads sends out across the active day rather than packing them into the
+# first few ticks after the quiet window ends.  Weighted by the user's local
+# hour: loneliness peaks in the evening, so a proactive check-in lands with
+# more value then (HBS 24-078 — companions help most when they reach you at a
+# lonely moment).  Daytime ticks are rarer so we don't feel needy at work.
+_PROACTIVE_TICK_PROB = 0.40
+
+
+def _proactive_prob_for_hour(hour: int) -> float:
+    """Probability weight by user-local hour (quiet hours are blocked
+    separately).  Evening/night-ish gets the highest weight."""
+    if 19 <= hour <= 22:        # prime evening — wind-down, most alone
+        return 0.65
+    if hour in (8, 9, 18):      # morning hello / after-work
+        return 0.45
+    if 10 <= hour <= 17:        # working hours — lighter touch
+        return 0.22
+    return 0.35                 # edges
+
+
+def _user_local_now() -> datetime:
+    """Now in the *user's* IANA timezone — the real human, not the persona.
+
+    Quiet hours mean "don't ping me when I'm asleep", which is the
+    user's sleep schedule.  Falls back to the persona's tz (better
+    than UTC if the wizard predates the ``user.timezone`` field) and
+    finally to naive ``datetime.now()`` if nothing's configured.
+    """
+    tz_name = ""
+    try:
+        from . import config as _cfg
+        tz_name = (
+            _cfg.get_str("user", "timezone", default="")
+            or _cfg.get_str("persona", "timezone", default="")
+            or ""
+        )
+    except Exception:
+        tz_name = ""
+    if tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+            return datetime.now(ZoneInfo(tz_name))
+        except Exception:
+            pass
+    return datetime.now()
+
+
+def _in_proactive_quiet_hours(now_local: datetime) -> bool:
+    h = now_local.hour
+    start = _PROACTIVE_QUIET_START_HOUR
+    end = _PROACTIVE_QUIET_END_HOUR
+    if start <= end:
+        return start <= h < end
+    return h >= start or h < end
+
+
+async def _proactive_throttle_decision(user_id: str) -> tuple[bool, str]:
+    """Decide whether to send a proactive message now.
+
+    Returns ``(should_send, reason_if_not)``.  Best-effort: any Pg
+    lookup failure logs and falls through to "send" rather than
+    silently muting the bot — we'd rather over-message a little than
+    have the proactive feature mysteriously go dark.
+    """
+    import os as _os
+    import random as _random
+
+    import httpx
+    now_local = _user_local_now()
+    if _in_proactive_quiet_hours(now_local):
+        return False, f"quiet-hours ({now_local.strftime('%H:%M')} local)"
+
+    pg_url = _os.environ.get("SUPABASE_URL", "").rstrip("/")
+    pg_key = _os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if pg_url and pg_key:
+        from datetime import timedelta, timezone
+        now_utc = datetime.now(timezone.utc)
+        headers = {"apikey": pg_key, "Authorization": f"Bearer {pg_key}"}
+        # Min-gap check
+        try:
+            async with httpx.AsyncClient(timeout=8) as c:
+                r = await c.get(
+                    f"{pg_url}/rest/v1/events",
+                    params={
+                        "user_id": f"eq.{user_id}",
+                        "kind":    "eq.proactive_sent",
+                        "select":  "ts",
+                        "order":   "ts.desc",
+                        "limit":   "1",
+                    },
+                    headers=headers,
+                )
+            rows = r.json() if r.is_success else []
+            if rows:
+                last_ts = rows[0].get("ts") or ""
+                try:
+                    last = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
+                    gap = (now_utc - last).total_seconds() / 60
+                    if gap < _MIN_PROACTIVE_GAP_MIN:
+                        return False, f"min-gap ({gap:.0f} min since last send)"
+                except Exception:
+                    pass
+        except Exception as exc:
+            logger.debug("[worker] proactive last-sent lookup failed: %s", exc)
+
+        # Daily-cap check (count in last 24h)
+        try:
+            cutoff = (now_utc - timedelta(hours=24)).isoformat()
+            async with httpx.AsyncClient(timeout=8) as c:
+                r = await c.get(
+                    f"{pg_url}/rest/v1/events",
+                    params={
+                        "user_id": f"eq.{user_id}",
+                        "kind":    "eq.proactive_sent",
+                        "ts":      f"gte.{cutoff}",
+                        "select":  "id",
+                    },
+                    headers={**headers, "Prefer": "count=exact", "Range": "0-0"},
+                )
+            content_range = r.headers.get("content-range") or ""
+            if "/" in content_range:
+                try:
+                    sent_today = int(content_range.rsplit("/", 1)[1])
+                    if sent_today >= _DEFAULT_MAX_PROACTIVE_DAILY:
+                        return False, f"daily-cap ({sent_today}/{_DEFAULT_MAX_PROACTIVE_DAILY})"
+                except ValueError:
+                    pass
+        except Exception as exc:
+            logger.debug("[worker] proactive daily-count lookup failed: %s", exc)
+
+    # Final probability roll, weighted toward the user's lonelier evening
+    # hours, so we don't predictably fire 90 min after the previous message
+    # and we show up more when it lands with the most value.
+    prob = _proactive_prob_for_hour(now_local.hour)
+    if _random.random() > prob:
+        return False, f"probability-roll (p={prob:.2f} @ {now_local.hour}h)"
+
+    return True, ""
+
+
+async def _log_proactive_sent(user_id: str) -> None:
+    """Record a ``proactive_sent`` event for throttling later.  Best-effort."""
+    import os as _os
+
+    import httpx
+    pg_url = _os.environ.get("SUPABASE_URL", "").rstrip("/")
+    pg_key = _os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not pg_url or not pg_key:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            await c.post(
+                f"{pg_url}/rest/v1/events",
+                json={"user_id": user_id, "kind": "proactive_sent", "payload": {}},
+                headers={
+                    "apikey":        pg_key,
+                    "Authorization": f"Bearer {pg_key}",
+                    "Content-Type":  "application/json",
+                    "Prefer":        "return=minimal",
+                },
+            )
+    except Exception as exc:
+        logger.debug("[worker] proactive event log failed: %s", exc)
+
+
 async def _handle_proactive(state: _WorkerState) -> None:
-    """Proactive ticks land here; we reuse ProactiveMessenger by calling
-    its generation function directly without the per-process scheduler."""
+    """Proactive ticks land here.  Gates on quiet-hours / min-gap /
+    daily-cap / probability roll before generating, then logs an event
+    so the next tick can see what happened.
+    """
     from .scheduler.proactive import _build_prompt
     row = await _user_settings_lookup(state.user_id)
     chat_id = (row or {}).get("telegram_chat_id")
     if chat_id is None:
         return
 
+    should_send, reason = await _proactive_throttle_decision(state.user_id)
+    if not should_send:
+        logger.info("[worker] proactive skipped for %s: %s",
+                    state.user_id[:8], reason)
+        return
+
     loop = asyncio.get_event_loop()
     agent = await state.get_agent()
-    prompt = _build_prompt(datetime.now())
+    sid = agent._session_id  # noqa: SLF001
+    sm = state.sm()
+    # If a user turn is being processed right now, drop this proactive tick
+    # rather than queueing behind it: a check-in that lands the instant the
+    # user just spoke is noise, and we must never interleave on the shared
+    # Agent's history.
+    if sm.get_lock(sid).locked():
+        logger.info("[worker] proactive dropped for %s (turn in progress)",
+                    state.user_id[:8])
+        return
+    # Build the prompt against the user's local clock, not the container's
+    # UTC, so the persona's sense of time-of-day matches the human's.
+    prompt = _build_prompt(_user_local_now())
     pinned_uid = state.user_id
     def _chat_proactive():
         tenancy.set_current_user(pinned_uid)
-        return agent.chat(prompt)
-    text = await loop.run_in_executor(None, _chat_proactive)
+        # chat_proactive() does NOT persist the synthetic prompt as a user
+        # turn — so it won't leak into the web Chronicles as a fake user msg.
+        t = agent.chat_proactive(prompt)
+        # AI-transparency: proactive (companion-initiated) messages carry a
+        # tiny "generated by AI" footer.  Built here, in-thread, where tenancy
+        # is bound so the language read is the user's configured one.
+        if t:
+            from .core import safety
+            _lang = config.get_str("agent", "language", default="en") or "en"
+            t = t.rstrip() + "\n\n" + safety.ai_note(_lang)
+        return t
+    async with sm.acquire(sid):
+        text = await loop.run_in_executor(None, _chat_proactive)
     if not text:
         return
     bot_app = await state.get_bot_app()
     if bot_app:
         await bot_app.bot.send_message(chat_id=int(chat_id), text=text[:4096])
+        # Record AFTER the TG send succeeds so a failed delivery doesn't
+        # eat a slot — next tick can retry with the same throttle budget.
+        await _log_proactive_sent(state.user_id)
 
 
 async def _handle_planner(state: _WorkerState) -> None:
@@ -496,20 +762,11 @@ async def _touch_message_at(user_id: str) -> None:
 
 
 def _register_channel_senders(session_id: str, bot_app, chat_id: int, loop,
-                              photo_sent_flag: list) -> None:
-    """Wire up send_photo / send_file → this user's Telegram bot.
-
-    The agent's tool layer calls ``send_photo(path)`` / ``send_file(path)``
-    on a synchronous thread (inside ``agent.chat``), but PTB's
-    ``bot.send_photo`` is async.  Bridge the two by scheduling the coroutine
-    on the asyncio event loop and waiting for it from the worker thread.
-
-    ``photo_sent_flag`` is a single-element list the caller passes in so we
-    can mark "a photo went out this turn" — the caller then suppresses any
-    trailing LLM text, which fixes DeepSeek's habit of writing "here you
-    go" / "told you it would work" bubbles AFTER the photo even though the
-    prompt said not to.
-    """
+                              photo_sent_flag: list,
+                              captions_sent: list) -> None:
+    """Wire send_photo / send_file → this user's Telegram bot, capturing
+    side-state (did a photo go out, what caption shipped) so the caller
+    can reconcile the saved Pg turn afterwards."""
     from .core.tools import set_file_sender, set_photo_sender
 
     def _file_sender(path: str, caption: str) -> None:
@@ -522,6 +779,7 @@ def _register_channel_senders(session_id: str, bot_app, chat_id: int, loop,
         )
         asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=60)
         photo_sent_flag.append(True)
+        captions_sent.append(caption or "")
 
     def _photo_sender(path: str, caption: str) -> None:
         with open(path, "rb") as f:
@@ -532,9 +790,85 @@ def _register_channel_senders(session_id: str, bot_app, chat_id: int, loop,
         )
         asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=60)
         photo_sent_flag.append(True)
+        captions_sent.append(caption or "")
 
     set_file_sender(session_id, _file_sender)
     set_photo_sender(session_id, _photo_sender)
+
+
+async def _overwrite_last_assistant_turn(*, user_id: str, session_id: str,
+                                         new_content: str) -> None:
+    """Replace the most recent assistant turn's ``content`` for this session.
+
+    Used after the agent emits a photo: the LLM saved its trailing
+    narrative text to Pg (e.g. "Here's the king of the house, told you
+    he'd be photogenic"), but TG only shipped the actual photo caption.
+    We rewrite the Pg row so web Chronicles displays the caption that
+    the user actually saw — keeping web and TG text in lockstep.
+
+    Best-effort: any failure logs and returns without raising; the worst
+    case is a one-message drift in the Chronicles view, not a broken
+    chat.
+    """
+    if not new_content.strip():
+        return
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url or not key:
+        return
+    import httpx
+
+    from .core.storage_pg import _hash_turn
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    try:
+        # Step 1: find the latest assistant turn for this session so we
+        # can target it by content_hash (PostgREST PATCH doesn't honour
+        # order+limit on its own).
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{url}/rest/v1/turns",
+                params={
+                    "user_id":    f"eq.{user_id}",
+                    "session_id": f"eq.{session_id}",
+                    "role":       "eq.assistant",
+                    "select":     "content_hash",
+                    "order":      "ts.desc",
+                    "limit":      "1",
+                },
+                headers=headers,
+            )
+            if not r.is_success:
+                logger.warning("[worker] overwrite-turn lookup failed: %s",
+                               r.status_code)
+                return
+            rows = r.json() or []
+            if not rows:
+                return
+            old_hash = rows[0].get("content_hash")
+            if not old_hash:
+                return
+            # Step 2: PATCH that row.  Recompute content_hash so future
+            # saves of the same caption text dedupe cleanly.
+            new_hash = _hash_turn(user_id, session_id, "assistant", new_content)
+            r2 = await client.patch(
+                f"{url}/rest/v1/turns",
+                params={
+                    "user_id":      f"eq.{user_id}",
+                    "content_hash": f"eq.{old_hash}",
+                },
+                json={"content": new_content, "content_hash": new_hash},
+                headers=headers,
+            )
+            if not r2.is_success:
+                logger.warning("[worker] overwrite-turn PATCH failed: %s %s",
+                               r2.status_code, r2.text[:200])
+    except Exception as exc:
+        logger.warning("[worker] overwrite-turn errored: %s", exc)
 
 
 async def _emit_milestones(user_id: str) -> None:

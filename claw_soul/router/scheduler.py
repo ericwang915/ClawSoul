@@ -23,7 +23,10 @@ delegated to ``db.py``.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
+import socket
 from datetime import datetime
 from typing import Iterable
 
@@ -56,12 +59,61 @@ _QUIET_AFTER_MESSAGE_MIN = 30
 _DEFAULT_SELFIE_SLOTS = ["10:00", "16:00", "20:00"]
 
 
+def _stable_offset(*parts: str, mod: int) -> int:
+    """Deterministic per-user offset in [0, mod).
+
+    Uses md5 (not builtin hash, which is per-process salted) so a user's
+    tick minute/second stays stable across router restarts — avoids
+    reshuffling everyone's schedule on every deploy.
+    """
+    h = hashlib.md5("|".join(parts).encode("utf-8")).hexdigest()
+    return int(h, 16) % mod
+
+
 class RouterScheduler:
     """Owns the AsyncIOScheduler + the reconcile loop."""
 
     def __init__(self) -> None:
         self._scheduler = AsyncIOScheduler(timezone="UTC")
         self._known_users: set[str] = set()
+        # Sharding: this instance owns users where hash % count == index.
+        # Defaults (index 0 / count 1) mean "own everyone" — the single-
+        # instance / fallback behaviour.
+        self._instance_id = (
+            os.environ.get("FLY_MACHINE_ID") or socket.gethostname() or "local"
+        )
+        self._shard_index = 0
+        self._shard_count = 1
+
+    # ── sharding ────────────────────────────────────────────────────────
+
+    async def _refresh_shard(self) -> None:
+        """Heartbeat self and recompute (shard_index, shard_count) from the
+        set of live router instances.
+
+        On any Pg error we fall back to owning everyone (index 0 / count 1);
+        the per-tick DB claim still prevents double-dispatch, so the worst
+        case is the pre-sharding behaviour, never a missed tick."""
+        try:
+            await db.heartbeat_router_instance(self._instance_id)
+            live = await db.list_live_router_instances()
+        except Exception as exc:
+            logger.warning("[router-sched] shard refresh failed, owning all: %s", exc)
+            self._shard_index, self._shard_count = 0, 1
+            return
+        # Our own heartbeat may not be readable yet (write/read race) — make
+        # sure we're in the ring so two fresh instances don't both pick index 0.
+        if self._instance_id not in live:
+            live = sorted(set(live) | {self._instance_id})
+        self._shard_count = max(1, len(live))
+        self._shard_index = live.index(self._instance_id)
+
+    def _owns(self, user_id: str) -> bool:
+        """True if this instance is responsible for *user_id* under the
+        current shard assignment."""
+        if self._shard_count <= 1:
+            return True
+        return _stable_offset(user_id, mod=self._shard_count) == self._shard_index
 
     # ── lifecycle ───────────────────────────────────────────────────────
 
@@ -103,27 +155,40 @@ class RouterScheduler:
             confirmed the user named the companion yet, and proactive/
             selfie ticks would interrupt the onboarding chat.
         """
+        # Recompute our shard first so we only register jobs for our slice.
+        await self._refresh_shard()
+
         try:
             rows = await db.list_user_machines()
         except httpx.HTTPError as exc:
             logger.warning("[router-sched] reconcile read failed: %s", exc)
             return
 
-        active_ids = set()
+        active: dict[str, str] = {}   # user_id -> tier
         for row in rows:
             if row.tier == "free":
                 continue
             if not row.onboarded:
                 continue
-            active_ids.add(row.user_id)
-            self._ensure_user_jobs(row.user_id, row.tier)
+            if not self._owns(row.user_id):
+                continue   # another router instance owns this user's ticks
+            active[row.user_id] = row.tier
+        active_ids = set(active)
 
-        # Drop jobs for users we used to schedule but no longer should.
-        for stale in self._known_users - active_ids:
+        # Incremental diff: only touch APScheduler for users who joined or
+        # left the active set.  Re-adding all N users' 6 jobs every minute
+        # (the old behaviour) churns the jobstore needlessly at scale.
+        joined = active_ids - self._known_users
+        left = self._known_users - active_ids
+        for uid in joined:
+            self._ensure_user_jobs(uid, active[uid])
+        for stale in left:
             self._remove_user_jobs(stale)
         self._known_users = active_ids
-        logger.info("[router-sched] reconciled — %d active paid users",
-                    len(active_ids))
+        logger.info("[router-sched] reconciled — shard %d/%d — %d owned paid "
+                    "users (+%d/-%d)",
+                    self._shard_index, self._shard_count,
+                    len(active_ids), len(joined), len(left))
 
     # ── per-user job ops ───────────────────────────────────────────────
 
@@ -138,22 +203,27 @@ class RouterScheduler:
             replace_existing=True,
         )
 
-        # Proactive tick — every 30 min.  5 min was too tight to be
-        # human-rhythm; with the post-message quiet window most ticks
-        # would have been thrown away anyway.
+        # Proactive tick — twice an hour, but SHARDED per user so 1000
+        # users don't all fire on :00/:30 and stampede the wake path.
+        # Each user gets their own minute-of-half-hour from a stable hash.
+        off = _stable_offset(user_id, "proactive", mod=30)
         sched.add_job(
-            self._fire_proactive, CronTrigger(minute="*/30"),
+            self._fire_proactive, CronTrigger(minute=f"{off},{off + 30}"),
             id=f"proactive:{user_id}",
             kwargs={"user_id": user_id},
             replace_existing=True,
         )
 
-        # Scheduled selfie slots
+        # Scheduled selfie slots — jitter the minute (0-15) and second
+        # within the slot hour, again per-user, so the shared 10/16/20:00
+        # slots don't fan out as a synchronized burst.
         for slot in _DEFAULT_SELFIE_SLOTS:
             hh, mm = slot.split(":")
+            jmin = (int(mm) + _stable_offset(user_id, slot, "min", mod=16)) % 60
+            jsec = _stable_offset(user_id, slot, "sec", mod=60)
             sched.add_job(
                 self._fire_selfie,
-                CronTrigger(hour=int(hh), minute=int(mm)),
+                CronTrigger(hour=int(hh), minute=jmin, second=jsec),
                 id=f"selfie:{user_id}:{hh}{mm}",
                 kwargs={"user_id": user_id, "slot": slot},
                 replace_existing=True,
@@ -226,6 +296,16 @@ class RouterScheduler:
             logger.info("[router-sched] pruned %d scheduled_runs rows", deleted)
         except Exception as exc:
             logger.warning("[router-sched] prune failed: %s", exc)
+        try:
+            deleted = await db.prune_telegram_updates(_PRUNE_OLDER_THAN_HOURS)
+            logger.info("[router-sched] pruned %d telegram_updates rows", deleted)
+        except Exception as exc:
+            logger.warning("[router-sched] telegram_updates prune failed: %s", exc)
+        try:
+            deleted = await db.prune_router_instances(_PRUNE_OLDER_THAN_HOURS)
+            logger.info("[router-sched] pruned %d router_instances rows", deleted)
+        except Exception as exc:
+            logger.warning("[router-sched] router_instances prune failed: %s", exc)
 
 
 # Singleton — the router app initializes this on startup.

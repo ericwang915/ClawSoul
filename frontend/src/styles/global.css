@@ -1,22 +1,23 @@
 :root {
-  --bg: #0b0710;
-  --bg-soft: #14101c;
-  --surface: rgba(255, 255, 255, 0.04);
-  --surface-strong: rgba(255, 255, 255, 0.06);
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #f3eef7;
-  --text-soft: #b9b1c8;
-  --text-muted: #7c7589;
-  --accent: #ff6b9d;
-  --accent-2: #c084fc;
-  --accent-3: #fb923c;
-  --gradient: linear-gradient(120deg, #ff6b9d 0%, #c084fc 50%, #fb923c 100%);
-  --gradient-soft: linear-gradient(135deg, rgba(255, 107, 157, 0.15), rgba(192, 132, 252, 0.12), rgba(251, 146, 60, 0.08));
-  --radius-sm: 10px;
-  --radius: 18px;
+  --bg: #120c10;
+  --bg-soft: #1a1015;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-strong: rgba(255, 255, 255, 0.055);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --text: #f4ece9;
+  --text-soft: #b3a3a9;
+  --text-muted: #7c6b72;
+  --accent: #f3a0b6;
+  --accent-2: #c98bd6;
+  --accent-3: #ffb59a;
+  --gradient: linear-gradient(135deg, #ff9bb0 0%, #ffb59a 100%);
+  --gradient-soft: linear-gradient(135deg, rgba(255, 155, 176, 0.14), rgba(201, 139, 214, 0.10));
+  --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --radius-sm: 12px;
+  --radius: 20px;
   --radius-lg: 28px;
-  --shadow-glow: 0 30px 80px -30px rgba(255, 107, 157, 0.45);
+  --shadow-glow: 0 0 80px -20px rgba(255, 150, 175, 0.5);
   --max-width: 1180px;
 }
 
@@ -37,11 +38,20 @@ html, body {
 
 body {
   background:
-    radial-gradient(1200px 700px at 80% -10%, rgba(192, 132, 252, 0.18), transparent 60%),
-    radial-gradient(1000px 600px at 0% 10%, rgba(255, 107, 157, 0.15), transparent 60%),
-    radial-gradient(900px 500px at 50% 100%, rgba(251, 146, 60, 0.10), transparent 60%),
+    radial-gradient(1200px 700px at 80% -10%, rgba(255, 150, 180, 0.14), transparent 60%),
+    radial-gradient(1000px 600px at 0% 8%, rgba(201, 139, 214, 0.10), transparent 60%),
     var(--bg);
   min-height: 100vh;
+}
+
+.serif { font-family: var(--serif); letter-spacing: -0.015em; }
+.it { font-family: var(--serif); font-style: italic; }
+
+/* Glowing companion orb motif. */
+.orb {
+  border-radius: 9999px;
+  background: radial-gradient(circle at 36% 30%, #ffe4cf 0%, #ff9ec0 34%, #d18ad6 68%, #8f73c4 100%);
+  box-shadow: 0 0 70px -8px rgba(255, 150, 190, 0.6), inset 0 0 30px rgba(255, 255, 255, 0.22);
 }
 
 a {
@@ -52,9 +62,10 @@ a {
 a:hover { opacity: 0.78; }
 
 h1, h2, h3 {
-  font-weight: 700;
+  font-family: var(--serif);
+  font-weight: 500;
   letter-spacing: -0.02em;
-  line-height: 1.12;
+  line-height: 1.08;
   margin: 0 0 0.6em;
 }
 
@@ -110,10 +121,10 @@ p { margin: 0 0 1em; color: var(--text-soft); }
 
 .btn-primary {
   background: var(--gradient);
-  color: #fff;
+  color: #2b1620;
   box-shadow: var(--shadow-glow);
 }
-.btn-primary:hover { transform: translateY(-2px); opacity: 1; }
+.btn-primary:hover { transform: translateY(-2px); opacity: 1; filter: brightness(1.04); }
 
 .btn-secondary {
   background: var(--surface-strong);

@@ -147,7 +147,13 @@ class PersistentAgent(Agent):
         # Mirror to the FTS5 transcript index for cross-session recall.
         # index_turn() dedupes by content hash so re-saving the whole list
         # each chat() call only inserts the *new* turns.
-        if self._session_index is not None:
+        #
+        # In Pg mode the store (SessionStorePg) already batch-writes every
+        # turn into the same `turns` table the index reads — so the mirror
+        # would be a redundant per-message N+1 POST.  Skip it there.
+        if self._session_index is not None and not getattr(
+            self._store, "writes_turn_index", False
+        ):
             try:
                 self._session_index.index_messages(self._session_id, self.messages[1:])
             except Exception as exc:
@@ -155,6 +161,24 @@ class PersistentAgent(Agent):
 
     def chat(self, user_input: str) -> str:
         response = super().chat(user_input)
+        self._save()
+        return response
+
+    def chat_proactive(self, user_input: str) -> str:
+        """Generate a proactive message WITHOUT persisting the synthetic
+        prompt as a user turn.
+
+        The proactive scheduler feeds the agent an internal instruction
+        ("it's morning — say something") as ``user_input``.  With plain
+        ``chat()`` that instruction lands in the Postgres ``turns`` table
+        as a user message and then shows up in the web Chronicles as if
+        the user sent it — which is why web and Telegram looked different.
+        Here we drop that synthetic user message after generation and keep
+        only the assistant reply (the message actually delivered)."""
+        start = len(self.messages)
+        response = super().chat(user_input)
+        if start < len(self.messages) and self.messages[start].get("role") == "user":
+            del self.messages[start]
         self._save()
         return response
 

@@ -62,12 +62,26 @@ def _current_user_id() -> str:
     return uid
 
 
+# Shared connection-pooled client — reused across every turn save/load and
+# memory read so we don't pay a fresh TCP+TLS handshake per PostgREST call.
+# httpx.Client is thread-safe; storage_pg runs from the (serialized) agent
+# thread plus background tasks, so a single process-wide client is correct.
+_CLIENT: httpx.Client | None = None
+
+
+def _client() -> httpx.Client:
+    global _CLIENT
+    if _CLIENT is None:
+        _CLIENT = httpx.Client(timeout=15)
+    return _CLIENT
+
+
 def _post(path: str, body: dict | list, *, params: dict | None = None,
           prefer: str = "return=minimal") -> dict | list | None:
     if not _configured():
         return None
-    r = httpx.post(_url() + path, json=body, params=params or {},
-                   headers=_headers(prefer=prefer), timeout=15)
+    r = _client().post(_url() + path, json=body, params=params or {},
+                       headers=_headers(prefer=prefer))
     if not r.is_success:
         logger.warning("[storage_pg] POST %s → %s %s", path, r.status_code, r.text[:200])
         return None
@@ -77,7 +91,7 @@ def _post(path: str, body: dict | list, *, params: dict | None = None,
 def _get(path: str, params: dict | None = None) -> list[dict]:
     if not _configured():
         return []
-    r = httpx.get(_url() + path, params=params or {}, headers=_headers(), timeout=15)
+    r = _client().get(_url() + path, params=params or {}, headers=_headers())
     if not r.is_success:
         logger.warning("[storage_pg] GET %s → %s %s", path, r.status_code, r.text[:200])
         return []
@@ -87,7 +101,7 @@ def _get(path: str, params: dict | None = None) -> list[dict]:
 def _delete(path: str, params: dict | None = None) -> bool:
     if not _configured():
         return False
-    r = httpx.delete(_url() + path, params=params or {}, headers=_headers(), timeout=15)
+    r = _client().delete(_url() + path, params=params or {}, headers=_headers())
     return r.is_success
 
 
@@ -99,6 +113,12 @@ class SessionStorePg:
 
     Public surface kept lean: ``save(session_id, messages)`` + ``load(session_id)``.
     """
+
+    # save() already batch-writes every turn into the shared `turns` table
+    # (one POST), which is the same table StorageManagerPg.search_turns
+    # reads.  So PersistentAgent can skip the separate per-message index
+    # mirror in Pg mode — see PersistentAgent._save.
+    writes_turn_index: bool = True
 
     def save(self, session_id: str, messages: list[dict]) -> None:
         uid = _current_user_id()

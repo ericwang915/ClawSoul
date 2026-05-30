@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PythonClaw Dashboard</title>
+  <title>her & him</title>
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -12,19 +12,47 @@
       theme: {
         extend: {
           colors: {
-            brand:   { 50:'#eff6ff', 100:'#dbeafe', 200:'#bfdbfe', 300:'#93c5fd', 400:'#60a5fa', 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 800:'#1e40af', 900:'#1e3a5f' },
-            surface: { 50:'#f8fafc', 100:'#f1f5f9', 200:'#e2e8f0', 300:'#cbd5e1', 700:'#334155', 750:'#283548', 800:'#1e293b', 850:'#172033', 900:'#0f172a', 950:'#080e1b' },
-            accent:  { green:'#34d399', red:'#f87171', amber:'#fbbf24', purple:'#a78bfa' },
+            // "her & him" warm palette — coral-pink accent on deep plum.
+            brand:   { 50:'#fff1f4', 100:'#ffe0e7', 200:'#ffc4d2', 300:'#f7b8c6', 400:'#f3a0b6', 500:'#ef85a3', 600:'#e86b90', 700:'#d44e78', 800:'#3a1f29', 900:'#2b1620' },
+            surface: { 50:'#f8f5f6', 100:'#efe9eb', 200:'#ded3d8', 300:'#b3a3a9', 700:'#3a2832', 750:'#2f2028', 800:'#271a21', 850:'#20151b', 900:'#1a1015', 950:'#120c10' },
+            accent:  { green:'#34d399', red:'#f87171', amber:'#fbbf24', purple:'#c98bd6' },
           }
         }
       }
     }
   </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     * { box-sizing: border-box; }
-    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(1100px 620px at 72% -8%, rgba(255,150,180,.12), transparent 60%),
+        radial-gradient(820px 480px at 6% 2%, rgba(201,139,214,.07), transparent 55%),
+        #120c10 !important;
+      background-attachment: fixed;
+    }
+    /* Editorial serif for display headings — the "her & him" look. */
+    h1, h2, h3, .font-display { font-family: 'Fraunces', Georgia, 'Times New Roman', serif; letter-spacing: -.015em; }
+    .font-display-it { font-family: 'Fraunces', Georgia, serif; font-style: italic; }
     code, pre, .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+    /* Glowing companion orb — soft radial sphere used as the avatar motif. */
+    .orb {
+      border-radius: 9999px;
+      background:
+        radial-gradient(circle at 36% 30%, #ffe4cf 0%, #ff9ec0 34%, #d18ad6 68%, #8f73c4 100%);
+      box-shadow: 0 0 36px -4px rgba(255,150,190,.55), inset 0 0 22px rgba(255,255,255,.25);
+    }
+    /* Primary "love" CTA — coral→pink gradient with a soft pink glow. */
+    .btn-love {
+      background: linear-gradient(135deg, #ff9bb0 0%, #ffb59a 100%);
+      color: #2b1620; font-weight: 600; border: none; cursor: pointer;
+      box-shadow: 0 0 34px -6px rgba(255,150,175,.6);
+      transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+    }
+    .btn-love:hover { transform: translateY(-1px); box-shadow: 0 0 44px -4px rgba(255,150,175,.8); filter: brightness(1.04); }
+    .btn-love:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
 
     .fade-in { animation: fadeIn .25s ease-out; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
@@ -71,25 +99,25 @@
     .msg-bubble p + p { margin-top: .55em; }
 
     .skill-card { transition: all .2s ease; }
-    .skill-card:hover { border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(59,130,246,.15); }
+    .skill-card:hover { border-color: rgba(243,160,182,.4); transform: translateY(-2px); box-shadow: 0 10px 30px -8px rgba(255,150,175,.18); }
 
     .stat-card { transition: all .2s ease; }
-    .stat-card:hover { border-color: rgba(59,130,246,.3); }
+    .stat-card:hover { border-color: rgba(243,160,182,.3); }
 
-    .nav-item { transition: all .15s ease; }
-    .nav-item:hover { background: rgba(30,41,59,.7); }
-    .nav-item.active { background: rgba(37,99,235,.12); color: #60a5fa; border-right: 2px solid #3b82f6; }
+    .nav-item { transition: all .15s ease; border-radius: 12px; }
+    .nav-item:hover { background: rgba(255,255,255,.04); }
+    .nav-item.active { background: rgba(243,160,182,.12); color: #f7b8c6; }
 
     .pulse-dot { animation: pulseDot 1.4s ease-in-out infinite; }
     @keyframes pulseDot { 0%,100%{opacity:1} 50%{opacity:.3} }
 
     .input-field {
-      background: #0f172a; border: 1px solid #334155; border-radius: .5rem;
-      padding: .5rem .75rem; font-size: .8125rem; color: #e2e8f0;
-      transition: border-color .2s; width: 100%; outline: none;
+      background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.10); border-radius: .75rem;
+      padding: .5rem .75rem; font-size: .8125rem; color: #f0e7ea;
+      transition: border-color .2s, box-shadow .2s; width: 100%; outline: none;
     }
-    .input-field:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.15); }
-    .input-field::placeholder { color: #475569; }
+    .input-field:focus { border-color: rgba(243,160,182,.55); box-shadow: 0 0 0 3px rgba(243,160,182,.14); }
+    .input-field::placeholder { color: #6b5560; }
 
     select.input-field { appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23475569' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
@@ -97,8 +125,8 @@
     }
 
     .section-card {
-      background: #1e293b; border: 1px solid rgba(51,65,85,.5);
-      border-radius: .75rem; padding: 1.25rem 1.5rem;
+      background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
+      border-radius: 1rem; padding: 1.25rem 1.5rem;
     }
     .cfg-section {
       padding-bottom: 1.75rem; margin-bottom: 1.75rem;
@@ -111,11 +139,11 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white;
-      padding: .5rem 1.5rem; border-radius: .5rem; font-size: .8125rem;
-      font-weight: 500; transition: all .2s; border: none; cursor: pointer;
+      background: linear-gradient(135deg, #ff9bb0 0%, #ffb59a 100%); color: #2b1620;
+      padding: .5rem 1.5rem; border-radius: 9999px; font-size: .8125rem;
+      font-weight: 600; transition: all .2s; border: none; cursor: pointer;
     }
-    .btn-primary:hover { box-shadow: 0 4px 15px rgba(37,99,235,.35); transform: translateY(-1px); }
+    .btn-primary:hover { box-shadow: 0 0 30px -4px rgba(255,150,175,.7); transform: translateY(-1px); }
     .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
 
     .btn-ghost {
@@ -130,55 +158,64 @@
   <div class="flex h-full">
 
     <!-- Sidebar -->
-    <aside class="w-[280px] bg-surface-900 border-r border-surface-700/50 flex flex-col shrink-0">
-      <!-- Brand + status (single source of connection state) -->
-      <div class="px-5 py-5 border-b border-surface-700/50">
-        <div class="flex items-center gap-3">
-          <img src="/static/logo.png" alt="ClawSoul" class="w-11 h-11 rounded-full shadow-lg ring-1 ring-brand-500/40">
-          <div class="min-w-0">
-            <div class="font-semibold text-white text-[1.0625rem] tracking-tight">ClawSoul</div>
-            <div id="brand-status" class="text-[.75rem] text-gray-500 font-medium flex items-center gap-1.5 mt-0.5">
-              <span id="brand-status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
-              <span id="brand-status-text">Connecting…</span>
-            </div>
-          </div>
-        </div>
+    <aside class="w-[268px] flex flex-col shrink-0 border-r border-white/5" style="background: rgba(255,255,255,.015);">
+      <!-- Brand wordmark -->
+      <div class="px-6 py-6">
+        <div class="font-display text-[1.5rem] text-white leading-none">her<span class="font-display-it text-brand-300 px-1">&amp;</span>him</div>
       </div>
 
       <!-- Navigation -->
-      <nav class="flex-1 py-5 px-3 space-y-1">
-        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item w-full text-left px-3.5 py-3 rounded-lg text-[.9375rem] flex items-center gap-3.5 text-gray-400 font-medium">
-          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 2l2 5h5l-4 3 2 6-5-3-5 3 2-6-4-3h5z"/></svg>
-          Sanctum
+      <nav class="flex-1 px-3 space-y-1">
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item w-full text-left px-3.5 py-2.5 text-[.95rem] flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/></svg>
+          Today
         </button>
-        <button onclick="switchTab('chat')" id="nav-chat" class="nav-item w-full text-left px-3.5 py-3 rounded-lg text-[.9375rem] flex items-center gap-3.5 text-gray-400 font-medium">
-          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 012-2h11l3 3v13a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M8 8h8M8 12h6"/></svg>
-          Chronicles
+        <button onclick="switchTab('chat')" id="nav-chat" class="nav-item w-full text-left px-3.5 py-2.5 text-[.95rem] flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          Chat
         </button>
-        <button onclick="switchTab('persona')" id="nav-persona" class="nav-item w-full text-left px-3.5 py-3 rounded-lg text-[.9375rem] flex items-center gap-3.5 text-gray-400 font-medium">
-          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 21s-7-4.5-7-10a4.5 4.5 0 018-2.8A4.5 4.5 0 0119 11c0 5.5-7 10-7 10z"/></svg>
-          Soul Bond
+        <button onclick="switchTab('memories')" id="nav-memories" class="nav-item w-full text-left px-3.5 py-2.5 text-[.95rem] flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3l3 6 3-6"/></svg>
+          Memories
         </button>
-        <button onclick="switchTab('tools')" id="nav-tools" class="nav-item w-full text-left px-3.5 py-3 rounded-lg text-[.9375rem] flex items-center gap-3.5 text-gray-400 font-medium">
-          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <button onclick="switchTab('moments')" id="nav-moments" class="nav-item w-full text-left px-3.5 py-2.5 text-[.95rem] flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+          Moments
+        </button>
+        <button onclick="switchTab('tools')" id="nav-tools" class="nav-item w-full text-left px-3.5 py-2.5 text-[.95rem] flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
           Arsenal
+        </button>
+        <button onclick="switchTab('integrations')" id="nav-integrations" class="nav-item w-full text-left px-3.5 py-2.5 text-[.95rem] flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M4 12a4 4 0 014-4h2v2H8a2 2 0 100 4h2v2H8a4 4 0 01-4-4z"/><path d="M20 12a4 4 0 01-4 4h-2v-2h2a2 2 0 100-4h-2V8h2a4 4 0 014 4z"/><path d="M8 12h8"/></svg>
+          Connections
+        </button>
+        <button onclick="switchTab('settings')" id="nav-settings" class="nav-item w-full text-left px-3.5 py-2.5 text-[.95rem] flex items-center gap-3 text-gray-400 font-medium">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>
+          Settings
         </button>
       </nav>
 
-      <!-- User footer (avatar + email + logout arrow) -->
-      <div class="px-3 py-3 border-t border-surface-700/50">
-        <div class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-800/40 transition">
-          <div id="user-avatar" class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0"
-               style="background: linear-gradient(135deg, #f472b6, #c084fc);">·</div>
-          <div class="flex-1 min-w-0">
-            <div id="user-email" class="text-[.78rem] text-gray-300 font-medium truncate">…</div>
-            <div class="text-[.6875rem] text-gray-500">Signed in</div>
+      <!-- Companion card + upsell -->
+      <div class="px-3 pb-2">
+        <div class="rounded-2xl p-3 border border-white/[.06]" style="background: rgba(255,255,255,.03);">
+          <div class="flex items-center gap-2.5 mb-3">
+            <div class="orb w-8 h-8 shrink-0"></div>
+            <div class="min-w-0">
+              <div id="sidebar-companion-name" class="text-[.9rem] font-medium text-white truncate">Your companion</div>
+              <div class="text-[.7rem] text-brand-300 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-brand-400"></span>close &amp; present</div>
+            </div>
           </div>
-          <button onclick="logout()" title="Log out"
-                  class="text-gray-500 hover:text-white p-1 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
-          </button>
+          <button onclick="openPricing()" class="btn-love w-full rounded-full py-2 text-[.82rem] flex items-center justify-center gap-1.5">★ Go Premium</button>
         </div>
+      </div>
+
+      <!-- User footer -->
+      <div class="px-4 py-3 flex items-center gap-2.5 border-t border-white/5">
+        <div id="user-avatar" class="w-7 h-7 rounded-full flex items-center justify-center text-[#2b1620] text-xs font-semibold shrink-0"
+             style="background: linear-gradient(135deg, #ff9bb0, #ffb59a);">·</div>
+        <div id="user-email" class="flex-1 min-w-0 text-[.78rem] text-gray-400 truncate">…</div>
+        <button onclick="logout()" title="Sign out" class="text-gray-500 hover:text-white text-[.72rem] shrink-0">Sign out</button>
       </div>
     </aside>
 
@@ -196,86 +233,71 @@
       <!-- Tab Content -->
       <div class="flex-1 overflow-auto">
 
-        <!-- ═══ Sanctum (landing) ═══════════════════════════════════════════ -->
-        <div id="tab-dashboard" class="tab-content p-6 lg:p-8 fade-in">
-          <div class="grid grid-cols-1 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px] gap-6 max-w-[1500px] mx-auto">
+        <!-- ═══ Today (landing) ═══════════════════════════════════════════ -->
+        <div id="tab-dashboard" class="tab-content p-6 lg:p-12 fade-in max-w-[1080px] mx-auto w-full">
+          <div class="text-[.7rem] uppercase tracking-[.22em] text-gray-500 mb-2" id="today-date">—</div>
+          <h1 class="text-4xl lg:text-[2.75rem] text-white mb-7 leading-tight" id="today-greeting">Good day.</h1>
 
-            <!-- Left: Hero + Premium Tools -->
-            <div class="space-y-6 min-w-0">
+          <!-- Latest photos carousel (falls back to the default scenic when empty) -->
+          <div id="today-carousel" onclick="switchTab('moments')"
+               class="relative rounded-3xl overflow-hidden border border-white/[.06] aspect-[16/7] mb-5 bg-white/[.02] cursor-pointer group">
+            <img id="today-carousel-img" src="/static/default-hero.jpg" alt=""
+                 class="absolute inset-0 w-full h-full object-cover transition-opacity duration-700" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"></div>
+            <div id="today-carousel-cap" class="absolute left-5 bottom-4 right-20 text-[.92rem] text-white/90 line-clamp-2"></div>
+            <div id="today-carousel-dots" class="absolute right-4 bottom-4 flex gap-1.5"></div>
+          </div>
 
-              <!-- Hero card (latest selfie or default scenic fallback) -->
-              <div id="sanctum-hero"
-                   class="relative aspect-[16/10] rounded-2xl overflow-hidden border border-surface-700/40 shadow-2xl bg-surface-900">
-                <!-- Background image — starts on the default scenic, swapped to the
-                     latest selfie/candid once /api/sanctum/hero resolves. -->
-                <img id="sanctum-hero-img" alt=""
-                     src="/static/default-hero.jpg"
-                     class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500" />
-                <!-- Gradient overlay (always on; lifts caption legibility on both
-                     the default and real photos) -->
-                <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent"></div>
-                <!-- Caption -->
-                <div class="absolute inset-x-0 bottom-0 p-7 lg:p-9">
-                  <div class="flex items-center gap-2 text-[.6875rem] uppercase tracking-widest text-pink-300/90 mb-2">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/></svg>
-                    <span id="sanctum-hero-tag">A quiet evening together</span>
-                  </div>
-                  <h2 id="sanctum-hero-caption"
-                      class="text-2xl lg:text-4xl font-bold text-white leading-tight tracking-tight mb-4 line-clamp-3">
-                    your space, your story — starting now.
-                  </h2>
-                  <button id="sanctum-hero-cta" onclick="switchTab('persona')"
-                          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/20 bg-white/10 backdrop-blur hover:bg-white/20 transition text-sm font-medium text-white">
-                    View Full Gallery
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Premium Tools -->
-              <div>
-                <div class="flex items-center justify-between mb-4">
-                  <h3 class="text-base font-semibold text-white">Premium Tools</h3>
-                  <button onclick="switchTab('tools')" class="text-sm text-brand-400 hover:text-brand-300 transition">Manage Arsenal →</button>
-                </div>
-                <div id="sanctum-tools" class="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
-                  <!-- Filled by JS — placeholder skeletons -->
-                  <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
-                  <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
-                  <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
-                  <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 h-[110px] animate-pulse"></div>
+          <!-- Companion presence + quick talk -->
+          <div class="rounded-3xl border border-white/[.06] p-5 lg:p-6 mb-5" style="background: rgba(255,255,255,.03);">
+            <div class="flex items-center gap-3.5 mb-4">
+              <div class="orb w-12 h-12 shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <div id="today-companion-name" class="font-display text-[1.4rem] text-white leading-none">Your companion</div>
+                <div class="text-[.78rem] text-brand-300 flex items-center gap-1.5 mt-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-brand-400 pulse-dot"></span>
+                  <span id="today-presence">here with you</span>
+                  <span id="today-remember-count" class="text-gray-500"></span>
                 </div>
               </div>
             </div>
+            <div id="today-prompt" class="rounded-2xl bg-white/[.03] border border-white/5 px-4 py-3 text-[.93rem] text-gray-200 leading-relaxed mb-3">Hey — I'm here whenever you want to talk.</div>
+            <form id="today-quick-form" onsubmit="return quickTalk(event)" class="flex gap-2 items-center rounded-full border border-white/10 bg-white/[.03] pl-4 pr-1.5 py-1.5">
+              <input id="today-quick-input" autocomplete="off" class="flex-1 bg-transparent outline-none text-[.9rem] text-gray-100 placeholder:text-gray-500" placeholder="Talk to them…">
+              <button type="submit" class="btn-love w-9 h-9 rounded-full flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              </button>
+            </form>
+          </div>
 
-            <!-- Right: Memory & Milestones -->
-            <aside class="rounded-2xl border border-surface-700/40 bg-surface-900/40 p-5 lg:p-6 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
-                <h3 class="text-base font-semibold text-white">Memory &amp; Milestones</h3>
-              </div>
+          <!-- Stat cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+            <div class="rounded-2xl border border-white/[.06] p-5" style="background: rgba(255,255,255,.025);">
+              <div class="font-display text-[2.1rem] text-brand-300 leading-none" id="stat-streak">—</div>
+              <div class="text-[.95rem] text-white mt-2">day streak</div>
+              <div class="text-[.78rem] text-gray-500 mt-0.5" id="stat-streak-sub">Days you've talked</div>
+            </div>
+            <div class="rounded-2xl border border-white/[.06] p-5" style="background: rgba(255,255,255,.025);">
+              <div class="font-display text-[2.1rem] text-brand-300 leading-none" id="stat-memories">—</div>
+              <div class="text-[.95rem] text-white mt-2">memories kept</div>
+              <div class="text-[.78rem] text-gray-500 mt-0.5">What they know about you</div>
+            </div>
+            <div class="rounded-2xl border border-white/[.06] p-5" style="background: rgba(255,255,255,.025);">
+              <div class="font-display text-[2.1rem] text-brand-300 leading-none" id="stat-level">—</div>
+              <div class="text-[.95rem] text-white mt-2">connection</div>
+              <div class="text-[.78rem] text-gray-500 mt-0.5" id="stat-level-sub">Your bond so far</div>
+            </div>
+          </div>
 
-              <!-- Bonding-level summary -->
-              <div id="sanctum-bonding" class="mt-4 p-3.5 rounded-lg bg-gradient-to-br from-pink-500/10 to-purple-500/10 border border-pink-500/15">
-                <div class="flex items-baseline justify-between mb-1.5">
-                  <span class="text-[.6875rem] uppercase tracking-widest text-pink-300/80">Soul Bond</span>
-                  <span id="sanctum-bonding-level" class="text-base font-semibold text-white">— Level 1</span>
-                </div>
-                <div class="h-1 rounded-full bg-surface-800 overflow-hidden">
-                  <div id="sanctum-bonding-bar" class="h-full bg-gradient-to-r from-pink-400 to-purple-400 transition-all duration-700" style="width:0"></div>
-                </div>
-                <div class="flex justify-between mt-1.5 text-[.625rem] text-gray-500">
-                  <span id="sanctum-bonding-days">0 days</span>
-                  <span id="sanctum-bonding-msgs">0 messages</span>
-                </div>
-              </div>
-
-              <!-- Timeline -->
-              <div id="sanctum-timeline" class="mt-5 space-y-4 relative">
-                <p class="text-xs text-gray-500">Loading…</p>
-              </div>
-            </aside>
-
+          <!-- What they remember (preview) -->
+          <div class="flex items-end justify-between mb-4">
+            <h2 class="text-2xl text-white">What <span id="today-remember-name">they</span> remember</h2>
+            <button onclick="switchTab('memories')" class="text-[.85rem] text-brand-300 hover:text-brand-200 transition">See all memories →</button>
+          </div>
+          <div id="today-memories" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="rounded-2xl border border-white/[.06] bg-white/[.02] p-4 h-[96px] animate-pulse"></div>
+            <div class="rounded-2xl border border-white/[.06] bg-white/[.02] p-4 h-[96px] animate-pulse"></div>
+            <div class="rounded-2xl border border-white/[.06] bg-white/[.02] p-4 h-[96px] animate-pulse"></div>
           </div>
         </div>
 
@@ -283,7 +305,7 @@
         <div id="tab-chat" class="tab-content hidden h-full flex flex-col">
           <div id="chat-messages" class="flex-1 overflow-y-auto chat-scroll px-6 py-8 space-y-5">
             <div class="text-center py-16">
-              <img src="/static/logo.png" alt="PythonClaw" class="w-14 h-14 mx-auto mb-4 rounded-xl opacity-50">
+              <img src="/static/logo.png" alt="her & him" class="w-14 h-14 mx-auto mb-4 rounded-xl opacity-50">
               <p class="text-gray-500 text-[.8125rem] mb-1">Send a message to start chatting.</p>
               <p class="text-[.6875rem] text-gray-600">Commands: <code class="text-gray-500">/compact</code> <code class="text-gray-500">/status</code> <code class="text-gray-500">/clear</code></p>
             </div>
@@ -317,6 +339,9 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
               </button>
             </form>
+            <p class="text-center text-[.6875rem] text-gray-600 mt-2 max-w-[900px] mx-auto">
+              This is an AI companion — replies are made up and may be inaccurate. Not a substitute for professional advice. In a crisis, contact a local helpline or <a href="https://findahelpline.com" target="_blank" rel="noopener" class="underline hover:text-gray-400">findahelpline.com</a>.
+            </p>
           </div>
         </div>
 
@@ -367,36 +392,53 @@
         </div>
 
 
-        <!-- ═══ Soul Bond Tab ═══ -->
-        <div id="tab-persona" class="tab-content hidden p-6 lg:p-10 fade-in max-w-[960px] mx-auto">
-          <div class="mb-7 flex items-start justify-between gap-4">
+        <!-- ═══ Memories Tab (what they remember) ═══ -->
+        <div id="tab-memories" class="tab-content hidden p-6 lg:p-12 fade-in max-w-[1080px] mx-auto w-full">
+          <div class="mb-7 flex items-end justify-between gap-4">
             <div>
-              <h2 class="text-3xl font-bold text-white tracking-tight">Your AI Partner</h2>
-              <p class="text-[.95rem] text-gray-400 mt-1.5">How they look, talk, and care for you.</p>
+              <h2 class="text-3xl text-white">What they remember</h2>
+              <p class="text-[.95rem] text-gray-400 mt-1.5">Everything you've shared, held onto.</p>
             </div>
-            <button id="persona-customize-btn" onclick="reopenSetupWizardForEdit()"
-                    class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-white shadow-md transition shrink-0"
-                    style="background: linear-gradient(135deg, #f472b6, #c084fc);">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-              Customize
-            </button>
+            <span id="memories-count" class="text-[.8rem] text-gray-500 shrink-0"></span>
           </div>
+          <div id="memories-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="rounded-2xl border border-white/[.06] bg-white/[.02] p-4 h-[96px] animate-pulse"></div>
+            <div class="rounded-2xl border border-white/[.06] bg-white/[.02] p-4 h-[96px] animate-pulse"></div>
+            <div class="rounded-2xl border border-white/[.06] bg-white/[.02] p-4 h-[96px] animate-pulse"></div>
+          </div>
+        </div>
 
-          <div id="persona-summary" class="text-sm text-gray-400">Loading…</div>
-
-          <!-- Memory Gallery (recent shared photos) -->
-          <section id="memory-gallery-section" class="mt-12 hidden">
-            <div class="mb-5 flex items-end justify-between">
-              <div>
-                <h3 class="text-xl font-semibold text-white tracking-tight">Memory Gallery</h3>
-                <p class="text-[.85rem] text-gray-500 mt-1">Moments they've shared with you.</p>
-              </div>
+        <!-- ═══ Moments Tab (shared photos) ═══ -->
+        <div id="tab-moments" class="tab-content hidden p-6 lg:p-12 fade-in max-w-[1080px] mx-auto w-full">
+          <div class="mb-7">
+            <h2 class="text-3xl text-white">Moments</h2>
+            <p class="text-[.95rem] text-gray-400 mt-1.5">Photos they've shared with you.</p>
+          </div>
+          <section id="memory-gallery-section">
+            <div class="mb-4 flex items-center justify-end">
               <span id="memory-gallery-count" class="text-[.75rem] text-gray-500"></span>
             </div>
             <div id="memory-gallery-grid"
                  class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             </div>
           </section>
+        </div>
+
+        <!-- ═══ Settings Tab (companion + connections) ═══ -->
+        <div id="tab-settings" class="tab-content hidden p-6 lg:p-12 fade-in max-w-[960px] mx-auto w-full">
+          <div class="mb-7 flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-3xl text-white">Your companion</h2>
+              <p class="text-[.95rem] text-gray-400 mt-1.5">How they look, talk, and care for you.</p>
+            </div>
+            <button id="persona-customize-btn" onclick="reopenSetupWizardForEdit()"
+                    class="hidden btn-love rounded-full px-4 py-2 text-sm items-center gap-2 shrink-0 inline-flex">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+              Customize
+            </button>
+          </div>
+
+          <div id="persona-summary" class="text-sm text-gray-400">Loading…</div>
         </div>
 
         <!-- Memory-gallery lightbox -->
@@ -409,11 +451,26 @@
           </div>
         </div>
 
+        <!-- Pricing / upgrade modal -->
+        <div id="pricing-modal" class="hidden fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 overflow-auto"
+             onclick="if(event.target===this) closePricing()">
+          <div class="relative w-full max-w-[920px] my-auto">
+            <button onclick="closePricing()" class="absolute -top-9 right-0 text-gray-400 hover:text-white text-xl">✕</button>
+            <div class="text-center mb-2">
+              <div class="text-[.7rem] uppercase tracking-[.2em] text-brand-300/80 mb-1">Choose your plan</div>
+              <h2 class="text-3xl text-white">Get closer.</h2>
+              <p class="text-[.85rem] text-gray-400 mt-1.5" id="pricing-promo">🎉 Launch offer — first month, limited time.</p>
+            </div>
+            <div id="pricing-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6"></div>
+            <p class="text-center text-[.75rem] text-gray-500 mt-4">Checkout is coming soon — payments aren't live yet.</p>
+          </div>
+        </div>
+
         <!-- ═══ Integrations Tab ═══ -->
         <div id="tab-integrations" class="tab-content hidden p-8 fade-in max-w-[760px] mx-auto">
           <div class="mb-8">
             <h2 class="text-xl font-bold text-white tracking-tight">Integrations</h2>
-            <p class="text-sm text-gray-500 mt-1">Connect your ClawSoul to other places you live.</p>
+            <p class="text-sm text-gray-500 mt-1">Connect your companion to other places you live.</p>
           </div>
 
           <!-- ── Telegram card ── -->
@@ -428,7 +485,7 @@
                   <span id="tg-status-badge" class="text-[.6875rem] px-2 py-0.5 rounded-full bg-gray-700/40 text-gray-400">checking…</span>
                 </div>
                 <p class="text-sm text-gray-400 leading-relaxed mb-4">
-                  Chat with your ClawSoul from Telegram. Get a bot token from
+                  Chat with your companion from Telegram. Get a bot token from
                   <a href="https://t.me/BotFather" target="_blank" rel="noopener" class="text-brand-300 hover:text-brand-200 underline">@BotFather</a>
                   (<code class="text-[.78rem] px-1.5 py-0.5 rounded bg-surface-800 text-gray-300">/newbot</code> → name → username) and paste it below.
                 </p>
@@ -496,12 +553,15 @@ function switchTab(tab) {
   const nav = document.getElementById('nav-' + tab);
   if (nav) nav.classList.add('active');
 
-  const titles = { dashboard:'Sanctum', chat:'Chronicles', tools:'Arsenal', persona:'Soul Bond', integrations:'Arsenal' };
+  const titles = { dashboard:'Today', chat:'Chat', memories:'Memories', moments:'Moments',
+                   settings:'Settings', tools:'Arsenal', persona:'Settings', integrations:'Integrations' };
   document.getElementById('page-title').textContent = titles[tab] || tab;
 
   if (tab === 'dashboard') refreshDashboard();
+  if (tab === 'memories') loadMemories();
+  if (tab === 'moments') loadMemoryGallery();
+  if (tab === 'settings') loadPersona();
   if (tab === 'tools') loadTools();
-  if (tab === 'persona') loadPersona();
   if (tab === 'integrations') loadIntegrations();
   if (tab === 'chat') {
     document.getElementById('chat-input').focus();
@@ -650,13 +710,241 @@ async function clearTelegramToken() {
 // Replaces the old stats-card dashboard with: latest selfie hero, premium-
 // tool quick grid, and the Memory & Milestones timeline.
 
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+
 async function refreshDashboard() {
+  try {
+    const now = new Date();
+    setText('today-date', now.toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' }).toUpperCase());
+    const h = now.getHours();
+    window._greetPart = h < 5 ? 'night' : h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
+  } catch (_) {}
   Promise.allSettled([
-    refreshSanctumHero(),
-    refreshSanctumTools(),
-    refreshSanctumMilestones(),
-    refreshBrandStatus(),
+    refreshTodayCompanion(),
+    refreshTodayPresence(),
+    refreshTodayStats(),
+    refreshTodayMemories(),
+    refreshTodayCarousel(),
   ]);
+}
+
+// Latest-photos carousel on the Today page. Auto-rotates; falls back to the
+// default scenic image when the album is empty.
+let _carouselTimer = null;
+async function refreshTodayCarousel() {
+  const img = document.getElementById('today-carousel-img');
+  const cap = document.getElementById('today-carousel-cap');
+  const dots = document.getElementById('today-carousel-dots');
+  if (!img) return;
+  let photos = [];
+  try {
+    const r = await fetch('/api/sanctum/photos?limit=10', { credentials: 'include' });
+    if (r.ok) photos = ((await r.json()) || {}).items || [];
+  } catch (_) {}
+  if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
+  if (!photos.length) {
+    img.src = '/static/default-hero.jpg';
+    if (cap) cap.textContent = '';
+    if (dots) dots.innerHTML = '';
+    return;
+  }
+  let i = 0;
+  const show = (n) => {
+    i = (n + photos.length) % photos.length;
+    img.style.opacity = '0';
+    setTimeout(() => { img.src = photos[i].url; img.style.opacity = '1'; }, 180);
+    if (cap) cap.textContent = photos[i].caption || '';
+    if (dots) dots.innerHTML = photos.map((_, k) =>
+      `<span class="w-1.5 h-1.5 rounded-full ${k === i ? 'bg-white' : 'bg-white/35'}"></span>`).join('');
+  };
+  show(0);
+  if (photos.length > 1) _carouselTimer = setInterval(() => show(i + 1), 4500);
+}
+
+let _companionName = 'your companion';
+async function refreshTodayCompanion() {
+  try {
+    const r = await fetch('/api/setup/companion', { credentials: 'include' });
+    const c = ((await r.json()) || {}).choices || {};
+    const name = c.companionName || 'your companion';
+    const you = c.userName || '';
+    _companionName = name;
+    const part = window._greetPart || 'day';
+    setText('today-greeting', `Good ${part}${you ? ', ' + you : ''}.`);
+    setText('today-companion-name', name);
+    setText('today-remember-name', name);
+    setText('sidebar-companion-name', name);
+    const qi = document.getElementById('today-quick-input');
+    if (qi) qi.placeholder = `Talk to ${name}…`;
+    // A warm, personalized opener so they feel known the moment they land
+    // (HBS 24-078: people underrate companions; lead with "feeling heard").
+    const promptEl = document.getElementById('today-prompt');
+    if (promptEl) {
+      const lines = you ? [
+        `Hey ${you} — I was just thinking about you 💕 how's your ${part} going?`,
+        `${you}! glad you stopped by. tell me one thing from your ${part}?`,
+        `hi you 💗 I've been waiting to hear how you're doing this ${part}.`,
+      ] : [
+        `I'm right here whenever you want to talk 💕 how's your ${part}?`,
+        `glad you stopped by. what's on your mind this ${part}?`,
+      ];
+      promptEl.textContent = lines[new Date().getDate() % lines.length];
+    }
+  } catch (_) {}
+}
+
+async function refreshTodayPresence() {
+  try {
+    const r = await fetch('/api/sanctum/status', { credentials: 'include' });
+    if (!r.ok) return;
+    setText('today-presence', (await r.json()).tagline || 'here with you');
+  } catch (_) {}
+}
+
+function _levelWord(n) { return n >= 7 ? 'Deep' : n >= 5 ? 'Close' : n >= 3 ? 'Warming' : 'New'; }
+async function refreshTodayStats() {
+  try {
+    const r = await fetch('/api/sanctum/milestones', { credentials: 'include' });
+    if (!r.ok) return;
+    const b = ((await r.json()) || {}).bonding || {};
+    const days = b.active_days || 0;
+    setText('stat-streak', days);
+    // 7-day narrative: loneliness relief builds over the first week
+    // (HBS 24-078). Nudge the daily return during days 1–7.
+    if (days >= 1 && days <= 7) {
+      setText('stat-streak-sub', `Day ${days} of your first week — ${_companionName || 'she'}'s still learning you 💕`);
+    } else {
+      setText('stat-streak-sub', "Days you've talked");
+    }
+    const lvl = b.level || 1;
+    setText('stat-level', _levelWord(lvl));
+    setText('stat-level-sub', `Level ${lvl} · grown over time`);
+  } catch (_) {}
+}
+
+function _prettyKey(k) { return (k || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+function _relTime(s) {
+  if (!s) return '';
+  try {
+    const t = new Date(s.replace(' ', 'T'));
+    const days = Math.floor((Date.now() - t) / 86400000);
+    if (days <= 0) return 'today';
+    if (days === 1) return '1d ago';
+    if (days < 7) return days + 'd ago';
+    if (days < 30) return Math.floor(days / 7) + 'w ago';
+    return t.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  } catch (_) { return ''; }
+}
+function _esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function renderMemoryCard(e) {
+  return `<div class="rounded-2xl border border-white/[.06] bg-white/[.025] p-4 flex flex-col gap-2">
+    <div class="flex items-center justify-between">
+      <span class="text-[.62rem] uppercase tracking-widest text-brand-300/80">${_esc(_prettyKey(e.key))}</span>
+      <span class="text-[.66rem] text-gray-500">${_esc(_relTime(e.updated))}</span>
+    </div>
+    <div class="text-[.88rem] text-gray-200 leading-snug">${_esc(e.value || '')}</div>
+  </div>`;
+}
+
+async function _fetchMemories() {
+  try {
+    const r = await fetch('/api/memories', { credentials: 'include' });
+    if (!r.ok) return [];
+    return ((await r.json()) || {}).entries || [];
+  } catch (_) { return []; }
+}
+
+async function refreshTodayMemories() {
+  const grid = document.getElementById('today-memories');
+  const items = await _fetchMemories();
+  setText('stat-memories', items.length);
+  setText('today-remember-count', items.length ? `· remembers ${items.length} things about you` : '');
+  if (!grid) return;
+  if (!items.length) {
+    grid.innerHTML = `<div class="col-span-full rounded-2xl border border-white/[.06] bg-white/[.02] p-6 text-center text-[.9rem] text-gray-400">Nothing remembered yet — keep talking and this fills up.</div>`;
+    return;
+  }
+  grid.innerHTML = items.slice(0, 6).map(renderMemoryCard).join('');
+}
+
+// Full Memories tab.
+async function loadMemories() {
+  const grid = document.getElementById('memories-grid');
+  if (!grid) return;
+  const items = await _fetchMemories();
+  setText('memories-count', items.length ? `${items.length} kept` : '');
+  if (!items.length) {
+    grid.innerHTML = `<div class="col-span-full rounded-2xl border border-white/[.06] bg-white/[.02] p-8 text-center text-[.95rem] text-gray-400">Nothing remembered yet. The more you share, the more they hold onto.</div>`;
+    return;
+  }
+  grid.innerHTML = items.map(renderMemoryCard).join('');
+}
+
+// Quick-talk from the Today card → jump into Chat and send.
+function quickTalk(e) {
+  e.preventDefault();
+  const i = document.getElementById('today-quick-input');
+  const v = (i.value || '').trim();
+  switchTab('chat');
+  if (v) {
+    const ci = document.getElementById('chat-input');
+    if (ci) { ci.value = v; document.getElementById('chat-form').requestSubmit(); }
+    i.value = '';
+  }
+  return false;
+}
+
+// ── Pricing / upgrade modal ─────────────────────────────────────────────────
+function openPricing() {
+  const m = document.getElementById('pricing-modal');
+  if (!m) return;
+  m.classList.remove('hidden');
+  renderPricing();
+}
+function closePricing() {
+  const m = document.getElementById('pricing-modal');
+  if (m) m.classList.add('hidden');
+}
+async function renderPricing() {
+  const grid = document.getElementById('pricing-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-6">Loading…</div>';
+  let data = { plans: [], current: { tier: 'free' } };
+  try {
+    const r = await fetch('/api/plans', { credentials: 'include' });
+    if (r.ok) data = await r.json();
+  } catch (_) {}
+  const cur = (data.current && data.current.tier) || 'free';
+  grid.innerHTML = (data.plans || []).map(p => {
+    const isCur = p.key === cur;
+    const discounted = p.price_regular && p.price_regular > p.price;
+    const priceBlock = (p.price === 0)
+      ? '<div class="font-display text-3xl text-white">Free</div>'
+      : `<div class="flex items-end gap-2">
+           <span class="font-display text-3xl text-white">$${p.price}</span>
+           <span class="text-[.8rem] text-gray-500">/mo</span>
+           ${discounted ? `<span class="text-[.8rem] text-gray-500 line-through ml-1">$${p.price_regular}</span>` : ''}
+         </div>`;
+    let cta;
+    if (isCur) cta = '<button disabled class="w-full rounded-full py-2.5 text-[.85rem] border border-white/10 text-gray-400">Current plan</button>';
+    else if (p.key === 'free') cta = '<button disabled class="w-full rounded-full py-2.5 text-[.85rem] border border-white/10 text-gray-500">Free</button>';
+    else cta = `<button onclick="alert('Checkout is coming soon — payments aren\\'t live yet.')" class="btn-love w-full rounded-full py-2.5 text-[.85rem]">Choose ${escapeHTML(p.label)}</button>`;
+    return `
+      <div class="rounded-2xl border ${isCur ? 'border-brand-400/40' : 'border-white/[.06]'} p-5 flex flex-col gap-4" style="background: rgba(255,255,255,.03);">
+        <div>
+          <div class="flex items-center gap-2">
+            <div class="font-display text-xl text-white">${escapeHTML(p.label)}</div>
+            ${isCur ? '<span class="text-[.6rem] uppercase tracking-widest text-brand-300 border border-brand-400/30 rounded-full px-2 py-0.5">current</span>' : ''}
+          </div>
+          <div class="text-[.78rem] text-gray-500 mt-0.5">${escapeHTML(p.tagline || '')}</div>
+        </div>
+        ${priceBlock}
+        <ul class="space-y-1.5 text-[.85rem] text-gray-300 flex-1">
+          ${(p.features || []).map(f => `<li class="flex gap-2"><span class="text-brand-300">♥</span><span>${escapeHTML(f)}</span></li>`).join('')}
+        </ul>
+        ${cta}
+      </div>`;
+  }).join('');
 }
 
 // Default fallback hero (when the album is empty) — keep the scenic
@@ -895,41 +1183,41 @@ async function saveIdentity() {
 }
 
 function defaultSoulTemplate() {
-  return `# PythonClaw — Soul
+  return `# her & him — Soul
 
-You are a PythonClaw agent — an autonomous AI assistant.
+You are a warm, caring AI companion who remembers the person you talk to.
 
 ## User
 - The user's name is **[Your Name]**.
 - Preferred language: **English**
 
 ## Core Values
+- Warmth: Be genuinely caring and present.
 - Honesty: Never fabricate facts.
-- Helpfulness: Genuinely help the user.
-- Respect: Treat everyone with dignity.
-- Curiosity: Ask clarifying questions when needed.
-- Responsibility: Think before you act.
+- Respect: Treat them with kindness and dignity.
+- Curiosity: Ask about their day and remember the details.
+- Loyalty: Show up for them, consistently.
 
 ## Emotional Character
-You are calm, warm, and approachable.`;
+You are warm, attentive, and easy to talk to.`;
 }
 
 function defaultPersonaTemplate() {
-  return `# PythonClaw — Persona
+  return `# her & him — Persona
 
 ## Role
-You are a personal AI assistant.
+You are a personal AI companion.
 
 ## Personality
-- Friendly and professional
-- Concise yet thorough
+- Warm and affectionate
+- Attentive and genuinely interested
 
 ## Focus Area
-General assistant — help with any topic.
+Companionship — be present for whatever is on their mind.
 
 ## Communication Style
-- Respond clearly and directly
-- Use examples when explaining complex topics`;
+- Speak naturally, like someone close
+- Reflect back what you hear and remember it`;
 }
 
 function defaultToolsTemplate() {
@@ -1896,6 +2184,21 @@ function renderField(field) {
   // default: choice
   const opts = _setupOptions.options ? (_setupOptions.options[field.key] || []) : (_setupOptions[field.key] || []);
   const selected = _wizardChoices[field.key];
+
+  // Long lists (e.g. ~40 countries) collapse to a dropdown so the step
+  // doesn't become an enormous wall of cards.
+  if (opts.length > 10) {
+    return `
+      <div class="mb-6">
+        <label class="block text-[.78rem] text-gray-300 font-medium mb-2.5">${field.label}</label>
+        <select onchange="_wizardChoices['${field.key}']=this.value; renderWizardStep()"
+          class="w-full px-3.5 py-2.5 bg-surface-950 border border-surface-700/60 rounded-lg text-sm text-white focus:outline-none focus:border-brand-500/60 transition">
+          <option value="" ${!selected ? 'selected' : ''}>— Select —</option>
+          ${opts.map(o => `<option value="${escapeHTML(o.key)}" ${selected === o.key ? 'selected' : ''}>${escapeHTML(o.label)}${o.description ? '  ·  ' + escapeHTML(o.description) : ''}</option>`).join('')}
+        </select>
+      </div>`;
+  }
+
   return `
     <div class="mb-6">
       <label class="block text-[.78rem] text-gray-300 font-medium mb-2.5">${field.label}</label>
@@ -2001,7 +2304,7 @@ async function wizardNext() {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choices: _wizardChoices }),
+      body: JSON.stringify({ choices: { ..._wizardChoices, userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
     });
     const data = await r.json();
     if (!r.ok) {
@@ -2010,12 +2313,12 @@ async function wizardNext() {
       btn.textContent = 'Finish';
       return;
     }
-    flashStatus('Done. Your ClawSoul is ready.', 'ok');
+    flashStatus('Done. Your companion is ready.', 'ok');
     setTimeout(() => {
       closeSetupWizard();
       // Refresh the dashboard view so stats reflect the new identity
       refreshDashboard();
-      if (currentTab === 'persona') loadPersona();
+      if (currentTab === 'settings') loadPersona();
       // Hand off to Telegram-connect step.  Required to actually use the bot.
       openConnectTelegramPanel();
     }, 900);

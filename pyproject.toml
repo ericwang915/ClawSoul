@@ -44,6 +44,7 @@ dependencies = [
     "beautifulsoup4",
     "requests",
     "tweepy>=4.14",
+    "boto3>=1.34",
 ]
 
 [project.scripts]

@@ -76,11 +76,49 @@ def cookie_domain() -> str | None:
     return os.environ.get("COOKIE_DOMAIN", "").strip() or None
 
 
+def dev_no_auth() -> bool:
+    """Explicit opt-out for laptop / single-tenant dev.
+
+    Auth is ON by default.  The ONLY way to disable it is to set
+    ``CLAW_DEV_NO_AUTH=1`` — so a misconfigured deploy (cleared secret,
+    botched rotation) fails closed instead of silently serving every
+    tenant from one shared namespace.
+    """
+    return os.environ.get("CLAW_DEV_NO_AUTH", "").strip().lower() in (
+        "1", "true", "yes",
+    )
+
+
 def auth_enabled() -> bool:
-    # The auth gate turns on whenever EITHER a shared JWT secret (legacy
-    # HS256-signed Supabase projects) OR a Supabase URL (new ES256-signed
-    # projects, where we verify with the JWKS public key) is configured.
-    return bool(jwt_secret() or supabase_url())
+    # Secure by default: auth is enforced unless explicitly disabled for
+    # local dev via CLAW_DEV_NO_AUTH.  When enabled, decode_jwt verifies
+    # against the shared HS256 secret or the project's JWKS public key —
+    # whichever the token's `alg` header indicates.
+    return not dev_no_auth()
+
+
+def verify_auth_config() -> None:
+    """Fail fast at startup if auth is required but unconfigured.
+
+    Called once when the web app boots.  Without this a deploy that
+    forgot / cleared ``SUPABASE_URL`` + ``SUPABASE_JWT_SECRET`` would
+    400/401 every request (or, with the old fail-open logic, serve every
+    user as a single shared tenant).  We'd rather refuse to boot and
+    surface the misconfig.
+    """
+    if dev_no_auth():
+        import logging
+        logging.getLogger(__name__).warning(
+            "[auth] CLAW_DEV_NO_AUTH set — auth DISABLED, single-tenant dev "
+            "mode.  Never set this in a deployed/multi-tenant environment."
+        )
+        return
+    if not (jwt_secret() or supabase_url()):
+        raise RuntimeError(
+            "Auth is enabled but neither SUPABASE_JWT_SECRET nor SUPABASE_URL "
+            "is set — refusing to boot to avoid serving all tenants unguarded. "
+            "Configure Supabase auth, or set CLAW_DEV_NO_AUTH=1 for local dev."
+        )
 
 
 def login_url() -> str:

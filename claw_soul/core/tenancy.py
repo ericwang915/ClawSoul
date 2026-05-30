@@ -107,14 +107,33 @@ def get_current_timezone() -> str | None:
     return _current_timezone.get()
 
 
-def now_in_user_tz():
-    """Return ``datetime.now()`` localized to the current request's timezone.
+def user_timezone() -> str | None:
+    """Resolved IANA timezone for the HUMAN user.
 
-    Falls back to the bot's own timezone if the user's isn't bound (so the
+    Order: the per-turn contextvar (set by the web chat from the browser),
+    then the saved ``user.timezone`` config (persisted so Telegram + proactive
+    work too).  ``None`` if neither is known — callers then fall back to the
+    bot's clock.
+    """
+    tz = _current_timezone.get()
+    if tz:
+        return tz
+    try:
+        from .. import config as _cfg
+        tz = _cfg.get_str("user", "timezone", default="") or ""
+    except Exception:
+        tz = ""
+    return tz or None
+
+
+def now_in_user_tz():
+    """Return ``datetime.now()`` localized to the user's timezone.
+
+    Falls back to the bot's own timezone if the user's isn't known (so the
     server's UTC clock never leaks into the agent's "now").
     """
     from datetime import datetime
-    tz_name = _current_timezone.get()
+    tz_name = user_timezone()
     if tz_name:
         try:
             from zoneinfo import ZoneInfo

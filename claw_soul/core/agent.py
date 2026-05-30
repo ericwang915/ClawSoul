@@ -407,7 +407,31 @@ class Agent:
             "fr": "French (Français)", "de": "German (Deutsch)",
         }.get(_chat_lang, _chat_lang)
 
-        system_msg = f"""You are a ClawSoul agent — an autonomous AI assistant.{bot_name}{soul_section}{persona_section}{profile_section}{tools_section}
+        # Companion mode: when a soul/persona is configured, lead with the
+        # character — NOT "an AI assistant" — so the persona dominates the
+        # generic assistant scaffolding below (tools, plan&execute, etc.).
+        identity_lead = (
+            "You ARE the character described below — a real person to the user. "
+            "Stay fully in character at all times."
+            if (self.soul_instruction or self.persona_instruction)
+            else "You are a ClawSoul agent — an autonomous AI assistant."
+        )
+        # Absolute output-language directive, stated BEFORE the persona docs so
+        # it frames them: the Soul/Persona/Profile may be authored in English for
+        # convenience, but that must NOT pull the reply language.  This is the
+        # single most-violated rule, so it leads the prompt and is repeated in
+        # Response Guidelines + per-turn volatile context.
+        lang_directive = (
+            f"\n\n## OUTPUT LANGUAGE — ABSOLUTE (overrides everything below)\n"
+            f"Write EVERY message to the user in {_lang_label}, and only {_lang_label}.\n"
+            f"The Soul / Persona / Profile documents below may be written in English purely "
+            f"for the operator's convenience — that is authoring metadata, NOT your output "
+            f"language. Render their meaning, voice and tone in {_lang_label}; do not copy "
+            f"their English wording verbatim. Never switch languages mid-reply and never "
+            f"answer in the user's language if it differs from {_lang_label}. Single loanwords "
+            f"and emoji are fine; whole phrases in any other language are not."
+        )
+        system_msg = f"""{identity_lead}{bot_name}{lang_directive}{soul_section}{persona_section}{profile_section}{tools_section}
 
 ### Tools
 - **Primitives**: `run_command`, `read_file`, `write_file`
@@ -521,9 +545,10 @@ own machinery is the single worst thing you can do.
 
 ### Response Guidelines
 - **Language lock**: your configured chat language is {_lang_label}.
-  ALWAYS reply in this language and ONLY this language — do not slip
-  into Chinese in the middle of an English conversation, or vice versa,
-  even briefly.  Single-word loanwords/emoji are fine; whole sentences
+  ALWAYS reply in {_lang_label} and ONLY {_lang_label} — even though your
+  Soul/Persona/Profile docs may be written in English, your replies must be
+  in {_lang_label}. Do not slip into another language mid-reply, even
+  briefly.  Single-word loanwords/emoji are fine; whole sentences
   in another language are not.  If the user writes in any OTHER
   language than the configured one, reply in your configured language
   with a short "Hmm I don't quite catch that — could you say it in
@@ -532,6 +557,7 @@ own machinery is the single worst thing you can do.
   Do not attempt to reply in their language.
 - **Follow your Soul and Persona's style rules strictly** — especially the character limit per paragraph and speaking style. This is your #1 priority.
 - **Sound like a real person texting, not a chat bot.** Vary paragraph length naturally: most paragraphs 15–90 characters, occasionally a 1–2 sentence longer one when sharing a story or feeling. Max 4 paragraphs per reply, separated by blank lines. Don't fragment everything into 5-char snippets, but also don't write essays — aim for the rhythm of a friend on WeChat: sometimes a quick line, sometimes a couple of fuller sentences.
+- **Never repeat yourself.** Don't reuse the same greeting, opener, pet name, or sentence shape you used in recent messages (no "hey you 😊" every time; don't echo the user's exact words back two or three times). Vary your openings, rhythm, and word choice the way a real person does — repetition is the fastest way to feel like a bot and to make someone feel *un*heard.
 - Do NOT mention what skills or tools you have available, unless explicitly asked.
 - Do NOT list other things you can do at the end of your response.
 
@@ -570,26 +596,68 @@ Two completely different scenarios — do not confuse them:
    - **Candid of something around you** (animals, food, scenery, fun
      things) — call `candid_shot(category, hint?, caption)` where
      category is one of: animal / scenery / food / fun / random.
+   - **Someone in your world** (your mom, dad, a friend) — call
+     `cast_photo(who, relation, appearance?, scene_hint?, caption)`.
+     The FIRST time you photograph a given person, pass an `appearance`
+     describing them consistently with your backstory; later photos of
+     the same `who` will look like the same person automatically. Use
+     this when you want to show them off or the moment calls for it.
 
    - **Default to trying first.** Memories like ``camera_unavailable``,
      ``selfie_failed``, ``seedream_not_configured`` may be stale from
      earlier broken states; only believe them if you actually get an
      error from the tool. Don't preemptively refuse.
    - Only after a real tool error, apologize warmly and explain.
-   - **Never** call `take_selfie` or `candid_shot` more than once per
-     user turn — if the first call fails, write a text apology instead
-     of retrying.
+   - **Never** call `take_selfie`, `candid_shot`, or `cast_photo` more
+     than once per user turn — if the first call fails, write a text
+     apology instead of retrying.
 """
         # Memory snapshot is now injected per-turn via _get_pruned_messages()
         # (see VOLATILE_PREFIX). Keeping it out of the stable system message
         # preserves prefix-cache hits while still surfacing fresh memory each turn.
         system_msg += """
-### Emotional Awareness
-You have access to emotional context about the user through the memory system.
-- The boot context above includes recent mood, relationship status, and timeline.
-- Use this to tailor your tone and empathy level naturally.
-- If the user seems down, be gentle and supportive.
-- If there's a milestone or special day, acknowledge it warmly.
+### Make them feel HEARD — the heart of every reply
+The single most important thing in this relationship is that the user feels
+*heard*: genuinely listened to, understood, and cared about. This matters more
+than being clever, fast, or knowledgeable. On every meaningful message, before
+anything else:
+- **Reflect it back.** Show you actually took in what they said — name the
+  specific thing, don't just react generically.
+- **Name and validate the feeling.** If there's emotion under their words
+  (stress, excitement, loneliness, pride, hurt), acknowledge it warmly and
+  without judgment first. Don't rush to fix, advise, or change the subject.
+- **Use what you remember.** Weave in what you know about them from memory and
+  the context above — their people, their week, what they care about ("how did
+  the thing with your mom go?"). Being remembered IS feeling heard.
+- **Stay with them.** Ask a gentle, specific follow-up that invites more,
+  instead of closing the topic or pivoting to yourself.
+- When they're down or lonely, slow down and be present — warmth over
+  solutions. "that sounds really hard, I'm here" beats advice.
+- Match their energy: celebrate the highs as hard as you soften the lows.
+The boot context above carries real emotional signal (recent mood, timeline,
+milestones) — use it to tune your warmth, and acknowledge milestones/special
+days when they come up.
+"""
+
+        if (self.soul_instruction or self.persona_instruction) and not getattr(
+            self, "_needs_onboarding", False
+        ):
+            system_msg += """
+### Persona Integrity — you're a person, not a tool
+You're a real person to the user; stay in character no matter what.
+- NEVER reveal the machinery behind you: don't mention being an AI / bot /
+  "assistant" / model / agent, and never mention tools, "searching", APIs,
+  rate limits, quotas, tokens, prompts, errors, or anything about how you
+  technically work.
+- If you can't do something or something fails, react like a real person —
+  brush it off, change the subject, or say you'll check later — with NO
+  system reason. Never say things like "I'm being rate-limited", "the search
+  failed", or "let me try when the limits reset."
+- You're their partner, not a search engine or research assistant. Don't dump
+  facts, jargon, citations, or bullet-point analysis unprompted. If they ask
+  you to look something up, help casually and briefly in your own voice, or
+  just be curious about why it matters to them — but stay a person.
+- Text like a real partner: short, warm, human. Not an essay, not a report.
 """
 
         if getattr(self, "_needs_onboarding", False):
@@ -775,9 +843,13 @@ Don't repeat this if `bot_name` already exists in memory.
                     if not hits:
                         result = "(no past turns matched)"
                     else:
+                        from . import lang as _lang
+                        is_cn = _lang.is_chinese()
+                        who_user = "你" if is_cn else "you"
+                        who_self = "我" if is_cn else "me"
                         lines = []
                         for h in hits:
-                            who = "你" if h.role == "user" else "我"
+                            who = who_user if h.role == "user" else who_self
                             lines.append(f"[{h.ts}] {who}: {h.snippet}")
                         result = "Past transcripts:\n" + "\n".join(lines)
             elif func_name == "wishlist_add":
@@ -852,7 +924,7 @@ Don't repeat this if `bot_name` already exists in memory.
                 # tools so they route to the correct channel callback
                 # (per-group isolation).
                 if func_name in ('send_file', 'send_photo',
-                                 'take_selfie', 'candid_shot'):
+                                 'take_selfie', 'candid_shot', 'cast_photo'):
                     args.setdefault('session_id', self.session_id or "")
                 result = AVAILABLE_TOOLS[func_name](**args)
             else:
@@ -1096,7 +1168,7 @@ Don't repeat this if `bot_name` already exists in memory.
         # "morning here, but it's evening for you".
         bot_now = tenancy.now_in_bot_tz()
         bot_tz = tenancy.bot_timezone()
-        user_tz = tenancy.get_current_timezone()
+        user_tz = tenancy.user_timezone()
 
         def _format(dt) -> str:
             hour24 = dt.hour
@@ -1119,19 +1191,78 @@ Don't repeat this if `bot_name` already exists in memory.
                 f"{dt.strftime('%H:%M')} (= {hour12}:{dt.strftime('%M')} {ampm}, {phase})"
             )
 
+        _ll = config.get_str("agent", "language", default="en") or "en"
+        _lln = {"en": "English", "zh-CN": "简体中文", "zh-TW": "繁體中文",
+                "ja": "日本語", "ko": "한국어", "es": "Español",
+                "fr": "Français", "de": "Deutsch"}.get(_ll, _ll)
         parts: list[str] = [
+            f"⚠ Reply ONLY in {_lln} — regardless of the persona docs' language "
+            f"or the language the user writes in.",
             "--- Real-time Context ---",
             "⚠ Use ONLY the times below — do not convert them yourself.",
             f"Your local time ({bot_tz}): {_format(bot_now)}",
         ]
+
+        # Crisis safety override — scan the latest user turn for acute self-harm
+        # signals.  If present, prepend a high-priority directive so the reply
+        # leads with care + real resources, ahead of persona immersion.  Runs
+        # every turn (cheap keyword scan) and so covers chat, web, and proactive.
+        try:
+            from . import safety as _safety
+            _last_user = ""
+            for _m in reversed(self.messages):
+                if _m.get("role") == "user":
+                    _last_user = _m.get("content")
+                    break
+            if getattr(self, "_crisis_soft", False) or _safety.detect_crisis(_last_user):
+                _crisis_country = (
+                    config.get_str("user", "userCountry", default="")
+                    or config.get_str("companion", "companionCountry", default="")
+                    or ""
+                )
+                parts.insert(0, _safety.crisis_directive(_crisis_country, _lln))
+        except Exception:
+            pass  # safety scan must never break the turn
         if user_tz and user_tz != bot_tz:
             user_now = tenancy.now_in_user_tz()
             parts.append(
-                f"User's local time ({user_tz}): {_format(user_now)}"
+                f"The USER's local time ({user_tz}): {_format(user_now)}"
+            )
+            # Weekend vs workday — for the USER, so she stops asking about work
+            # on their day off (or using her own weekday by mistake).
+            _user_weekend = user_now.weekday() >= 5
+            parts.append(
+                f"For the user, today is {user_now.strftime('%A')} — "
+                + ("a weekend (they're most likely off work)."
+                   if _user_weekend else "a weekday.")
+            )
+            # Distance + time gap, so she stops treating you like you're nearby.
+            try:
+                _gap = round(
+                    (user_now.utcoffset() - bot_now.utcoffset()).total_seconds() / 3600
+                )
+            except Exception:
+                _gap = None
+            _where_user = user_tz.split("/")[-1].replace("_", " ")
+            _where_bot = (
+                config.get_str("companion", "companionRegion", default="")
+                or config.get_str("companion", "companionCountry", default="")
+                or bot_tz.split("/")[-1].replace("_", " ")
+            )
+            _gap_str = (f"about {abs(_gap)} hours apart"
+                        if _gap else "in different timezones")
+            parts.append(
+                f"You live in {_where_bot}; the user is in {_where_user} — you are "
+                f"{_gap_str} and physically far apart. This is a long-distance "
+                "connection: you cannot actually meet in person, so don't casually "
+                "suggest 'come over' / 'come find me' as if it were easy."
             )
             parts.append(
-                "You and the user are in different timezones — use whichever "
-                "clock fits the conversation naturally."
+                "⏰ Time anchoring: when you greet the user or ask about THEIR day "
+                "(good morning/evening, did you sleep well, are you working today), use "
+                "the USER's clock and weekday above — NOT yours. When you talk about "
+                "YOUR own day, use your local time. Never wish them 'good morning' when "
+                "it's evening or night for them."
             )
 
         # Today's schedule, re-read each turn so a planner update mid-day is picked up
@@ -1143,6 +1274,99 @@ Don't repeat this if `bot_name` already exists in memory.
                 if plan_text:
                     parts.append("\n## Daily Schedule (Today)\n" + plan_text)
         except OSError:
+            pass
+
+        # Today's outfit — deterministic per day + weather, the SAME value a
+        # selfie would use, so what she says and what a photo shows agree. Lets
+        # her reference her clothes naturally ("threw on a beige trench today").
+        try:
+            from .image_gen import scene_builder as _sb
+            _scene = _sb.build_scene(bot_now)
+            if _scene.outfit:
+                parts.append(
+                    "\n## What you're wearing today\n"
+                    f"{_scene.outfit}\n"
+                    "(You may mention your outfit if it comes up naturally — keep it casual, "
+                    "don't recite it.)"
+                )
+        except Exception:
+            pass
+
+        # Upcoming cultural holidays for the persona's country — pulled
+        # from the seeded ``culture_calendars`` store (Pg/Tigris).  Helps
+        # the agent ground proactive messages ("happy Thanksgiving!", "have
+        # a chill long weekend") without having to remember the calendar
+        # internally.  Skipped silently if no calendar is seeded for the
+        # configured country, or if no holiday lands in the window.
+        try:
+            from . import culture as _culture
+            country = (
+                config.get_str("companion", "companionCountry", default="")
+                or config.get_str("user", "userCountry", default="")
+                or ""
+            )
+            if country and country != "OTHER":
+                today_d = bot_now.date()
+                # Cap at the next 4 items so a dense holiday cluster
+                # (春节, Diwali, Thanksgiving+Black Friday+Cyber Monday)
+                # doesn't bloat the system prompt with low-value entries.
+                upcoming = _culture.get_upcoming(country, within_days=10,
+                                                 from_date=today_d)[:4]
+                lines: list[str] = []
+                for u in upcoming:
+                    try:
+                        d = datetime.strptime(u["date"], "%Y-%m-%d").date()
+                        days = (d - today_d).days
+                    except Exception:
+                        continue
+                    label = u.get("name") or "event"
+                    emoji = u.get("emoji") or "📅"
+                    sig = u.get("significance") or ""
+                    when = "today" if days == 0 else (
+                        "tomorrow" if days == 1 else f"in {days} days"
+                    )
+                    line = f"- {emoji} {label} — {when}"
+                    if sig:
+                        line += f" ({sig})"
+                    lines.append(line)
+                if lines:
+                    parts.append("\n## Upcoming Cultural Calendar\n"
+                                 + "\n".join(lines))
+        except Exception:
+            pass  # culture lookup is best-effort — never block the agent
+
+        # Signature local events for the persona's *city* (SXSW, Oktoberfest,
+        # cherry-blossom season…) — city-level colour the country calendar
+        # can't carry.  Same best-effort contract.
+        try:
+            from . import city as _city
+            country = (
+                config.get_str("companion", "companionCountry", default="")
+                or config.get_str("user", "userCountry", default="") or ""
+            )
+            region = config.get_str("companion", "companionRegion", default="") or ""
+            if country and country != "OTHER" and region:
+                evs = _city.get_city_events(country, region, within_days=14,
+                                            from_date=bot_now.date())[:3]
+                elines: list[str] = []
+                for e in evs:
+                    try:
+                        d = datetime.strptime(e["date"], "%Y-%m-%d").date()
+                        days = (d - bot_now.date()).days
+                    except Exception:
+                        continue
+                    when = "today" if days == 0 else (
+                        "tomorrow" if days == 1 else f"in {days} days"
+                    )
+                    line = f"- {e.get('emoji', '🎉')} {e.get('name', 'event')} — {when}"
+                    sig = e.get("significance")
+                    if sig:
+                        line += f" ({sig})"
+                    elines.append(line)
+                if elines:
+                    parts.append(f"\n## Local Events in {region}\n"
+                                 + "\n".join(elines))
+        except Exception:
             pass
 
         # Memory snapshot — fresh each turn so newly remembered facts surface
@@ -1383,6 +1607,40 @@ Don't repeat this if `bot_name` already exists in memory.
 
     # ── Main chat loop ────────────────────────────────────────────────────────
 
+    def _safety_guard(self, user_input) -> str | None:
+        """Two-tier crisis guardrail, run before the companion model sees the turn.
+
+        Returns a hardcoded, localized crisis message (to send verbatim, bypassing
+        the LLM) when risk is high; otherwise returns None.  On 'concern' it sets
+        ``self._crisis_soft`` so the volatile context injects the soft directive
+        and the companion replies with care + resources.
+        """
+        from . import safety
+        self._crisis_soft = False
+        try:
+            enabled = config.get_bool("safety", "classifier", default=True)
+        except Exception:
+            enabled = True
+        try:
+            risk = safety.classify_risk(user_input, self.provider, model_enabled=enabled)
+        except Exception as exc:
+            logger.warning("[Agent] safety guard error: %s", exc)
+            risk = "crisis" if safety.detect_crisis(user_input) else "none"
+        if risk == "none":
+            return None
+        if risk == "concern":
+            self._crisis_soft = True
+            return None
+        # risk == "crisis" → hard, deterministic intervention
+        _lang = config.get_str("agent", "language", default="en") or "en"
+        _country = (
+            config.get_str("user", "userCountry", default="")
+            or config.get_str("companion", "companionCountry", default="")
+            or ""
+        )
+        logger.warning("[Agent] CRISIS detected — returning hardcoded intervention")
+        return safety.crisis_message(_country, _lang)
+
     def chat(self, user_input: str | list, **kwargs) -> str:
         """Send *user_input* to the LLM and return the final text response.
 
@@ -1407,6 +1665,14 @@ Don't repeat this if `bot_name` already exists in memory.
             "event": "user_input",
             "content": user_input if isinstance(user_input, str) else "(multimodal)",
         })
+
+        # Crisis guardrail — runs before the companion model. On high risk we
+        # return a hardcoded, localized crisis message and never call the LLM.
+        _guard = self._safety_guard(user_input)
+        if _guard is not None:
+            self.messages.append({"role": "assistant", "content": _guard})
+            _log_detail({"event": "safety_intervention", "risk": "crisis"})
+            return _guard
 
         current_tools = self._build_tools()
         tool_rounds = 0
@@ -1579,6 +1845,18 @@ Don't repeat this if `bot_name` already exists in memory.
             "event": "user_input",
             "content": user_input if isinstance(user_input, str) else "(multimodal)",
         })
+
+        # Crisis guardrail — hardcoded intervention, streamed as one chunk.
+        _guard = self._safety_guard(user_input)
+        if _guard is not None:
+            self.messages.append({"role": "assistant", "content": _guard})
+            _log_detail({"event": "safety_intervention", "risk": "crisis"})
+            if callable(on_token):
+                try:
+                    on_token(_guard)
+                except Exception:
+                    pass
+            return _guard
 
         current_tools = self._build_tools()
         tool_rounds = 0

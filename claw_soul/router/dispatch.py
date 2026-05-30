@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any
 
@@ -32,6 +33,20 @@ logger = logging.getLogger(__name__)
 
 
 WORKER_DISPATCH_TIMEOUT = 30.0
+
+# Cap concurrent worker wakes so a tick burst (e.g. hundreds of proactive
+# ticks landing in the same window) doesn't stampede the Fly Machines API
+# or cold-start a thundering herd of suspended machines at once.  Sized via
+# env; the default keeps Fly API QPS sane while still draining a burst in a
+# few seconds.  A module-level Semaphore is loop-agnostic until first awaited.
+def _max_concurrent_wakes() -> int:
+    try:
+        return max(1, int(os.environ.get("ROUTER_MAX_CONCURRENT_WAKES", "20")))
+    except ValueError:
+        return 20
+
+
+_WAKE_SEMAPHORE = asyncio.Semaphore(_max_concurrent_wakes())
 
 
 class DispatchError(RuntimeError):
@@ -63,7 +78,11 @@ async def wake_if_needed(row: db.UserMachineRow) -> None:
     t0 = time.monotonic()
     woke = False
     try:
-        fly_client.start_machine(row.machine_id)
+        # fly_client is sync (httpx.Client + time.sleep).  The router is a
+        # SINGLE instance serving every webhook AND every scheduler tick, so
+        # any blocking call here stalls the whole event loop — offload to a
+        # thread so one cold-start wake doesn't freeze all other users.
+        await asyncio.to_thread(fly_client.start_machine, row.machine_id)
         woke = True
     except fly_client.FlyAPIError as exc:
         if exc.status not in (409,):
@@ -76,8 +95,10 @@ async def wake_if_needed(row: db.UserMachineRow) -> None:
 
     if woke:
         # Wait for Fly to fully reattach networking before the caller
-        # tries to resolve the machine's internal DNS.
-        ok = fly_client.wait_for_state(
+        # tries to resolve the machine's internal DNS.  Also offloaded —
+        # wait_for_state polls with time.sleep for up to 15s.
+        ok = await asyncio.to_thread(
+            fly_client.wait_for_state,
             row.machine_id, "started", timeout_sec=15.0, poll_interval=0.5,
         )
         if not ok:
@@ -95,7 +116,9 @@ async def dispatch(user_id: str, kind: str, payload: dict[str, Any]) -> bool:
         logger.warning("[router] dispatch: no user_machines row for %s", user_id[:8])
         return False
     try:
-        await wake_if_needed(row)
+        # Bound concurrent wakes so a tick burst doesn't stampede Fly's API.
+        async with _WAKE_SEMAPHORE:
+            await wake_if_needed(row)
     except DispatchError as exc:
         logger.warning("[router] %s wake failed: %s", user_id[:8], exc)
         return False

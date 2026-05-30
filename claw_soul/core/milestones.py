@@ -226,28 +226,26 @@ async def _count_turns(user_id: str) -> int:
 
 
 async def _count_active_days(user_id: str) -> int:
+    """Distinct UTC days the user has chatted in the last year.
+
+    Uses the ``count_active_days`` SQL RPC (migration 012) so Postgres
+    does the COUNT(DISTINCT date) instead of shipping up to 5000 rows to
+    de-dup in Python on the hot path."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
     try:
         async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(
-                f"{_pg_url()}/rest/v1/turns",
-                params={"user_id": f"eq.{user_id}",
-                        "ts":      f"gte.{cutoff}",
-                        "select":  "ts",
-                        "limit":   "5000"},
-                headers=_headers(),
+            r = await c.post(
+                f"{_pg_url()}/rest/v1/rpc/count_active_days",
+                json={"p_user_id": user_id, "p_since": cutoff},
+                headers={**_headers(), "Content-Type": "application/json"},
             )
         if not r.is_success:
+            logger.warning("[milestones] active-days RPC failed: %s %s",
+                           r.status_code, r.text[:200])
             return 0
-        days = set()
-        for row in r.json() or []:
-            try:
-                d = datetime.fromisoformat(row["ts"].replace("Z", "+00:00")).date()
-                days.add(d.isoformat())
-            except Exception:
-                continue
-        return len(days)
-    except Exception:
+        return int(r.json())
+    except Exception as exc:
+        logger.warning("[milestones] active-days RPC errored: %s", exc)
         return 0
 
 
