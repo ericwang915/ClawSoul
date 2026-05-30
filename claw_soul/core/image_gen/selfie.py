@@ -68,6 +68,12 @@ def _build_prompt(appearance: str, scene: Scene, extra_hint: str | None) -> str:
         scene_block = scene.as_prompt_block()
         if scene_block:
             chunks.append(scene_block)
+    else:
+        # Non-CN persona: the auto scene block is Chinese, so we don't add it,
+        # but we DO inject the daily outfit (already in English) — that's what
+        # gives day-to-day, weather-appropriate wardrobe variety here.
+        if scene.outfit:
+            chunks.append(f"Outfit: {scene.outfit}.")
     if extra_hint:
         chunks.append(extra_hint.strip())
     chunks.append(_BASE_STYLE_ZH if is_zh else _BASE_STYLE_EN)

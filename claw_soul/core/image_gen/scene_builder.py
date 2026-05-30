@@ -46,9 +46,10 @@ class Scene:
     mood: str = ""
     weather: str = ""
     holiday: str = ""
+    outfit: str = ""
 
     def is_empty(self) -> bool:
-        return not (self.activity or self.mood or self.weather)
+        return not (self.activity or self.mood or self.weather or self.outfit)
 
     def as_prompt_block(self) -> str:
         """Render the scene as a Chinese natural-language paragraph for Seedream."""
@@ -58,6 +59,8 @@ class Scene:
         when = self.time or datetime.now().strftime("%H:%M")
         if self.activity:
             parts.append(f"{when} 她正在{self.activity}")
+        if self.outfit:
+            parts.append(f"今天穿着{self.outfit}")
         if self.weather:
             parts.append(f"窗外{self.weather}")
         if self.mood:
@@ -131,11 +134,24 @@ def build_scene(now: datetime | None = None) -> Scene:
 
     header, activities = _parse_plan(text)
     time_str, activity = _pick_current(activities, now.hour * 60 + now.minute)
+    weather = header.get("天气", "")
+
+    # Daily, weather-coupled, persona-appropriate outfit. Deterministic by date,
+    # so the selfie and what she says in chat agree. Best-effort — never break
+    # scene building over wardrobe.
+    outfit = ""
+    try:
+        from . import wardrobe
+        lang = config.get_str("agent", "language", default="en") or "en"
+        outfit = wardrobe.outfit_today(now, weather, lang, activity=activity)
+    except Exception as exc:
+        logger.debug("[scene_builder] outfit skipped: %s", exc)
 
     return Scene(
         time=time_str,
         activity=activity,
         mood=header.get("精神状态") or header.get("心情") or "",
-        weather=header.get("天气", ""),
+        weather=weather,
         holiday=header.get("节日", ""),
+        outfit=outfit,
     )

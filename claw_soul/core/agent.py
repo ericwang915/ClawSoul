@@ -1244,6 +1244,22 @@ Don't repeat this if `bot_name` already exists in memory.
         except OSError:
             pass
 
+        # Today's outfit — deterministic per day + weather, the SAME value a
+        # selfie would use, so what she says and what a photo shows agree. Lets
+        # her reference her clothes naturally ("threw on a beige trench today").
+        try:
+            from .image_gen import scene_builder as _sb
+            _scene = _sb.build_scene(bot_now)
+            if _scene.outfit:
+                parts.append(
+                    "\n## What you're wearing today\n"
+                    f"{_scene.outfit}\n"
+                    "(You may mention your outfit if it comes up naturally — keep it casual, "
+                    "don't recite it.)"
+                )
+        except Exception:
+            pass
+
         # Upcoming cultural holidays for the persona's country — pulled
         # from the seeded ``culture_calendars`` store (Pg/Tigris).  Helps
         # the agent ground proactive messages ("happy Thanksgiving!", "have
