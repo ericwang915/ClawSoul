@@ -22,12 +22,13 @@ import os
 import random
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from .. import config
+from ..core import tenancy
 from ..core.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,21 @@ _MOODS = [
     "今天有点丧，需要奶茶续命",
     "今天莫名开心，想给男朋友分享一堆东西",
     "今天有点感冒的迹象，嗓子不太舒服",
+]
+
+_MOODS_EN = [
+    "feeling energized today, good mood, want to make things happen",
+    "kind of meh today, a bit lazy, want to take it slow",
+    "creative spark today, really in the mood to work on something",
+    "a little tired today, want more rest, no rushing",
+    "in a great mood today, want to get out and wander",
+    "slightly anxious today — a client is on my back about a deadline",
+    "very relaxed today, no pressure, just going with the flow",
+    "a bit homesick today, want to call my parents",
+    "motivated today, want to finally clear the stuff I've been putting off",
+    "a little down today, need a coffee to keep going",
+    "inexplicably happy today, want to share a bunch of things with them",
+    "feeling a cold coming on today, throat's a bit scratchy",
 ]
 
 _WEEKDAYS_ZH = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -114,44 +130,95 @@ _LUNAR_HOLIDAYS: dict[int, list[tuple[int, int, str]]] = {
 
 
 def _get_holiday_info(now: datetime) -> str:
-    """Return a description of today's holiday status and upcoming events."""
+    """Return a description of today's holiday status and upcoming events.
+
+    Looks the persona's home country up in the cultural-calendar store
+    (Pg/Tigris-backed; see ``claw_soul.core.culture``).  Falls back to
+    the legacy CN ``_FIXED_HOLIDAYS`` / ``_LUNAR_HOLIDAYS`` tables when
+    no country is configured or no calendar exists for it — preserves
+    behaviour for original CN single-tenant installs.
+    """
+    from ..core import culture
+
+    today_date = now.date()
+    country = (
+        config.get_str("companion", "companionCountry", default="")
+        or config.get_str("user", "userCountry", default="")
+        or ""
+    )
+
+    cal_entry: dict | None = None
+    upcoming_items: list[dict] = []
+    country_known = bool(country and country != "OTHER")
+    if country_known:
+        cal_entry = culture.get_holiday_for_date(country, today_date)
+        upcoming_items = culture.get_upcoming(country, within_days=4,
+                                              from_date=today_date)
+
+    # Once we know the persona's country, always emit the English-style
+    # block — falling back to the legacy CN string when there happens
+    # to be no holiday in window would inject Chinese text into an
+    # English persona's system prompt.
+    if country_known or cal_entry is not None or upcoming_items:
+        parts: list[str] = []
+        if cal_entry is not None:
+            emoji = cal_entry.get("emoji") or "🎉"
+            name = cal_entry.get("name") or "today's holiday"
+            sig = cal_entry.get("significance") or ""
+            parts.append(f"{emoji} Today is {name}." + (f" {sig}" if sig else ""))
+        else:
+            is_weekend = now.weekday() >= 5
+            parts.append("Weekend rest day." if is_weekend else "Regular weekday.")
+        # Strip today out of upcoming and keep next 1-3
+        future = [u for u in upcoming_items if u.get("date") != today_date.isoformat()]
+        if future:
+            pieces = []
+            for u in future[:3]:
+                try:
+                    d = datetime.strptime(u["date"], "%Y-%m-%d").date()
+                    days = (d - today_date).days
+                except (KeyError, ValueError):
+                    continue
+                pieces.append(
+                    f"{u.get('emoji','📅')} {u.get('name','event')} in {days} day"
+                    + ("s" if days != 1 else "")
+                )
+            if pieces:
+                parts.append(" (" + "; ".join(pieces) + ")")
+        return "".join(parts)
+
+    # ── Legacy CN fallback ────────────────────────────────────────────
     today_key = (now.month, now.day)
     year = now.year
 
-    # Check fixed-date holidays
     holiday = _FIXED_HOLIDAYS.get(today_key)
-
-    # Check lunar holidays for this year
     if not holiday:
         for m, d, name in _LUNAR_HOLIDAYS.get(year, []):
             if m == now.month and d == now.day:
                 holiday = name
                 break
 
-    # Check upcoming holidays (next 3 days)
     upcoming: list[str] = []
     for delta in range(1, 4):
-        future = now + timedelta(days=delta)
-        fkey = (future.month, future.day)
+        future_dt = now + timedelta(days=delta)
+        fkey = (future_dt.month, future_dt.day)
         h = _FIXED_HOLIDAYS.get(fkey)
         if not h:
             for m, d, name in _LUNAR_HOLIDAYS.get(year, []):
-                if m == future.month and d == future.day:
+                if m == future_dt.month and d == future_dt.day:
                     h = name
                     break
         if h:
             upcoming.append(f"{delta}天后是{h}")
 
-    parts: list[str] = []
+    parts = []
     if holiday:
         parts.append(f"🎉 今天是{holiday}！放假/特殊日子")
     else:
         is_weekend = now.weekday() >= 5
         parts.append("周末休息日" if is_weekend else "普通工作日")
-
     if upcoming:
         parts.append("（" + "；".join(upcoming) + "）")
-
     return "".join(parts)
 
 # ── Shanghai default coords (from PROFILE.md) ───────────────────────────────
@@ -277,7 +344,7 @@ def _seasonal_fallback_weather() -> str:
     leaving the LLM to invent August snow.
     """
     import random as _r
-    m = datetime.now().month
+    m = tenancy.now_in_bot_tz().month
     bands = {
         1:  [("阴冷干燥", 3, 8), ("小雨偏冷", 4, 9)],
         2:  [("阴天偏冷", 5, 11), ("小雨初春", 7, 13)],
@@ -333,7 +400,7 @@ def _gather_realtime_signals(city: str = "Shanghai", weekday_zh: str = "") -> st
     except Exception:
         return ""
 
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = tenancy.now_in_bot_tz().strftime("%Y-%m-%d")
     queries = [
         f"{city} 今日活动 演出 展览 {today_str}",
         f"{city} 本周 活动 演唱会 市集 美食节",
@@ -367,12 +434,17 @@ def _plan_path() -> str:
 
 
 def plan_is_stale() -> bool:
-    """Return True if today_plan.md is missing or was generated on a past day."""
+    """Return True if today_plan.md is missing or was generated on a past day.
+
+    Compares in the persona's timezone so the day boundary matches when the
+    plan is regenerated (00:0x bot-tz), not the container's UTC midnight."""
+    from datetime import timezone
     path = _plan_path()
     if not os.path.exists(path):
         return True
-    mtime = datetime.fromtimestamp(os.path.getmtime(path))
-    return mtime.date() != date.today()
+    bot_now = tenancy.now_in_bot_tz()
+    mtime = datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc)
+    return mtime.astimezone(bot_now.tzinfo).date() != bot_now.date()
 
 
 def _season(month: int) -> str:
@@ -385,11 +457,30 @@ def _season(month: int) -> str:
     return "冬天"
 
 
+def _season_en(month: int) -> str:
+    if month in (3, 4, 5):
+        return "spring"
+    if month in (6, 7, 8):
+        return "summer"
+    if month in (9, 10, 11):
+        return "autumn"
+    return "winter"
+
+
 # ── Core generation ──────────────────────────────────────────────────────────
 
 async def generate_daily_plan(provider: LLMProvider) -> None:
-    """Generate the daily plan and save it to context/calendar/today_plan.md."""
-    logger.info("[Planner] Starting daily schedule generation...")
+    """Generate the daily plan and save it to context/calendar/today_plan.md.
+
+    Bilingual: Chinese personas get the CN prompt + mood pool; everyone else
+    gets the English equivalent.  Both produce a "today's schedule" that
+    grounds the agent's sense of what it's doing all day, in the persona's
+    own language (so an EN persona's plan doesn't pull chat toward Chinese).
+    """
+    from ..core import lang as _lang
+    is_zh = _lang.is_chinese()
+    logger.info("[Planner] Starting daily schedule generation (lang=%s)...",
+                "zh" if is_zh else "en")
 
     home = str(config.CLAWSOUL_HOME)
     context_dir = os.path.join(home, "context")
@@ -410,28 +501,60 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
 
     # Real-time signals (weather + local events) — both run off the executor
     # so the planner doesn't block on slow weather/search providers.
+    # Resolve the persona's real city → coordinates so the daily plan's
+    # weather reflects where she actually lives, not a hardcoded Shanghai.
+    # Falls back to the Shanghai default inside _fetch_weather_brief when
+    # the city isn't in the seeded store.
+    from ..core import city as _city
+    _country = (config.get_str("companion", "companionCountry", default="")
+                or config.get_str("user", "userCountry", default="") or "")
+    _region = config.get_str("companion", "companionRegion", default="") or ""
+    _cprof = _city.get_city(_country, _region) if _country else None
+
     loop = asyncio.get_running_loop()
-    weather, realtime_signals = await asyncio.gather(
-        loop.run_in_executor(None, _fetch_weather_brief),
-        loop.run_in_executor(None, _gather_realtime_signals),
-    )
+    if _cprof:
+        weather_call = loop.run_in_executor(
+            None, _fetch_weather_brief,
+            _cprof["lat"], _cprof["lon"], _cprof["city"])
+    else:
+        weather_call = loop.run_in_executor(None, _fetch_weather_brief)
+    # Live local search builds Chinese queries, so only run it for CN
+    # personas; EN personas stay vague (the prompt handles the empty case).
+    if is_zh:
+        sig_city = _cprof["city"] if _cprof else "Shanghai"
+        signals_call = loop.run_in_executor(None, _gather_realtime_signals, sig_city)
+        weather, realtime_signals = await asyncio.gather(weather_call, signals_call)
+    else:
+        weather = await weather_call
+        realtime_signals = ""
 
-    # Random daily mood
-    mood = random.choice(_MOODS)
-
-    now = datetime.now()
-    date_str = now.strftime("%Y年%m月%d日")
-    weekday = _WEEKDAYS_ZH[now.weekday()]
-    season = _season(now.month)
+    # Date context in the persona's home timezone (not the container's UTC),
+    # plus language-specific mood / labels / live-search framing.
+    now = tenancy.now_in_bot_tz()
     holiday_info = _get_holiday_info(now)
+    season = _season(now.month) if is_zh else _season_en(now.month)
+    if is_zh:
+        mood = random.choice(_MOODS)
+        date_str = now.strftime("%Y年%m月%d日")
+        weekday = _WEEKDAYS_ZH[now.weekday()]
+        realtime_block = (
+            f"\n## 实时检索到的本地信息（一手资料，优先使用）\n{realtime_signals}\n"
+            if realtime_signals else
+            "\n## 实时检索\n（无实时检索结果——保持模糊，不要编造具体活动名称、嘉宾、地点）\n"
+        )
+    else:
+        mood = random.choice(_MOODS_EN)
+        date_str = now.strftime("%B %d, %Y")
+        weekday = now.strftime("%A")
+        realtime_block = (
+            f"\n## Live local info (first-hand — prefer this)\n{realtime_signals}\n"
+            if realtime_signals else
+            "\n## Live search\n(No live results — stay vague; don't invent specific "
+            "event names, performers, or addresses.)\n"
+        )
 
-    realtime_block = (
-        f"\n## 实时检索到的本地信息（一手资料，优先使用）\n{realtime_signals}\n"
-        if realtime_signals else
-        "\n## 实时检索\n（无实时检索结果——保持模糊，不要编造具体活动名称、嘉宾、地点）\n"
-    )
-
-    prompt = f"""你要为自己规划今天一整天的日程。你就是下面这个角色，请完全代入。
+    if is_zh:
+        prompt = f"""你要为自己规划今天一整天的日程。你就是下面这个角色，请完全代入。
 这份日程是给你自己看的——你之后跟男朋友/女朋友聊天时，会根据当下时间在
 日程里走到哪一格来决定自己「现在大概在干嘛、心情怎么样、刚发生了什么」。
 所以细节越具体越好，越像真人随手记的生活流水越好。
@@ -519,6 +642,85 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
 
 直接输出日程列表（**至少 36 行** `- HH:MM ...`），不要标题、不要多余说明。
 """
+    else:
+        prompt = f"""You're planning your whole day for yourself. You ARE the character below — fully inhabit them.
+This schedule is for your own reference: later, when you chat with your partner, you'll glance at
+where you are in it right now to decide "what am I probably doing, how do I feel, what just happened."
+So the more concrete and the more like a real person's offhand life-log, the better.
+
+## Your core personality
+{soul[:600]}
+
+## Your persona
+{persona[:500]}
+
+## Your life background
+{profile}
+
+## Today
+- Date: {date_str} ({weekday})
+- Season: {season}
+- Holidays: {holiday_info}
+- {weather}
+- Today's mood: {mood}
+{realtime_block}
+
+## Requirements
+
+In the first person, from 7am to 0–1am (bedtime), **output at least 36 time slots**, one every
+20–40 minutes, denser at key moments (waking, meals, work, windows where you'd message them).
+Time moves forward, **never reverse**; format `HH:MM`.
+
+**At least 2 concrete details per slot** — not just a verb like "draw" or "eat." For example:
+
+```
+- 09:15 alarm goes off a third time before I get up; the cat's been meowing at my feet for five
+        minutes, dinner's late — I shuffle over to feed it and make an iced americano, sit by the
+        window zoning out
+- 10:00 open the tablet to keep going on last night's piece, palette leaning cool; put on an album,
+        draw till my wrist aches around 11 and stop to stretch
+- 12:30 grab a sandwich from the shop downstairs, the clerk's wearing that cap again
+```
+
+## Content rules
+
+1. **Fully inhabit the character**: their job / routine / hobbies / the real rhythm of their city.
+2. **1–2 sensory or emotional details per slot**: weather sounds, smells, body feelings, things
+   seen, things remembered, a message you fired off.
+3. **Weather drives behavior**: use the "weather" field above for indoor / outdoor. Rain → stay in;
+   muggy → air-conditioned places; clear → a walk. If weather's unknown, guess from the season.
+4. **Date / weekend / holidays**:
+   - Mon–Fri: include real work (tasks, revisions, client calls, a pitch);
+   - Sat–Sun: later wake-up, looser — brunch / friends / errands / a show;
+   - Holidays: show the ritual of the day + holiday spending (markets, gifts, prep);
+   - As a holiday nears: show anticipation ("day off tomorrow", "heading home next week").
+5. **Local activity (immersion matters most)** — 1–3 doable local things in the day.
+   **Strict rule — do NOT make things up**:
+   * If the "Live local info" above has a concrete event / show / new spot → **prefer the real
+     event**; its name, place, and date are fine to use.
+   * If live search is empty → **stay vague**. Don't invent real event names, performers, or street
+     addresses. Say "thinking of trying that new café nearby" — NOT "seeing [real artist] tonight."
+   * Safe generic directions: a walk, a homeware store, a new café, a new movie (no specific title),
+     your usual coffee shop, the market, the flower shop downstairs.
+   * Seasonal vague references (style hints only — don't copy as real event names):
+     - late spring / early summer: outdoor coffee markets, a museum spring show, a riverside walk
+     - summer: night markets, summer art events, a night run, cooling off in a mall
+     - autumn: park outings, an art week, a long-weekend trip
+     - winter: holiday markets, year-end events, getting ready for the holidays
+6. **3–5 "anchor" events a day**: brunch with a friend, a package arriving, the art store, the cat
+   downstairs, a video that made you laugh, talking shop with a friend online, an order landing,
+   buying flowers, trying a new spot, a family video call.
+7. **Leave windows to interact with them**: a morning "good morning" urge, an afternoon slack-off
+   share, a sudden missing-you on the evening walk, wanting to talk after a shower — scatter these.
+8. **Necessary "boring" stretches**: scrolling, spacing out, lying around — real people aren't
+   productive every minute.
+9. **Occasional little surprises or turns**: changing your mind about going out, redoing work that
+   isn't coming together, a delivery call waking you, a queue too long so you go elsewhere.
+10. **Not every slot sunny**: sometimes tired, annoyed, inexplicably down, mad at a client.
+11. The day ends with sleep between 0:00–1:00.
+
+Output the schedule list directly (**at least 36 lines** of `- HH:MM ...`) — no title, no extra commentary.
+"""
 
     try:
         messages = [{"role": "user", "content": prompt}]
@@ -528,12 +730,16 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
         plan_file = _plan_path()
         os.makedirs(os.path.dirname(plan_file), exist_ok=True)
 
-        header = (
-            f"# {date_str}（{weekday}）日程\n\n"
-            f"> {holiday_info}\n"
-            f"> {weather}\n"
-            f"> 精神状态：{mood}\n\n"
-        )
+        if is_zh:
+            header = (
+                f"# {date_str}（{weekday}）日程\n\n"
+                f"> {holiday_info}\n> {weather}\n> 精神状态：{mood}\n\n"
+            )
+        else:
+            header = (
+                f"# Daily Schedule — {date_str} ({weekday})\n\n"
+                f"> {holiday_info}\n> {weather}\n> Mood: {mood}\n\n"
+            )
         with open(plan_file, "w", encoding="utf-8") as f:
             f.write(header + content)
 

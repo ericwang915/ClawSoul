@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import tempfile
-from datetime import datetime, date
+from datetime import date, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -193,39 +193,60 @@ class MilestoneManager:
 
         Returns (True, "description") or (False, "").
         """
+        from .. import lang as _lang
         days = self._days_since_first()
         if days is None:
             return False, ""
 
+        is_cn = _lang.is_chinese()
         if days in (1, 7, 30, 100, 365, 730, 1095):
-            labels = {1: "认识1天", 7: "认识1周", 30: "认识1个月", 100: "认识100天",
-                      365: "认识1周年", 730: "认识2周年", 1095: "认识3周年"}
-            return True, labels.get(days, f"认识{days}天")
+            if is_cn:
+                labels = {1: "认识1天", 7: "认识1周", 30: "认识1个月",
+                          100: "认识100天", 365: "认识1周年",
+                          730: "认识2周年", 1095: "认识3周年"}
+                return True, labels.get(days, f"认识{days}天")
+            labels_en = {1: "1 day together", 7: "1 week together",
+                         30: "1 month together", 100: "100 days together",
+                         365: "1-year anniversary", 730: "2-year anniversary",
+                         1095: "3-year anniversary"}
+            return True, labels_en.get(days, f"{days} days together")
 
         # Every 365 days after first year
         if days > 365 and days % 365 == 0:
             years = days // 365
-            return True, f"认识{years}周年纪念日"
+            if is_cn:
+                return True, f"认识{years}周年纪念日"
+            return True, f"{years}-year anniversary"
 
         return False, ""
 
     def get_relationship_age_str(self) -> str:
         """Return human-readable relationship age, e.g. '123 days'."""
+        from .. import lang as _lang
         days = self._days_since_first()
+        is_cn = _lang.is_chinese()
         if days is None:
-            return "正在认识中..."
+            return "正在认识中..." if is_cn else "Still getting to know each other…"
         if days == 0:
-            return "初次见面"
+            return "初次见面" if is_cn else "Just met"
         if days < 30:
-            return f"{days} 天"
+            return f"{days} 天" if is_cn else f"{days} days"
         if days < 365:
             months = days // 30
             remaining = days % 30
-            return f"{months} 个月 {remaining} 天"
+            if is_cn:
+                return f"{months} 个月 {remaining} 天"
+            unit_m = "month" if months == 1 else "months"
+            unit_d = "day" if remaining == 1 else "days"
+            return f"{months} {unit_m} {remaining} {unit_d}"
         years = days // 365
         remaining = days % 365
         months = remaining // 30
-        return f"{years} 年 {months} 个月"
+        if is_cn:
+            return f"{years} 年 {months} 个月"
+        unit_y = "year" if years == 1 else "years"
+        unit_m = "month" if months == 1 else "months"
+        return f"{years} {unit_y} {months} {unit_m}"
 
     def get_data(self) -> dict[str, Any]:
         """Return raw data dict."""

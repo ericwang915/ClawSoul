@@ -247,6 +247,16 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
         cleaned.get("companionRegion") or "",
     )
 
+    # User's local timezone — used by the proactive throttle's quiet-hours
+    # gate ("don't bug me when I'm asleep"), which should follow the real
+    # human's sleep schedule, not the persona's.  Wizard only collects
+    # ``userCountry`` (no user region), so we resolve via the same helper
+    # but with an empty region — falling through to the country-default
+    # tz, which is good enough until we add a user-city field.
+    cfg.setdefault("user", {})["timezone"] = companion_to_timezone(
+        cleaned.get("userCountry", ""), "",
+    )
+
     _persist_config(cfg)
 
     # 3. Identity files.  In SaaS mode the dashboard host (legacy

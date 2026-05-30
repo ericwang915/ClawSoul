@@ -29,6 +29,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from .. import config
+from ..core import lang as _lang
 
 if TYPE_CHECKING:
     from ..channels.telegram_bot import TelegramBot
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _WEEKDAYS_ZH = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+_WEEKDAYS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 _TIME_HINTS: dict[str, str] = {
     "early_morning": "你刚起床还有点迷糊",
@@ -50,6 +52,18 @@ _TIME_HINTS: dict[str, str] = {
     "night":         "很晚了，你准备去睡觉",
 }
 
+_TIME_HINTS_EN: dict[str, str] = {
+    "early_morning": "you just woke up, still a bit groggy",
+    "morning":       "you're up, having coffee or about to start work",
+    "late_morning":  "morning's almost gone, you're painting or in the middle of work",
+    "noon":          "lunch time",
+    "afternoon":     "it's afternoon — you're working / slacking off / having tea",
+    "late_afternoon":"early evening — work is mostly wrapping up",
+    "evening":       "it's evening, you're relaxing and unwinding",
+    "late_evening":  "getting late, you're still up",
+    "night":         "very late, you're heading to bed soon",
+}
+
 # ── Soul Mate: sentiment-aware prompt templates ──────────────────────────────
 
 _SENTIMENT_PROMPTS: dict[str, str] = {
@@ -58,6 +72,14 @@ _SENTIMENT_PROMPTS: dict[str, str] = {
     "neutral": "日常随意聊聊。",
     "long_silence": "已经很久没联系了。发一条简短温馨的消息。",
     "unfinished": "上次聊到{topic}还没聊完，主动提起来。",
+}
+
+_SENTIMENT_PROMPTS_EN: dict[str, str] = {
+    "negative":     "They seem a bit down today. Reach out gently — don't dig for the reason, just be present.",
+    "positive":     "They seem in a good mood today. Share something light, or ask what's making them happy.",
+    "neutral":      "Casual everyday check-in.",
+    "long_silence":"It's been a while since you've talked. Send something short and warm.",
+    "unfinished":   "Last time you were talking about {topic} and it didn't wrap up — bring it up naturally.",
 }
 
 
@@ -91,6 +113,16 @@ _ENRICHMENTS = [
     "看看有没有什么有趣的新闻或热搜，用自己的话随口聊聊。",
     "分享一个你今天的小日常：画画进度、芝麻趣事、吃了什么好吃的、拍到好看的云等。",
     "关心一下对方的身体状况或工作状态，撒个娇。",
+]
+
+_ENRICHMENTS_EN = [
+    "Check the weather where you live — if anything's worth mentioning (cold snap, rain, blazing sun), drop it in naturally.",
+    "Glance at your schedule today; if there's something happening near this time, you can chat about it.",
+    "Use `recall` to peek at what they said recently — if there's a thread worth following (a project / plan / mood they mentioned), bring it up.",
+    "Think about what you've been watching, reading, or listening to lately — recommend one to them.",
+    "Look for any fun news or trending topic and riff on it in your own words.",
+    "Share a small slice of your day: painting progress, a silly thing that happened, food you had, a pretty cloud you spotted.",
+    "Check in on how they're feeling physically or how work's going — let yourself be a little needy.",
 ]
 
 # ── Soul Mate: sentiment gating threshold ────────────────────────────────────
@@ -179,12 +211,22 @@ def _build_wish_prompt(wish_text: str, now: datetime) -> str:
     not robotically read it back.
     """
     time_str = now.strftime("%H:%M")
-    weekday = _WEEKDAYS_ZH[now.weekday()]
+    if _lang.is_chinese():
+        weekday = _WEEKDAYS_ZH[now.weekday()]
+        return (
+            f"现在是{weekday} {time_str}。\n"
+            f"对方之前说过想做这件事：「{wish_text}」。\n"
+            f"主动跟对方提一下，看看现在要不要做、什么时候做、或者有没有什么想法。\n"
+            f"不要直接复述「你之前说过」，自然地把这事带起来，像是你也想到了一样。"
+        )
+    weekday = _WEEKDAYS_EN[now.weekday()]
     return (
-        f"现在是{weekday} {time_str}。\n"
-        f"对方之前说过想做这件事：「{wish_text}」。\n"
-        f"主动跟对方提一下，看看现在要不要做、什么时候做、或者有没有什么想法。\n"
-        f"不要直接复述「你之前说过」，自然地把这事带起来，像是你也想到了一样。"
+        f"It's {weekday} {time_str}.\n"
+        f"They mentioned wanting to do this: \"{wish_text}\".\n"
+        "Bring it up naturally — see if they want to do it now, when, or "
+        "if they have any thoughts.\n"
+        "Don't say \"you mentioned\" verbatim; weave it in like you also "
+        "happened to be thinking about it."
     )
 
 
@@ -193,16 +235,17 @@ def _build_prompt(
     sentiment_context: dict[str, Any] | None = None,
 ) -> str:
     time_str = now.strftime("%H:%M")
-    weekday = _WEEKDAYS_ZH[now.weekday()]
     slot = _time_slot(now.hour)
-    hint = _TIME_HINTS[slot]
+    is_cn = _lang.is_chinese()
 
     # Pick 0–2 random enrichments so each message feels different
+    enrichments_pool = _ENRICHMENTS if is_cn else _ENRICHMENTS_EN
     k = random.choices([0, 1, 2], weights=[3, 5, 2], k=1)[0]
-    extras = random.sample(_ENRICHMENTS, k=min(k, len(_ENRICHMENTS)))
+    extras = random.sample(enrichments_pool, k=min(k, len(enrichments_pool)))
     extra_block = "\n".join(extras)
 
     # ── Soul Mate: sentiment-aware prompt section ──────────────────────────────
+    sentiment_table = _SENTIMENT_PROMPTS if is_cn else _SENTIMENT_PROMPTS_EN
     sentiment_instruction = ""
     if sentiment_context:
         sentiment = sentiment_context.get("sentiment", "neutral")
@@ -211,27 +254,54 @@ def _build_prompt(
         topics = sentiment_context.get("topics", [])
 
         if hours_since > _LONG_SILENCE_HOURS:
-            sentiment_instruction = _SENTIMENT_PROMPTS["long_silence"]
+            sentiment_instruction = sentiment_table["long_silence"]
         elif has_unfinished or sentiment == "negative":
-            sentiment_instruction = _SENTIMENT_PROMPTS.get(sentiment, _SENTIMENT_PROMPTS["neutral"])
+            sentiment_instruction = sentiment_table.get(sentiment, sentiment_table["neutral"])
         else:
-            sentiment_instruction = _SENTIMENT_PROMPTS.get(sentiment, _SENTIMENT_PROMPTS["neutral"])
+            sentiment_instruction = sentiment_table.get(sentiment, sentiment_table["neutral"])
 
         # Add unfinished topic reference
         if has_unfinished and topics:
-            sentiment_instruction += f"\n对方可能还在想上次聊的{topics[0]}。"
+            if is_cn:
+                sentiment_instruction += f"\n对方可能还在想上次聊的{topics[0]}。"
+            else:
+                sentiment_instruction += (
+                    f"\nThey might still be thinking about the {topics[0]} you "
+                    "were chatting about last time."
+                )
 
+    if is_cn:
+        weekday = _WEEKDAYS_ZH[now.weekday()]
+        hint = _TIME_HINTS[slot]
+        parts = [
+            f"现在是{weekday} {time_str}，{hint}。",
+            "你想主动给男朋友发条消息来触发对话。",
+        ]
+        if sentiment_instruction:
+            parts.append(sentiment_instruction)
+        if extra_block:
+            parts.append(extra_block)
+        parts.append(
+            "像在微信上打字，每段10-50字，最多2-3段，用空行隔开。"
+            "直接发消息内容，不要有任何前缀、解释或引号。"
+        )
+        return "\n".join(parts)
+
+    weekday = _WEEKDAYS_EN[now.weekday()]
+    hint = _TIME_HINTS_EN[slot]
     parts = [
-        f"现在是{weekday} {time_str}，{hint}。",
-        "你想主动给男朋友发条消息来触发对话。",
+        f"It's {weekday} {time_str} — {hint}.",
+        "You want to text your partner first to start a conversation.",
     ]
     if sentiment_instruction:
         parts.append(sentiment_instruction)
     if extra_block:
         parts.append(extra_block)
     parts.append(
-        "像在微信上打字，每段10-50字，最多2-3段，用空行隔开。"
-        "直接发消息内容，不要有任何前缀、解释或引号。"
+        "Text like you're on iMessage: each paragraph 15–90 characters, "
+        "at most 2–3 paragraphs separated by a blank line. "
+        "Output the message content directly — no prefix, no explanation, "
+        "no quotes."
     )
     return "\n".join(parts)
 

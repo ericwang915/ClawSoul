@@ -27,16 +27,23 @@ from .generator import DEFAULT_SIZE, SeedreamError, SeedreamGenerator
 logger = logging.getLogger(__name__)
 
 
-Category = Literal["animal", "scenery", "food", "fun", "random"]
+Category = Literal["animal", "scenery", "food", "fun", "place", "random"]
 
 
 # Style suffix appended to every candid prompt — keeps the look consistent
 # with the rest of the conversation (a partner sharing a phone snapshot,
-# not a glossy stock photo).
-_CANDID_STYLE = (
+# not a glossy stock photo).  Language-aware: Chinese personas keep the CN
+# suffix (Seedream's strongest prompting language); others get EN so the
+# look isn't biased by surrounding Chinese context.
+_CANDID_STYLE_ZH = (
     "写实手机随拍风格，自然光线，不要修图感，"
     "构图随意像是顺手按下快门，画面有生活气息。"
     "不要文字、不要水印、不要 NSFW。"
+)
+_CANDID_STYLE_EN = (
+    "Realistic candid phone snapshot, natural lighting, un-retouched, "
+    "casual framing like a quick everyday shot. "
+    "No text, no watermark, no NSFW."
 )
 
 
@@ -88,20 +95,91 @@ _BUCKET_BY_CATEGORY: dict[str, list[str]] = {
     "fun":     _FUN_SUBJECTS,
 }
 
+# English subject pools — used when the persona's chat language isn't Chinese,
+# so the snapshot isn't pulled toward an East-Asian setting by CN context.
+_ANIMAL_SUBJECTS_EN = [
+    "a ginger cat sunbathing on a street corner, eyes half-closed, fur fluffed up",
+    "a shiba inu sprawled by a park bench, tongue out",
+    "sparrows lined up on a wire against an evening sky",
+    "a tabby cat crouched outside a corner shop, watchful eyes",
+    "two seagulls strolling on the beach",
+    "a pigeon on the windowsill, city rooftops behind it",
+]
+_SCENERY_SUBJECTS_EN = [
+    "the city skyline from a balcony at dusk, clouds tinged orange-pink",
+    "a rain-slicked street after a shower, lights reflected on the ground",
+    "an almost-empty train platform in the early morning, sun slanting in",
+    "a tree-lined path in the park, leaves just turning yellow",
+    "a harbor at the seaside, a few small boats, gentle waves",
+    "a sea of clouds seen from a mountaintop, taller peaks in the distance",
+]
+_FOOD_SUBJECTS_EN = [
+    "a steaming bowl of ramen — chashu, soft egg, scallions clearly visible",
+    "a latte with leaf art beside a slice of cheesecake, side light",
+    "a late-night plate of garlic crayfish, red oil splashed on the cloth",
+    "a convenience-store oden box — fish balls, daikon, kelp rolls, steam rising",
+    "a fresh croissant in a paper bag, glossy caramel crust",
+    "a skewer of grilled meat at a night market, fat dripping, blurred lanterns behind",
+]
+_FUN_SUBJECTS_EN = [
+    "a half-built Lego set on a desk beside a cold cup of coffee",
+    "crooked, overstuffed shelves in a secondhand bookshop, warm dim light",
+    "a claw machine just grabbing a little bear",
+    "a convenience-store freezer wall of colorful imported snacks",
+    "empty cinema seats after the credits, a stray popcorn tub on the floor",
+    "a pour-over kettle and thermometer on the windowsill, steam curling up",
+]
+
+_BUCKET_BY_CATEGORY_EN: dict[str, list[str]] = {
+    "animal":  _ANIMAL_SUBJECTS_EN,
+    "scenery": _SCENERY_SUBJECTS_EN,
+    "food":    _FOOD_SUBJECTS_EN,
+    "fun":     _FUN_SUBJECTS_EN,
+}
+
+
+def _place_subject(is_zh: bool) -> str:
+    """Scene-driven 'where I am right now' subject, derived from today's
+    plan so the snapshot matches what she's actually doing.  Falls back to
+    a generic scenery pick when there's no current activity."""
+    try:
+        from .scene_builder import build_scene
+        scene = build_scene()
+        activity = (scene.activity or "").strip()
+    except Exception:
+        activity = ""
+    if not activity:
+        return random.choice(_SCENERY_SUBJECTS if is_zh else _SCENERY_SUBJECTS_EN)
+    if is_zh:
+        return f"她此刻所在环境的随手一拍：{activity}的场景，没有人物入镜，只拍周围的样子"
+    return (f"a quick snapshot of where she is right now: the setting around "
+            f"'{activity}', no people in frame, just the surroundings")
+
 
 def _pick_subject(category: Category, hint: str | None) -> tuple[str, str]:
-    """Return ``(resolved_category, subject_prompt)``.
+    """Return ``(resolved_category, subject_prompt)`` in the persona's
+    chat language.
 
-    "random" picks one of the four real categories; the hint, if given,
-    overrides the bucket pick so the agent can be specific
-    ("拍一下楼下那只总过来蹭饭的猫" → category=animal, hint kept).
+    "random" picks one of the real categories; the hint, if given,
+    overrides the bucket pick so the agent can be specific. "place" is
+    scene-driven from today's plan.
     """
+    from .. import lang as _lang
+    is_zh = _lang.is_chinese()
+    pools = _BUCKET_BY_CATEGORY if is_zh else _BUCKET_BY_CATEGORY_EN
+
     if category == "random":
-        category = random.choice(list(_BUCKET_BY_CATEGORY.keys()))  # type: ignore[assignment]
-    bucket = _BUCKET_BY_CATEGORY.get(category, _SCENERY_SUBJECTS)
-    base = random.choice(bucket)
+        category = random.choice([*pools.keys(), "place"])  # type: ignore[assignment]
+
+    if category == "place":
+        base = _place_subject(is_zh)
+    else:
+        bucket = pools.get(category, pools["scenery"])
+        base = random.choice(bucket)
+
     if hint:
-        return category, f"{base}\n额外细节: {hint.strip()}"
+        extra = "额外细节" if is_zh else "extra detail"
+        return category, f"{base}\n{extra}: {hint.strip()}"
     return category, base
 
 
@@ -121,6 +199,7 @@ class CandidResult:
             "scenery": "🌆",
             "food":    "🍜",
             "fun":     "✨",
+            "place":   "📍",
         }.get(self.category, "📷")
         return emoji
 
@@ -142,13 +221,18 @@ def take_candid(
     rendering, smaller prompt assembly path.
     """
     # Pre-flight disk check — same budget as selfies (~700 KB).
-    from ..quota import check_disk
+    from ..quota import check_disk, check_photos
+    over = check_photos()
+    if over:
+        raise SeedreamError(over)
     refusal = check_disk(extra_bytes=700_000)
     if refusal:
         raise SeedreamError(refusal)
 
+    from .. import lang as _lang
     resolved_cat, subject = _pick_subject(category, hint)
-    prompt = f"{subject}\n\n{_CANDID_STYLE}"
+    style = _CANDID_STYLE_ZH if _lang.is_chinese() else _CANDID_STYLE_EN
+    prompt = f"{subject}\n\n{style}"
 
     generator = generator or SeedreamGenerator(model=model)
 

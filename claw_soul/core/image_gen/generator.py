@@ -111,6 +111,21 @@ class SeedreamGenerator:
         ``reference_image`` may be a local file path (will be encoded as
         a data URL) or an http(s) URL passed through unchanged.
         """
+        # Content guard — single chokepoint for selfie / candid / cast and any
+        # future image path.  Child-sexual content is a strict-liability red
+        # line; refuse before spending an API call. Surfaced to the model as a
+        # generic safety refusal, which it declines in-character (see agent
+        # system prompt).
+        from .guard import ImageBlocked, assert_allowed
+        try:
+            assert_allowed(prompt)
+        except ImageBlocked as exc:
+            logger.warning("[Seedream] prompt blocked by content guard: %s", exc)
+            raise SeedreamError(
+                "refused by safety guard — decline this photo warmly and "
+                "in-character, do not explain the rule"
+            )
+
         body: dict[str, Any] = {
             "model": model or self.model,
             "prompt": prompt,

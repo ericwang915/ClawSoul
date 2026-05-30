@@ -80,12 +80,22 @@ def _headers() -> dict[str, str]:
     }
 
 
+_MAX_ATTEMPTS = 4
+
+
 def _request(method: str, path: str, *, json: dict | None = None,
              timeout: float = 30.0) -> dict:
-    """Single HTTP request with one retry on 5xx."""
+    """HTTP request with retry on 5xx AND 429 (rate-limit) with backoff.
+
+    At 1000+ users a tick burst can briefly exceed Fly's Machines-API rate
+    limit; a 429 here should back off and retry, not bubble up as a hard
+    failure that drops the user's wake.  Honors ``Retry-After`` when Fly
+    sends it, else exponential backoff.  This runs in a worker thread
+    (callers offload via ``asyncio.to_thread``), so ``time.sleep`` is fine.
+    """
     url = FLY_API_BASE + path
     last_exc: Exception | None = None
-    for attempt in (1, 2):
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
             with httpx.Client(timeout=timeout) as client:
                 resp = client.request(method, url, json=json, headers=_headers())
@@ -93,18 +103,32 @@ def _request(method: str, path: str, *, json: dict | None = None,
                 if resp.text.strip():
                     return resp.json()
                 return {}
-            if 500 <= resp.status_code < 600 and attempt == 1:
-                time.sleep(1.0)
+            retryable = resp.status_code == 429 or 500 <= resp.status_code < 600
+            if retryable and attempt < _MAX_ATTEMPTS:
+                _sleep_for_retry(resp, attempt)
                 continue
             raise FlyAPIError(resp.status_code, resp.text)
         except httpx.HTTPError as exc:
             last_exc = exc
-            if attempt == 1:
-                time.sleep(1.0)
+            if attempt < _MAX_ATTEMPTS:
+                time.sleep(min(2.0 ** (attempt - 1), 8.0))
                 continue
             raise
     # Defensive — shouldn't reach
     raise last_exc or RuntimeError("fly request failed")
+
+
+def _sleep_for_retry(resp: httpx.Response, attempt: int) -> None:
+    """Back off before a retry — Retry-After header if present, else
+    exponential (1s, 2s, 4s, capped at 8s)."""
+    ra = resp.headers.get("retry-after", "")
+    if ra:
+        try:
+            time.sleep(min(float(ra), 10.0))
+            return
+        except ValueError:
+            pass
+    time.sleep(min(2.0 ** (attempt - 1), 8.0))
 
 
 # ── Spec dataclass ─────────────────────────────────────────────────────────
@@ -132,7 +156,9 @@ class MachineSpec:
         if self.memory_mb <= 0:
             self.memory_mb = {
                 "free":       512,    # 256 OOMs on first agent boot
-                "paid":       512,
+                "pro":        512,
+                "ultra":      512,
+                "paid":       512,    # legacy alias for pro
                 "enterprise": 1024,
             }.get(self.tier, 512)
 

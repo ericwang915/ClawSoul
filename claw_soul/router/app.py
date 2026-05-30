@@ -19,6 +19,7 @@ they're authenticated by Fly's health checker / by the token in the path.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
 import os
@@ -71,7 +72,10 @@ def create_router_app() -> FastAPI:
             "ok": True,
             "service": "clawsoul-router",
             "version": _version(),
-            "scheduled_users": len(sched._known_users),  # noqa: SLF001
+            "scheduled_users": len(sched._known_users),   # noqa: SLF001
+            "shard_index": sched._shard_index,            # noqa: SLF001
+            "shard_count": sched._shard_count,            # noqa: SLF001
+            "instance_id": sched._instance_id,            # noqa: SLF001
         })
 
     # ── Telegram webhook ─────────────────────────────────────────────
@@ -112,6 +116,15 @@ def create_router_app() -> FastAPI:
         if not user_id:
             return JSONResponse({"ignored": True}, status_code=200)
 
+        # Durable dedup BEFORE waking the worker: a Telegram retry (or a
+        # worker that suspended and lost its in-memory ring buffer) would
+        # otherwise re-process the same update.  Claim by INSERT; if the
+        # row already exists this is a duplicate delivery — drop it.
+        update_id = payload.get("update_id")
+        if isinstance(update_id, int):
+            if not await db.try_claim_telegram_update(user_id, update_id):
+                return JSONResponse({"deduped": True})
+
         background_tasks.add_task(
             dispatch.dispatch, user_id, "telegram_update", {"update": payload},
         )
@@ -146,7 +159,9 @@ def create_router_app() -> FastAPI:
                 spec = fly_client.MachineSpec(
                     user_id=user_id, region=region, tier=tier,
                 )
-                machine = fly_client.create_user_machine(spec)
+                # Sync Fly call — offload so it doesn't block the router loop.
+                machine = await asyncio.to_thread(
+                    fly_client.create_user_machine, spec)
             except fly_client.FlyConfigError as exc:
                 raise HTTPException(503, f"fly not configured: {exc}")
             except fly_client.FlyAPIError as exc:
@@ -195,15 +210,31 @@ def create_router_app() -> FastAPI:
     ) -> JSONResponse:
         _check_admin(x_admin_key)
         row = await db.get_user_machine(user_id)
-        if row is None:
-            return JSONResponse({"ok": True, "note": "no machine"}, status_code=200)
+        # Photos in Tigris don't cascade with the Pg row; wipe them
+        # explicitly so account-deletion doesn't leave per-user objects
+        # sitting in storage forever (the 30-day lifecycle rule would
+        # catch them eventually, but immediate removal is what users
+        # expect when they say "delete my account").
+        photos_removed = 0
         try:
-            fly_client.destroy_machine(row.machine_id, force=True)
+            from ..core.image_gen.tigris import delete_user_objects
+            # Sync boto3 list+delete — offload off the router loop.
+            photos_removed = await asyncio.to_thread(delete_user_objects, user_id)
+        except Exception as exc:
+            logger.warning("[router] destroy tigris cleanup failed: %s", exc)
+        if row is None:
+            return JSONResponse({"ok": True, "note": "no machine",
+                                 "photos_removed": photos_removed},
+                                status_code=200)
+        try:
+            await asyncio.to_thread(
+                fly_client.destroy_machine, row.machine_id, force=True)
         except fly_client.FlyAPIError as exc:
             logger.warning("[router] destroy fly err: %s", exc)
         await db.delete_user_machine(user_id)
         await scheduler.kick_reconcile()
-        return JSONResponse({"ok": True, "machine_id": row.machine_id})
+        return JSONResponse({"ok": True, "machine_id": row.machine_id,
+                             "photos_removed": photos_removed})
 
     @app.post("/admin/users/{user_id}/reload")
     async def reload(

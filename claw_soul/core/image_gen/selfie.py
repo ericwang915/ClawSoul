@@ -98,7 +98,9 @@ class SelfieResult:
     def caption(self) -> str:
         """Short human-readable caption suitable for Telegram."""
         if self.scene.activity:
-            return f"{self.scene.time or '现在'} · {self.scene.activity}"
+            from .. import lang as _lang
+            now_word = "现在" if _lang.is_chinese() else "now"
+            return f"{self.scene.time or now_word} · {self.scene.activity}"
         return self.scene.activity or ""
 
 
@@ -124,7 +126,10 @@ def take_selfie(
     # Pre-flight disk quota check — refuse BEFORE spending an API call when
     # there's no room to save the result anyway. ~700 KB is a conservative
     # over-estimate of a 2048x2048 JPEG selfie.
-    from ..quota import check_disk
+    from ..quota import check_disk, check_photos
+    over = check_photos()
+    if over:
+        raise SeedreamError(over)
     refusal = check_disk(extra_bytes=700_000)
     if refusal:
         raise SeedreamError(refusal)

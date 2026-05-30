@@ -3,48 +3,27 @@ const year = new Date().getFullYear();
 ---
 <footer class="footer">
   <div class="container footer__inner">
-    <div class="footer__brand">
-      <img src="/logo.png" alt="ClawSoul" width="28" height="28" />
-      <span>ClawSoul</span>
+    <a href="/" class="footer__brand">her<span class="amp">&amp;</span>him</a>
+    <div class="footer__links">
+      <a href="/privacy">Privacy</a>
+      <a href="/safety">Safety</a>
+      <a href="/terms">Terms</a>
+      <a href="/support">Support</a>
     </div>
-    <nav class="footer__links">
-      <a href="https://github.com/ericwang915/ClawSoul" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/ericwang915/ClawSoul#readme" target="_blank" rel="noopener">Docs</a>
-      <a href="https://github.com/ericwang915/ClawSoul/issues" target="_blank" rel="noopener">Issues</a>
-    </nav>
-    <p class="footer__copy">© {year} ClawSoul · Built with 💕 · MIT licensed</p>
+    <div class="footer__copy">© {year} her &amp; him</div>
+  </div>
+  <div class="container">
+    <p class="footer__note">For adults 18+. her &amp; him is an AI companion for entertainment and companionship — not a medical, mental-health, therapy, or crisis service, and not a substitute for professional care or human relationships.</p>
   </div>
 </footer>
 
 <style>
-  .footer {
-    padding: 48px 0 40px;
-    border-top: 1px solid var(--border);
-    margin-top: 40px;
-  }
-  .footer__inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
-    text-align: center;
-  }
-  .footer__brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: 700;
-  }
-  .footer__brand img { border-radius: 6px; }
-  .footer__links {
-    display: flex;
-    gap: 28px;
-    color: var(--text-soft);
-    font-size: 0.92rem;
-  }
-  .footer__copy {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-  }
+  .footer { padding: 36px 0; border-top: 1px solid var(--border); }
+  .footer__inner { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+  .footer__brand { font-family: var(--serif); font-size: 1.2rem; color: #fff; }
+  .footer__brand .amp { font-style: italic; color: var(--accent); padding: 0 3px; }
+  .footer__links { display: flex; gap: 26px; font-size: 0.9rem; color: var(--text-soft); }
+  .footer__copy { font-size: 0.85rem; color: var(--text-muted); }
+  .footer__note { margin: 18px 0 0; font-size: 0.76rem; line-height: 1.55; color: var(--text-muted); max-width: 720px; }
+  @media (max-width: 640px) { .footer__inner { justify-content: center; text-align: center; } .footer__note { text-align: center; margin-left: auto; margin-right: auto; } }
 </style>

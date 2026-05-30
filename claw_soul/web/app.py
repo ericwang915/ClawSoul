@@ -9,6 +9,7 @@ endpoint for real-time chat with the agent.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import copy
 import json
 import logging
@@ -22,7 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .. import config, init as claw_init
+from .. import config
+from .. import init as claw_init
 from ..core import tenancy
 from ..core.agent import Agent
 from ..core.llm.base import LLMProvider
@@ -94,7 +96,7 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     _start_time = time.time()
     _build_provider_fn = build_provider_fn
 
-    app = FastAPI(title="ClawSoul Dashboard", docs_url=None, redoc_url=None)
+    app = FastAPI(title="her & him", docs_url=None, redoc_url=None)
     _fastapi_app = app
 
     # CORS must come BEFORE AuthMiddleware so preflight OPTIONS aren't gated.
@@ -107,6 +109,10 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type"],
         )
+
+    # Fail fast if auth is required but unconfigured — never silently
+    # fall open to a shared single-tenant namespace in a deploy.
+    auth_mod.verify_auth_config()
 
     app.add_middleware(auth_mod.AuthMiddleware)
 
@@ -132,6 +138,7 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app.add_api_route("/api/skills", _api_skills, methods=["GET"])
     app.add_api_route("/api/status", _api_status, methods=["GET"])
     app.add_api_route("/api/memories", _api_memories, methods=["GET"])
+    app.add_api_route("/api/plans", _api_plans, methods=["GET"])
     app.add_api_route("/api/identity", _api_identity, methods=["GET"])
     app.add_api_route("/api/identity/soul", _api_save_soul, methods=["POST"])
     app.add_api_route("/api/identity/persona", _api_save_persona, methods=["POST"])
@@ -484,13 +491,13 @@ async def _router_call(path: str, body: dict | None = None) -> tuple[int, str]:
 async def _api_setup_options():
     """Return the full option menu (labels + descriptions) for the wizard."""
     from .. import companion as comp
-    from ..onboard import _REGIONS_BY_COUNTRY
+    from ..core import city as _city
     return JSONResponse({
         "options":      comp.OPTIONS,
         "fields":       list(comp.ALL_FIELDS),
         "trait_groups": comp.TRAIT_GROUPS,
         "traits_range": {"min": comp.TRAITS_MIN, "max": comp.TRAITS_MAX},
-        "regions_by_country": _REGIONS_BY_COUNTRY,
+        "regions_by_country": _city.all_regions_by_country(),
     })
 
 
@@ -835,6 +842,23 @@ async def _api_status():
         "sessionFile": session_file,
         "sessionPersistent": True,
     }
+
+
+async def _api_plans():
+    """Pricing-page data: the public Free/Pro/Ultra plans + the current
+    tenant's tier and this period's usage (for the dashboard upgrade view)."""
+    from ..core import plans as _plans
+    from ..core import quota as _quota
+    current = {"tier": "free"}
+    try:
+        current = {
+            "tier": _quota._current_tier(),          # noqa: SLF001
+            "messages": _quota.message_status(),
+            "photos": _quota.photo_status(),
+        }
+    except Exception:
+        pass
+    return {"plans": _plans.public_plans(), "current": current}
 
 
 async def _api_memories(limit: int = 200):
@@ -1322,9 +1346,19 @@ async def _ws_chat(websocket: WebSocket):
     if auth_mod.auth_enabled():
         token = websocket.cookies.get(auth_mod.COOKIE_NAME) or \
                 websocket.query_params.get("token")
-        if not auth_mod.authorize_websocket(token):
+        payload = auth_mod.authorize_websocket(token)
+        if not payload:
             await websocket.close(code=4401, reason="unauthorized")
             return
+        # Bind tenancy from the validated token onto THIS connection's task.
+        # The ASGI middleware binds it too, but the agent work runs in
+        # executor threads that don't inherit contextvars — so we bind here
+        # explicitly and copy_context() into the executor below.  Without
+        # this, _get_agent()/storage could resolve to the wrong (or single)
+        # tenant and leak one user's chat into another's.
+        uid = payload.get("sub")
+        if uid and uid != "dev":
+            tenancy.set_current_user(uid)
 
     await websocket.accept()
     logger.info("[Web] WebSocket client connected")
@@ -1440,8 +1474,14 @@ async def _ws_chat(websocket: WebSocket):
                 async with lock:
                     stream_task = asyncio.create_task(_stream_tokens())
                     try:
+                        # contextvars (tenancy user_id + timezone) don't
+                        # propagate into executor threads — copy the current
+                        # context so the agent's storage writes and volatile
+                        # clock resolve to the right tenant, not _single.
+                        ctx = contextvars.copy_context()
                         response = await loop.run_in_executor(
-                            None, agent.chat_stream, chat_input, _on_token
+                            None,
+                            lambda: ctx.run(agent.chat_stream, chat_input, _on_token),
                         )
                     finally:
                         loop.call_soon_threadsafe(

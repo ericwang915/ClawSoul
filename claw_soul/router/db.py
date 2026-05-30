@@ -40,6 +40,20 @@ def _headers() -> dict[str, str]:
     }
 
 
+# Shared connection-pooled async client for the per-dispatch hot paths
+# (token lookup, machine lookup, tick/update claims, message touch).  The
+# router is one event loop, so a single lazily-built client is reused for
+# the process lifetime — avoids a TLS handshake on every webhook/tick.
+_ACLIENT: httpx.AsyncClient | None = None
+
+
+def _aclient() -> httpx.AsyncClient:
+    global _ACLIENT
+    if _ACLIENT is None:
+        _ACLIENT = httpx.AsyncClient(timeout=10)
+    return _ACLIENT
+
+
 @dataclass
 class UserMachineRow:
     user_id: str
@@ -74,12 +88,11 @@ def _row(d: dict) -> UserMachineRow:
 # ── user_machines CRUD ───────────────────────────────────────────────────
 
 async def get_user_machine(user_id: str) -> UserMachineRow | None:
-    async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.get(
-            f"{_url()}/rest/v1/user_machines",
-            params={"user_id": f"eq.{user_id}", "select": "*"},
-            headers=_headers(),
-        )
+    r = await _aclient().get(
+        f"{_url()}/rest/v1/user_machines",
+        params={"user_id": f"eq.{user_id}", "select": "*"},
+        headers=_headers(),
+    )
     r.raise_for_status()
     rows = r.json() or []
     return _row(rows[0]) if rows else None
@@ -148,13 +161,12 @@ async def touch_message_at(user_id: str) -> None:
     skip ticks that would land in the middle of a conversation."""
     from datetime import datetime, timezone
     now_iso = datetime.now(timezone.utc).isoformat()
-    async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.patch(
-            f"{_url()}/rest/v1/user_machines",
-            params={"user_id": f"eq.{user_id}"},
-            headers={**_headers(), "Prefer": "return=minimal"},
-            json={"last_message_at": now_iso},
-        )
+    r = await _aclient().patch(
+        f"{_url()}/rest/v1/user_machines",
+        params={"user_id": f"eq.{user_id}"},
+        headers={**_headers(), "Prefer": "return=minimal"},
+        json={"last_message_at": now_iso},
+    )
     if not r.is_success:
         logger.warning("[router-db] touch_message_at failed: %s %s",
                        r.status_code, r.text[:200])
@@ -178,19 +190,38 @@ async def mark_onboarded(user_id: str) -> None:
                        r.status_code, r.text[:200])
 
 
+_PAGE_SIZE = 1000
+
+
 async def list_user_machines(
     *, state: str | None = None, tier: str | None = None,
 ) -> list[UserMachineRow]:
-    params: dict[str, str] = {"select": "*"}
+    """List all user_machines rows, paginated.
+
+    PostgREST/Supabase cap a single response at ``db-max-rows`` (commonly
+    1000).  Without paging, every user past the cap is silently dropped —
+    so at 1000+ users the scheduler would simply stop ticking the tail.
+    We page with limit/offset until a short page comes back.
+    """
+    base: dict[str, str] = {"select": "*", "order": "user_id.asc"}
     if state:
-        params["state"] = f"eq.{state}"
+        base["state"] = f"eq.{state}"
     if tier:
-        params["tier"] = f"eq.{tier}"
+        base["tier"] = f"eq.{tier}"
+    out: list[UserMachineRow] = []
+    offset = 0
     async with httpx.AsyncClient(timeout=15) as c:
-        r = await c.get(f"{_url()}/rest/v1/user_machines",
-                        params=params, headers=_headers())
-    r.raise_for_status()
-    return [_row(d) for d in (r.json() or [])]
+        while True:
+            params = {**base, "limit": str(_PAGE_SIZE), "offset": str(offset)}
+            r = await c.get(f"{_url()}/rest/v1/user_machines",
+                            params=params, headers=_headers())
+            r.raise_for_status()
+            rows = r.json() or []
+            out.extend(_row(d) for d in rows)
+            if len(rows) < _PAGE_SIZE:
+                break
+            offset += _PAGE_SIZE
+    return out
 
 
 async def delete_user_machine(user_id: str) -> None:
@@ -210,15 +241,14 @@ async def delete_user_machine(user_id: str) -> None:
 async def find_user_id_by_bot_token(token: str) -> str | None:
     """Reverse-lookup: given a Telegram bot token, return its owning user_id.
     Used by the webhook router to figure out where to forward updates."""
-    async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.get(
-            f"{_url()}/rest/v1/user_settings",
-            params={
-                "select": "user_id",
-                "telegram_bot_token": f"eq.{token}",
-            },
-            headers=_headers(),
-        )
+    r = await _aclient().get(
+        f"{_url()}/rest/v1/user_settings",
+        params={
+            "select": "user_id",
+            "telegram_bot_token": f"eq.{token}",
+        },
+        headers=_headers(),
+    )
     if not r.is_success:
         return None
     rows = r.json() or []
@@ -243,13 +273,12 @@ async def try_claim_tick(job_id: str, fire_minute: str,
         "fire_minute": fire_minute,
         "machine_id":  machine_id or os.environ.get("FLY_MACHINE_ID", ""),
     }
-    async with httpx.AsyncClient(timeout=5) as c:
-        r = await c.post(
-            f"{_url()}/rest/v1/scheduled_runs",
-            headers={**_headers(),
-                     "Prefer": "return=minimal"},
-            json=body,
-        )
+    r = await _aclient().post(
+        f"{_url()}/rest/v1/scheduled_runs",
+        headers={**_headers(), "Prefer": "return=minimal"},
+        json=body,
+        timeout=5,
+    )
     if r.status_code in (200, 201, 204):
         return True
     # 409 (Conflict) — other machine got it. Anything else = real error.
@@ -260,6 +289,117 @@ async def try_claim_tick(job_id: str, fire_minute: str,
         logger.warning("[router-db] try_claim_tick unexpected %s: %s",
                        r.status_code, r.text[:200])
     return False
+
+
+async def try_claim_telegram_update(user_id: str, update_id: int) -> bool:
+    """Claim a Telegram update_id by INSERT; return True iff THIS delivery
+    won (i.e. we haven't processed this update before).
+
+    Durable cross-machine, cross-cold-boot dedup: the (user_id, update_id)
+    PK means a Telegram retry — even one that lands after the worker has
+    suspended and lost its in-memory ring buffer — loses the race and is
+    dropped here, before we pay the cost of waking the worker.
+
+    Fails OPEN (returns True) only on an unexpected transport error, so a
+    transient Pg blip degrades to "might double-process" rather than
+    "drop the user's message entirely".
+    """
+    body = {"user_id": user_id, "update_id": update_id}
+    try:
+        r = await _aclient().post(
+            f"{_url()}/rest/v1/telegram_updates",
+            headers={**_headers(), "Prefer": "return=minimal"},
+            json=body,
+            timeout=5,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("[router-db] claim_telegram_update transport err: %s", exc)
+        return True  # fail open — don't silently swallow the user's message
+    if r.status_code in (200, 201, 204):
+        return True
+    if r.status_code == 409 or "23505" in r.text:
+        return False  # already claimed → duplicate delivery
+    logger.warning("[router-db] claim_telegram_update unexpected %s: %s",
+                   r.status_code, r.text[:200])
+    return True  # unknown error — prefer processing over dropping
+
+
+async def prune_telegram_updates(older_than_hours: int = 24) -> int:
+    """DELETE telegram_updates dedup rows older than *older_than_hours*."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=older_than_hours))
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.delete(
+            f"{_url()}/rest/v1/telegram_updates",
+            params={"claimed_at": f"lt.{cutoff.isoformat()}"},
+            headers={**_headers(), "Prefer": "return=representation"},
+        )
+    if not r.is_success:
+        logger.warning("[router-db] prune_telegram_updates failed: %s %s",
+                       r.status_code, r.text[:200])
+        return 0
+    try:
+        return len(r.json() or [])
+    except Exception:
+        return 0
+
+
+async def heartbeat_router_instance(instance_id: str) -> None:
+    """Upsert this router instance's liveness row (last_seen=now()).
+
+    Called every reconcile so the sharding logic can see which instances
+    are alive.  Best-effort: a failure just means the caller falls back to
+    owning all users (the DB claim still prevents double-dispatch)."""
+    from datetime import datetime, timezone
+    r = await _aclient().post(
+        f"{_url()}/rest/v1/router_instances",
+        params={"on_conflict": "instance_id"},
+        headers={**_headers(),
+                 "Prefer": "resolution=merge-duplicates,return=minimal"},
+        json={"instance_id": instance_id,
+              "last_seen": datetime.now(timezone.utc).isoformat()},
+    )
+    if not r.is_success:
+        logger.warning("[router-db] heartbeat failed: %s %s",
+                       r.status_code, r.text[:200])
+
+
+async def list_live_router_instances(*, stale_after_sec: int = 150) -> list[str]:
+    """Return instance_ids seen within the freshness window, sorted ascending.
+
+    Stale window (150s) is > 2 reconcile intervals so a single missed
+    heartbeat doesn't flap an instance out of the ring."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc)
+              - timedelta(seconds=stale_after_sec)).isoformat()
+    r = await _aclient().get(
+        f"{_url()}/rest/v1/router_instances",
+        params={"last_seen": f"gte.{cutoff}",
+                "select": "instance_id", "order": "instance_id.asc"},
+        headers=_headers(),
+    )
+    r.raise_for_status()
+    return [row["instance_id"] for row in (r.json() or [])]
+
+
+async def prune_router_instances(older_than_hours: int = 24) -> int:
+    """DELETE router_instances rows not seen for *older_than_hours*."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=older_than_hours))
+    r = await _aclient().delete(
+        f"{_url()}/rest/v1/router_instances",
+        params={"last_seen": f"lt.{cutoff.isoformat()}"},
+        headers={**_headers(), "Prefer": "return=representation"},
+        timeout=30,
+    )
+    if not r.is_success:
+        logger.warning("[router-db] prune_router_instances failed: %s %s",
+                       r.status_code, r.text[:200])
+        return 0
+    try:
+        return len(r.json() or [])
+    except Exception:
+        return 0
 
 
 async def prune_scheduled_runs(older_than_hours: int = 24) -> int:

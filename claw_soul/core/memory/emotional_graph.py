@@ -462,13 +462,23 @@ class RelationshipStore:
 
     def get_summary(self) -> str:
         """Return human-readable relationship summary."""
+        from .. import lang as _lang
         parts = []
-        labels = {
-            "relationship_temperature": "温度",
-            "trust": "信任",
-            "intimacy": "亲密",
-            "understanding": "理解",
-        }
+        labels = (
+            {
+                "relationship_temperature": "温度",
+                "trust": "信任",
+                "intimacy": "亲密",
+                "understanding": "理解",
+            }
+            if _lang.is_chinese()
+            else {
+                "relationship_temperature": "Warmth",
+                "trust": "Trust",
+                "intimacy": "Intimacy",
+                "understanding": "Understanding",
+            }
+        )
         for dim in self.DIMENSIONS:
             val = int(self._data.get(dim, 50))
             emoji = "🟢" if val >= 70 else ("🟡" if val >= 40 else "🔴")

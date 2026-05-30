@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from ... import config
+from ...core import tenancy
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,47 @@ class PhotoAlbum:
         entries = self._load_index()
         entries.append(entry)
         self._save_index(entries)
+
+        # Cross-machine gallery: upload to Tigris + index in Pg so the
+        # legacy web app (running on a different Fly machine and volume)
+        # can show this photo in the Memory Gallery without needing to
+        # reach the worker's filesystem.  Best-effort: a failure here
+        # never breaks the local photo flow — the TG send already
+        # shipped the JPEG bytes inline.
+        try:
+            self._publish_to_cloud(entry, dst)
+        except Exception as exc:
+            logger.warning("[PhotoAlbum] cloud publish failed: %s", exc)
         return dst
+
+    def _publish_to_cloud(self, entry: dict[str, Any], local_path: str) -> None:
+        """Upload to Tigris and record metadata in Pg, scoped to the
+        current tenant.  No-op when either Tigris or Pg isn't configured
+        (single-tenant / dev mode)."""
+        uid = tenancy.get_current_user()
+        if not uid:
+            return
+        from .tigris import is_configured as tigris_ready
+        from .tigris import upload_photo
+        if not tigris_ready():
+            return
+        filename = entry["filename"]
+        key = upload_photo(uid, local_path, filename=filename)
+        if not key:
+            return
+        # Build the caption the same way sanctum_api would — keeps web
+        # display consistent with what the local /api/sanctum/hero used
+        # to produce.
+        from ...web.sanctum_api import _build_hero_caption  # avoid cycle at import time
+        caption = _build_hero_caption(entry)
+        _index_photo_row(
+            user_id=uid,
+            filename=filename,
+            object_key=key,
+            kind=entry.get("kind"),
+            caption=caption,
+            ts=entry["timestamp"],
+        )
 
     # ── Query ────────────────────────────────────────────────────────────
 
@@ -168,3 +209,45 @@ class PhotoAlbum:
             logger.info("[PhotoAlbum] cleaned up %d photo(s) older than %d days",
                         removed, self.retention_days)
         return removed
+
+
+def _index_photo_row(*, user_id: str, filename: str, object_key: str,
+                     kind: str | None, caption: str | None, ts: str) -> None:
+    """Insert a row in the public.photos Postgres table.
+
+    Idempotent via the (user_id, filename) unique constraint — if Tigris
+    upload was re-run for the same filename we just merge.  Best-effort:
+    a failure logs and returns without raising.
+    """
+    import os as _os
+
+    import httpx
+    url = _os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = _os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url or not key:
+        return
+    try:
+        r = httpx.post(
+            f"{url}/rest/v1/photos",
+            params={"on_conflict": "user_id,filename"},
+            json={
+                "user_id":    user_id,
+                "filename":   filename,
+                "object_key": object_key,
+                "kind":       kind,
+                "caption":    caption,
+                "ts":         ts,
+            },
+            headers={
+                "apikey":        key,
+                "Authorization": f"Bearer {key}",
+                "Content-Type":  "application/json",
+                "Prefer":        "resolution=merge-duplicates,return=minimal",
+            },
+            timeout=10,
+        )
+        if not r.is_success:
+            logger.warning("[PhotoAlbum] Pg index failed %s: %s",
+                           r.status_code, r.text[:200])
+    except Exception as exc:
+        logger.warning("[PhotoAlbum] Pg index errored: %s", exc)

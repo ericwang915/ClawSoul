@@ -224,12 +224,18 @@ class MemoryManager:
             if eg_summary and "No recent" not in eg_summary:
                 affect_lines.append(eg_summary)
 
+            from .. import lang as _lang
+            is_cn = _lang.is_chinese()
+            rel_label = "关系状态" if is_cn else "Relationship"
+            age_label = "认识时间" if is_cn else "Time known"
+            section_header = "### 情感上下文" if is_cn else "### Emotional Context"
+
             rel_summary = self.relationship.get_summary()
             if rel_summary:
-                affect_lines.append(f"**关系状态**: {rel_summary}")
+                affect_lines.append(f"**{rel_label}**: {rel_summary}")
 
             days = self.milestones.get_relationship_age_str()
-            affect_lines.append(f"**认识时间**: {days}")
+            affect_lines.append(f"**{age_label}**: {days}")
 
             # Check special day
             is_special, label = self.milestones.is_special_day()
@@ -237,7 +243,7 @@ class MemoryManager:
                 affect_lines.append(f"✨ **{label}** ✨")
 
             if affect_lines:
-                parts.append("### 情感上下文\n" + "\n".join(affect_lines))
+                parts.append(section_header + "\n" + "\n".join(affect_lines))
         except Exception:
             logger.debug("Soul Mate affect context injection failed (non-fatal)", exc_info=True)
 

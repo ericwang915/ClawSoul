@@ -5,14 +5,25 @@ import Nav from '../components/Nav.astro';
 const DASHBOARD = 'https://app.herandhim.ai';
 ---
 
-<Layout title="Sign in · ClawSoul" description="Sign in to your ClawSoul dashboard.">
+<Layout title="Sign in · her & him" description="Sign in to your her & him dashboard.">
   <Nav />
   <main>
     <section class="login">
       <div class="card">
         <span class="eyebrow">Dashboard sign in</span>
         <h1>Welcome <span class="gradient-text">back</span>.</h1>
-        <p class="sub">Use the email you registered in Supabase to access your ClawSoul dashboard.</p>
+        <p class="sub">Sign in to your her &amp; him dashboard, or create a new account.</p>
+
+        <div class="consent" id="consent">
+          <label>
+            <input type="checkbox" id="consent-age" />
+            <span>I am 18 years of age or older.</span>
+          </label>
+          <label>
+            <input type="checkbox" id="consent-terms" />
+            <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+          </label>
+        </div>
 
         <div class="providers">
           <button type="button" class="provider" data-provider="google">
@@ -66,6 +77,26 @@ const DASHBOARD = 'https://app.herandhim.ai';
         statusEl.className = 'status ' + kind;
       };
 
+      // Consent gate — both 18+ and Terms must be checked before ANY sign-in
+      // path (Google, GitHub, or email). Required for both sign-in and signup.
+      const consentEl = document.getElementById('consent');
+      const ageBox = document.getElementById('consent-age');
+      const termsBox = document.getElementById('consent-terms');
+      const consentOk = () => {
+        const ok = ageBox.checked && termsBox.checked;
+        if (!ok) {
+          setStatus('Please confirm you are 18+ and agree to the Terms to continue.', 'error');
+          if (consentEl) consentEl.classList.add('flash');
+        }
+        return ok;
+      };
+      [ageBox, termsBox].forEach((box) => box.addEventListener('change', () => {
+        if (ageBox.checked && termsBox.checked) {
+          if (consentEl) consentEl.classList.remove('flash');
+          if (statusEl.classList.contains('error')) setStatus('');
+        }
+      }));
+
       // Lazy-load Supabase JS SDK from CDN
       const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
 
@@ -89,6 +120,7 @@ const DASHBOARD = 'https://app.herandhim.ai';
       // OAuth buttons — Supabase redirects to provider, then back to /auth/callback
       document.querySelectorAll('.provider').forEach((btn) => {
         btn.addEventListener('click', async () => {
+          if (!consentOk()) return;
           const provider = btn.getAttribute('data-provider');
           setStatus('Redirecting to ' + provider + '…', 'ok');
           const { error } = await sb.auth.signInWithOAuth({
@@ -114,6 +146,7 @@ const DASHBOARD = 'https://app.herandhim.ai';
 
       document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!consentOk()) return;
         btn.disabled = true;
         setStatus('');
 
@@ -227,6 +260,35 @@ const DASHBOARD = 'https://app.herandhim.ai';
   }
   .btn-submit:hover:not(:disabled) { transform: translateY(-2px); }
   .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .consent {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0 0 22px;
+    text-align: left;
+  }
+  .consent label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.82rem;
+    color: var(--text-soft);
+    line-height: 1.45;
+    cursor: pointer;
+    margin: 0;
+  }
+  .consent input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    margin: 1px 0 0;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .consent a { color: var(--accent); font-weight: 600; }
+  .consent.flash label { color: #fca5a5; }
+  .consent.flash input[type='checkbox'] { outline: 2px solid #fca5a5; outline-offset: 2px; border-radius: 3px; }
 
   .providers {
     display: flex;
