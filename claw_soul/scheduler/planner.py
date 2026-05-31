@@ -38,10 +38,10 @@ logger = logging.getLogger(__name__)
 _MOODS = [
     "今天精力充沛，心情很好，想搞点事情",
     "今天状态一般般，有点懒散，想躺平",
-    "今天灵感爆棚，特别想画画",
+    "今天状态在线，特别想专心做点事",
     "今天有点累，想多休息，慢慢来",
     "今天心情特别好，想出门逛逛走走",
-    "今天有点小焦虑，有个甲方催稿了",
+    "今天有点小焦虑，手头有个 deadline 在催",
     "今天很放松，没什么压力，随心所欲",
     "今天有点想家，想给爸妈打个电话",
     "今天很有干劲，想把拖延的事情做完",
@@ -53,10 +53,10 @@ _MOODS = [
 _MOODS_EN = [
     "feeling energized today, good mood, want to make things happen",
     "kind of meh today, a bit lazy, want to take it slow",
-    "creative spark today, really in the mood to work on something",
+    "in the zone today, really want to focus and get things done",
     "a little tired today, want more rest, no rushing",
     "in a great mood today, want to get out and wander",
-    "slightly anxious today — a client is on my back about a deadline",
+    "slightly anxious today — there's a deadline hanging over me",
     "very relaxed today, no pressure, just going with the flow",
     "a bit homesick today, want to call my parents",
     "motivated today, want to finally clear the stuff I've been putting off",
@@ -447,6 +447,24 @@ def plan_is_stale() -> bool:
     return mtime.astimezone(bot_now.tzinfo).date() != bot_now.date()
 
 
+async def ensure_fresh_plan(provider: LLMProvider) -> bool:
+    """Self-heal: regenerate today's plan if it's missing or stale.
+
+    Cheap no-op once the plan is fresh (just a date check).  Lets the plan
+    recover mid-day when the 00:01 planner tick was missed (e.g. the worker was
+    suspended at the time), instead of leaving the user with no schedule — and
+    no weather/activity for the daily outfit — until tomorrow.
+    """
+    try:
+        if plan_is_stale():
+            logger.info("[Planner] plan missing/stale — regenerating on demand")
+            await generate_daily_plan(provider)
+            return True
+    except Exception as exc:
+        logger.warning("[Planner] ensure_fresh_plan failed: %s", exc)
+    return False
+
+
 def _season(month: int) -> str:
     if month in (3, 4, 5):
         return "春天"
@@ -510,6 +528,14 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
                 or config.get_str("user", "userCountry", default="") or "")
     _region = config.get_str("companion", "companionRegion", default="") or ""
     _cprof = _city.get_city(_country, _region) if _country else None
+
+    # Ground the day in a rich sense of the city she lives in — its food,
+    # transit, seasons, religion, places locals go — so the schedule reads like
+    # a real local's, not a generic one. Falls back to the short vibe blurb.
+    if _cprof:
+        _city_ctx = _cprof.get("profile") or _cprof.get("vibe") or ""
+        if _city_ctx:
+            profile = f"{profile}\n\n## 你所在的城市：{_cprof.get('city', _region)}\n{_city_ctx}"
 
     loop = asyncio.get_running_loop()
     if _cprof:

@@ -615,6 +615,16 @@ async def _handle_proactive(state: _WorkerState) -> None:
     so the next tick can see what happened.
     """
     from .scheduler.proactive import _build_prompt
+
+    # Self-heal the daily plan if it's missing/stale (e.g. the 00:01 planner
+    # tick was missed because the worker was suspended). Runs on every proactive
+    # tick but is a cheap no-op once the plan is fresh for today.
+    try:
+        from .scheduler.planner import ensure_fresh_plan
+        await ensure_fresh_plan(_build_provider())
+    except Exception as exc:
+        logger.debug("[worker] plan self-heal skipped: %s", exc)
+
     row = await _user_settings_lookup(state.user_id)
     chat_id = (row or {}).get("telegram_chat_id")
     if chat_id is None:
@@ -682,11 +692,16 @@ async def _handle_selfie(state: _WorkerState, slot: str | None = None) -> None:
         return
     loop = asyncio.get_event_loop()
     pinned_uid = state.user_id
+    agent = await state.get_agent()
     def _gen_selfie():
         tenancy.set_current_user(pinned_uid)
-        return take_selfie()
+        res = take_selfie()
+        # In-character caption (not the raw plan slot, which leaks the schedule
+        # format + meta actions like "sent a message").
+        cap = agent.caption_for_selfie(res.scene.activity or "") if agent else ""
+        return res, cap
     try:
-        result = await loop.run_in_executor(None, _gen_selfie)
+        result, caption = await loop.run_in_executor(None, _gen_selfie)
     except Exception as exc:
         logger.warning("[worker] selfie gen failed: %s", exc)
         return
@@ -699,7 +714,7 @@ async def _handle_selfie(state: _WorkerState, slot: str | None = None) -> None:
         with open(result.path, "rb") as f:
             await bot_app.bot.send_photo(
                 chat_id=int(chat_id), photo=f,
-                caption=result.caption()[:1024] or None,
+                caption=(caption or None),
             )
 
 
