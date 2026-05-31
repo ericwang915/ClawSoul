@@ -71,6 +71,36 @@ def _get_client():
         return _client
 
 
+def put_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> bool:
+    """Upload raw bytes to ``key``. Best-effort; returns success."""
+    if not is_configured():
+        return False
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        client.put_object(Bucket=_bucket(), Key=key, Body=data, ContentType=content_type)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[tigris] put_bytes failed key=%s: %s", key, exc)
+        return False
+
+
+def get_bytes(key: str) -> bytes | None:
+    """Download ``key`` as bytes, or ``None`` if missing / on error."""
+    if not is_configured():
+        return None
+    client = _get_client()
+    if client is None:
+        return None
+    try:
+        resp = client.get_object(Bucket=_bucket(), Key=key)
+        return resp["Body"].read()
+    except Exception as exc:  # noqa: BLE001  (NoSuchKey included — treat as absent)
+        logger.debug("[tigris] get_bytes miss/err key=%s: %s", key, exc)
+        return None
+
+
 def object_key(user_id: str, filename: str) -> str:
     """Stable key layout: ``users/<uid>/<basename>``."""
     base = os.path.basename(filename)
@@ -163,4 +193,4 @@ def delete_user_objects(user_id: str) -> int:
 
 
 __all__ = ["is_configured", "object_key", "upload_photo", "presign_get",
-           "delete_user_objects"]
+           "delete_user_objects", "put_bytes", "get_bytes"]
