@@ -735,12 +735,32 @@ async def _idle_watchdog(state: _WorkerState) -> None:
         logger.info("[worker] auto-exit disabled (tier=%s)", _tier())
         return
 
+    loop = asyncio.get_event_loop()
+    last_backup = time.monotonic()
     while True:
         await asyncio.sleep(30)
-        idle = time.monotonic() - state.last_active
+        now = time.monotonic()
+        # Periodic memory checkpoint (~5 min) so an abrupt kill — a deploy that
+        # resets the rootfs, a crash — loses at most a few minutes of memory,
+        # not the whole session. Best-effort, off the event loop.
+        if now - last_backup >= 300:
+            last_backup = now
+            try:
+                from .core import memory_backup
+                await loop.run_in_executor(None, memory_backup.backup, state.user_id)
+            except Exception as exc:
+                logger.debug("[worker] periodic memory backup skipped: %s", exc)
+        idle = now - state.last_active
         if idle >= threshold:
             logger.info("[worker] idle for %.0fs ≥ %ds (tier=%s), exiting",
                         idle, threshold, _tier())
+            # Checkpoint long-term memory to Tigris before we go — so it
+            # survives a later machine destroy / migration, not just suspend.
+            try:
+                from .core import memory_backup
+                memory_backup.backup(state.user_id)
+            except Exception as exc:
+                logger.warning("[worker] memory backup on exit failed: %s", exc)
             # SIGTERM-equivalent: clean exit, Fly Proxy will mark stopped.
             os._exit(0)
 
@@ -952,6 +972,16 @@ def _hydrate_persona_from_pg(user_id: str) -> None:
     /data/context/*.md) picks them up.  Silent no-op if the user hasn't
     completed the wizard yet."""
     from . import companion as comp
+
+    # Fresh machine (destroyed / migrated / first boot)? Restore the user's
+    # synthesized long-term memory from Tigris before the agent loads it.
+    # No-op when local memory already exists.
+    try:
+        from .core import memory_backup
+        memory_backup.restore(user_id)
+    except Exception as exc:
+        logger.debug("[worker] memory restore skipped: %s", exc)
+
     choices = comp.load_choices()
     if not choices:
         logger.info("[worker] no companion choices in Pg yet — chat blocked "
