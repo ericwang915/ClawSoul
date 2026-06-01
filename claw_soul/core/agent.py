@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
@@ -1207,6 +1208,44 @@ Don't repeat this if `bot_name` already exists in memory.
 
         return system_msgs + chat_msgs
 
+    @staticmethod
+    def _now_slot(plan_text: str, bot_now) -> str:
+        """Find the day-plan slot that covers ``bot_now`` and return its text.
+
+        The plan runs 7am → 0–1am in file order (time never reverses), so file
+        order is chronological even across midnight. We linearize each ``HH:MM``
+        slot onto an absolute timeline (post-midnight slots get +24h) and pick
+        the last one whose start time is at or before now. Returns "" if the
+        plan has no parseable time slots.
+        """
+        base = 7 * 60
+        slots = []  # (abs_minutes, text) in chronological file order
+        prev = None
+        off = 0
+        for raw in plan_text.splitlines():
+            m = re.match(r"\s*[-*]?\s*(\d{1,2}):(\d{2})\b", raw)
+            if not m:
+                continue
+            h, mm = int(m.group(1)), int(m.group(2))
+            if h > 23 or mm > 59:
+                continue
+            clock = h * 60 + mm
+            if prev is not None and clock < prev:
+                off += 1440  # wrapped past midnight
+            prev = clock
+            slots.append((clock + off, raw.strip().lstrip("-* ").strip()))
+        if not slots:
+            return ""
+        now_min = bot_now.hour * 60 + bot_now.minute
+        now_abs = now_min + (1440 if now_min < base else 0)
+        cur = slots[0][1]
+        for a, text in slots:
+            if a <= now_abs:
+                cur = text
+            else:
+                break
+        return cur
+
     def _build_volatile_context(self) -> str:
         """Assemble per-turn context: current time + today's plan + memory snapshot.
 
@@ -1346,6 +1385,21 @@ Don't repeat this if `bot_name` already exists in memory.
                 with open(plan_path, "r", encoding="utf-8") as f:
                     plan_text = f.read().strip()
                 if plan_text:
+                    # Pin the CURRENT slot, not just the whole plan — otherwise she
+                    # has to guess where "now" lands in ~36 slots and defaults to the
+                    # safe "just at home." Anchoring the active slot makes her speak
+                    # from wherever the plan actually has her (at work, out, a café).
+                    now_line = self._now_slot(plan_text, bot_now)
+                    if now_line:
+                        parts.append(
+                            f"\n## 🕐 Right now ({bot_now:%H:%M})\n"
+                            f"Per your own day, this is where you are / what you're doing right now:\n"
+                            f"  {now_line}\n"
+                            "Speak from INSIDE this moment. If it has you out — at work, "
+                            "commuting, in a café, running errands — then that's where you "
+                            "are; don't fall back to 'just at home.' When they ask what "
+                            "you're up to or where you are, answer from this line."
+                        )
                     parts.append("\n## Daily Schedule (Today)\n" + plan_text)
         except OSError:
             pass
