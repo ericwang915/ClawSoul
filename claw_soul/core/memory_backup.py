@@ -78,6 +78,17 @@ def backup(user_id: str) -> bool:
         return False
 
 
+def purge(user_id: str) -> bool:
+    """Delete the user's memory backup tarball from Tigris (re-customization
+    reset).  Photos live under ``users/<uid>/`` and are NOT touched."""
+    if not user_id or not tigris.is_configured():
+        return False
+    ok = tigris.delete_key(_key(user_id))
+    if ok:
+        logger.info("[memory_backup] purged backup for %s", user_id[:8])
+    return ok
+
+
 def restore(user_id: str) -> bool:
     """If local memory is absent (fresh machine), restore it from Tigris.
 
