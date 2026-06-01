@@ -323,6 +323,7 @@ class MemoryManagerPg:
         rows = _get("/rest/v1/memory_entries", params={
             "user_id": f"eq.{uid}",
             "select":  "key,content",
+            "order":   "updated_at.desc",  # >500 entries → keep the freshest, not arbitrary
             "limit":   "500",
         })
         return {r["key"]: r["content"] for r in rows}
@@ -353,6 +354,7 @@ class MemoryManagerPg:
                 return "(empty query)"
             params: dict[str, Any] = {
                 "user_id": f"eq.{uid}", "select": "key,content",
+                "order": "updated_at.desc",  # >20 matches → freshest, not arbitrary
                 "limit": "20",
             }
             for t in tokens:
