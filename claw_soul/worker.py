@@ -308,6 +308,22 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
         return  # unsupported (sticker/voice/etc.) or no chat
     user_text = text or caption                            # caption rides with a photo
 
+    # How long since the user's PREVIOUS message (read before we bump it below),
+    # so the agent can treat old feelings as old instead of as "just now".
+    gap_note = ""
+    try:
+        from datetime import datetime, timezone
+        from .router.db import get_user_machine
+        _row = await get_user_machine(state.user_id)
+        _prev = getattr(_row, "last_message_at", None) if _row else None
+        if _prev:
+            _last = datetime.fromisoformat(str(_prev).replace("Z", "+00:00"))
+            _mins = (datetime.now(timezone.utc) - _last).total_seconds() / 60.0
+            if _mins >= 20:
+                gap_note = _humanize_gap(_mins)
+    except Exception:
+        gap_note = ""
+
     # Tell the scheduler we just got a fresh inbound — proactive/selfie
     # ticks within the next quiet window get suppressed so the user
     # doesn't get spammed mid-conversation.
@@ -335,6 +351,7 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
 
     loop = asyncio.get_event_loop()
     agent = await state.get_agent()
+    agent._gap_note = gap_note  # transient; the volatile context reads + uses it
 
     bot_app = await state.get_bot_app()
     if bot_app is None:
@@ -691,6 +708,7 @@ async def _handle_proactive(state: _WorkerState) -> None:
     # UTC, so the persona's sense of time-of-day matches the human's.
     prompt = _build_prompt(_user_local_now())
     pinned_uid = state.user_id
+    agent._gap_note = ""  # proactive has no "current user message" to anchor to
     def _chat_proactive():
         tenancy.set_current_user(pinned_uid)
         # chat_proactive() does NOT persist the synthetic prompt as a user
@@ -825,6 +843,17 @@ async def _user_settings_lookup(user_id: str) -> dict | None:
     except Exception as exc:
         logger.warning("[worker] settings lookup failed: %s", exc)
         return None
+
+
+def _humanize_gap(mins: float) -> str:
+    if mins < 60:
+        return f"about {int(mins)} minutes"
+    hrs = mins / 60.0
+    if hrs < 24:
+        n = int(round(hrs))
+        return f"about {n} hour{'s' if n != 1 else ''}"
+    days = int(round(hrs / 24.0))
+    return f"about {days} day{'s' if days != 1 else ''}"
 
 
 async def _touch_message_at(user_id: str) -> None:

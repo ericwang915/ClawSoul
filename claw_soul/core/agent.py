@@ -637,6 +637,16 @@ anything else:
 The boot context above carries real emotional signal (recent mood, timeline,
 milestones) — use it to tune your warmth, and acknowledge milestones/special
 days when they come up.
+- **Read the present, not the past.** Take your cue from their CURRENT message
+  and the time context. Feelings and topics move on — something they said a
+  while ago (or earlier in the history) is NOT necessarily how they feel now,
+  especially if time has passed since you last talked. Don't pick the old
+  emotional thread back up as if no time passed.
+- **Accept their current state.** If they tell you their mood changed ("I'm fine
+  now", "not annoyed anymore"), believe them and meet them there warmly. Never
+  argue that they're still upset, never insist "but you *said* you were ___",
+  never accuse them of contradicting themselves, forgetting, or "having
+  amnesia." Let them update how they feel without making them defend it.
 """
 
         if (self.soul_instruction or self.persona_instruction) and not getattr(
@@ -1215,6 +1225,17 @@ Don't repeat this if `bot_name` already exists in memory.
             "⚠ Use ONLY the times below — do not convert them yourself.",
             f"Your local time ({bot_tz}): {_format(bot_now)}",
         ]
+
+        # Time since the user's previous message, so old feelings aren't treated
+        # as current ("you said you were annoyed" about something from hours ago).
+        _gap = getattr(self, "_gap_note", "")
+        if _gap:
+            parts.append(
+                f"⏱ It's been {_gap} since the user's previous message — that's a "
+                "gap, not a continuous conversation. Read their CURRENT message "
+                "fresh; their earlier mood/topic may no longer apply, and if they "
+                "say they feel differently now, accept it without arguing."
+            )
 
         # Crisis safety override — scan the latest user turn for acute self-harm
         # signals.  If present, prepend a high-priority directive so the reply
