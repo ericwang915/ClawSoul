@@ -1794,6 +1794,24 @@ document.getElementById('chat-form').addEventListener('submit', (e) => {
 let _setupOptions = null;
 let _wizardStep = 0;
 let _wizardChoices = {};
+let _origChoices = null;   // snapshot when re-opening to edit (for reset warning)
+
+// Identity fields that, if changed, make the companion a different person —
+// the backend wipes accumulated memory + chat history (photos are kept). Keep
+// in sync with _MATERIAL_FIELDS in claw_soul/core/recustomize.py.
+const MATERIAL_FIELDS = ['companionName','companionGender','companionAge',
+  'companionCountry','companionRegion','companionOccupation','archetype',
+  'dynamic','tone','backstory','userLanguage'];
+
+function _normChoiceVal(v) {
+  if (Array.isArray(v)) return v.map(_normChoiceVal).sort().join(',');
+  return String(v ?? '').trim().toLowerCase();
+}
+
+function identityChanged(orig, next) {
+  if (!orig) return false;
+  return MATERIAL_FIELDS.some(k => _normChoiceVal(orig[k]) !== _normChoiceVal(next[k]));
+}
 
 const WIZARD_STEPS = [
   {
@@ -2035,6 +2053,7 @@ async function ensureSetupOptions() {
 async function openSetupWizard(existingChoices = null) {
   await ensureSetupOptions();
   _wizardChoices = existingChoices ? { ...existingChoices } : {};
+  _origChoices = existingChoices ? { ...existingChoices } : null;
   _wizardStep = 0;
   // The close button is only shown for users who already completed onboarding
   // and are re-opening to edit.  First-time users must finish the flow — the
@@ -2293,7 +2312,21 @@ async function wizardNext() {
     return;
   }
 
-  // Final step: submit
+  // Final step: submit. If this is an edit that changes who they are, warn —
+  // the companion will forget everything (photos are kept).
+  const submitChoices = { ..._wizardChoices, userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  if (identityChanged(_origChoices, _wizardChoices)) {
+    const ok = confirm(
+      "You're changing who they are — their name, age, where they live, their " +
+      "personality or the language they speak.\n\n" +
+      "That makes them a different person: they'll FORGET all your past " +
+      "conversations and memories, and your relationship history (milestones, " +
+      "how long you've known each other) resets to zero.\n\n" +
+      "Your saved photos are kept.\n\nContinue?"
+    );
+    if (!ok) return;
+  }
+
   const btn = document.getElementById('wiz-next');
   btn.disabled = true;
   btn.textContent = 'Saving…';
@@ -2304,7 +2337,7 @@ async function wizardNext() {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choices: { ..._wizardChoices, userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
+      body: JSON.stringify({ choices: submitChoices }),
     });
     const data = await r.json();
     if (!r.ok) {

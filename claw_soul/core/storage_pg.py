@@ -174,6 +174,26 @@ class SessionStorePg:
         return int(ok1) + int(ok2)
 
 
+def purge_user_memory(user_id: str) -> dict[str, bool]:
+    """Delete ALL of a user's conversation + synthesized memory rows across
+    every session — used by the re-customization reset.  Photos live in their
+    own ``photos`` table and are deliberately left untouched.
+
+    Milestone/bonding events are removed (relationship state resets with the new
+    identity); operational events (e.g. proactive_sent) are left alone.
+    """
+    uid = user_id
+    f = {"user_id": f"eq.{uid}"}
+    return {
+        "turns":          _delete("/rest/v1/turns", params=dict(f)),
+        "sessions":       _delete("/rest/v1/sessions", params=dict(f)),
+        "memory_entries": _delete("/rest/v1/memory_entries", params=dict(f)),
+        "memory_daily":   _delete("/rest/v1/memory_daily", params=dict(f)),
+        "events":         _delete("/rest/v1/events", params={
+            **f, "kind": 'in.("milestone","bonding_level")'}),
+    }
+
+
 # ── Storage / event log (Pg) ──────────────────────────────────────────
 
 

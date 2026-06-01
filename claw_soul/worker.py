@@ -1079,6 +1079,16 @@ def _hydrate_persona_from_pg(user_id: str) -> None:
         logger.info("[worker] no companion choices in Pg yet — chat blocked "
                     "until user completes web wizard")
         return
+    # If the user materially re-customized (identity / place / language), wipe
+    # the accumulated memory + transcript first so she doesn't behave like the
+    # new persona while remembering the old one. Photos are kept. No-op on first
+    # onboarding and on unchanged identity. Must run BEFORE apply_choices, which
+    # regenerates the identity docs.
+    try:
+        from .core import recustomize
+        recustomize.maybe_reset_on_identity_change(user_id, choices)
+    except Exception as exc:
+        logger.warning("[worker] identity-change reset skipped: %s", exc)
     try:
         comp.apply_choices(choices)
         logger.info("[worker] hydrated persona from Pg for user=%s", user_id[:8])
