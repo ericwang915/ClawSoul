@@ -258,7 +258,12 @@ async def _existing_milestone_keys(user_id: str) -> set[str]:
                     "user_id": f"eq.{user_id}",
                     "kind":    'in.("milestone","bonding_level")',
                     "select":  "payload",
-                    "limit":   "200",
+                    # This builds the set of ALREADY-achieved keys; an arbitrary
+                    # truncation would drop achieved keys and re-fire milestones.
+                    # Order newest-first and lift the cap well above the bounded
+                    # milestone catalog so the set stays complete.
+                    "order":   "ts.desc",
+                    "limit":   "1000",
                 },
                 headers=_headers(),
             )
