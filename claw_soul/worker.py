@@ -298,9 +298,15 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
 
     msg = update.get("message") or update.get("edited_message") or {}
     text = (msg.get("text") or "").strip()
+    caption = (msg.get("caption") or "").strip()
+    photos = msg.get("photo") or []                       # list of PhotoSize
+    doc = msg.get("document") or {}
+    is_image_doc = isinstance(doc, dict) and str(doc.get("mime_type", "")).startswith("image/")
+    has_image = bool(photos) or is_image_doc
     chat_id = ((msg.get("chat") or {}).get("id"))
-    if not text or chat_id is None:
-        return  # non-text message types not supported in this phase
+    if (not text and not has_image) or chat_id is None:
+        return  # unsupported (sticker/voice/etc.) or no chat
+    user_text = text or caption                            # caption rides with a photo
 
     # Tell the scheduler we just got a fresh inbound — proactive/selfie
     # ticks within the next quiet window get suppressed so the user
@@ -334,6 +340,28 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     if bot_app is None:
         logger.warning("[worker] no bot token configured; can't reply")
         return
+
+    # Inbound photo → download from Telegram and pass to the agent as a
+    # multimodal turn so she actually SEES it (the provider routes image turns
+    # to the vision model). Without this, photos were silently dropped.
+    chat_input: object = user_text
+    if has_image:
+        try:
+            file_id = (photos[-1].get("file_id") if photos else doc.get("file_id"))
+            tg_file = await bot_app.bot.get_file(file_id)
+            raw = await tg_file.download_as_bytearray()
+            import base64
+            mime = (doc.get("mime_type") if is_image_doc else None) or "image/jpeg"
+            url = f"data:{mime};base64," + base64.b64encode(bytes(raw)).decode()
+            chat_input = [
+                {"type": "text",
+                 "text": user_text or "（我发了一张照片给你，看看然后自然地回应～）"},
+                {"type": "image_url", "image_url": {"url": url}},
+            ]
+        except Exception as exc:
+            logger.warning("[worker] inbound photo download failed: %s", exc)
+            if not user_text:
+                return  # nothing to say without the image
 
     # First-ever conversation? Send a one-time, out-of-character AI disclaimer
     # before the companion's first words — Telegram has no chrome for the
@@ -393,7 +421,7 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
             pinned_uid = state.user_id
             def _chat_in_thread():
                 tenancy.set_current_user(pinned_uid)
-                return agent.chat(text)
+                return agent.chat(chat_input)
             reply = await loop.run_in_executor(None, _chat_in_thread)
         finally:
             typing_task.cancel()
