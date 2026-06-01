@@ -149,7 +149,7 @@ class Agent:
         tools_path: str | None = None,
         verbose: bool = False,
         show_full_context: bool = False,
-        max_chat_history: int = 10,
+        max_chat_history: int = 60,
         auto_compaction: bool = True,
         compaction_threshold: int = DEFAULT_AUTO_THRESHOLD_TOKENS,
         compaction_recent_keep: int = DEFAULT_RECENT_KEEP,

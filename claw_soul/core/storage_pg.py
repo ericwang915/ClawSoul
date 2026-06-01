@@ -154,9 +154,10 @@ class SessionStorePg:
             "user_id":    f"eq.{uid}",
             "session_id": f"eq.{session_id}",
             "select":     "role,content,ts",
-            "order":      "ts.asc",
-            "limit":      "200",
+            "order":      "ts.desc",   # newest first, so the limit keeps RECENT turns
+            "limit":      "200",       # 200 turns ≈ 100 rounds (1 round = user + assistant)
         })
+        rows = list(reversed(rows))    # back to chronological (ts.asc) for the agent
         return [
             {"role": r["role"], "content": r["content"], "_ts": r["ts"]}
             for r in rows

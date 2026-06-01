@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CHARS_PER_TOKEN = 4
-DEFAULT_AUTO_THRESHOLD_TOKENS = 6000   # trigger auto-compaction at ~6k tokens
+DEFAULT_AUTO_THRESHOLD_TOKENS = 10000  # trigger auto-compaction at ~10k tokens
 DEFAULT_RECENT_KEEP = 6                # keep last N chat messages verbatim
 def _compaction_log_file() -> str:
     from .. import config as _cfg
