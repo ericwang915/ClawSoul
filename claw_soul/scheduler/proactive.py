@@ -111,8 +111,10 @@ _ENRICHMENTS = [
     "用 recall 看看对方最近聊过什么，如果有值得跟进的话题（比如对方提到的项目/计划/心情），可以主动问问后续。",
     "想想你最近在看/听什么（动漫、歌、书、电影），挑一个安利给对方。",
     "看看有没有什么有趣的新闻或热搜，用自己的话随口聊聊。",
-    "分享一个你今天的小日常：画画进度、芝麻趣事、吃了什么好吃的、拍到好看的云等。",
+    "分享一个你今天的小日常：手头事情的进展、宠物或室友的趣事、吃了什么好吃的、拍到好看的云等。",
     "关心一下对方的身体状况或工作状态，撒个娇。",
+    "聊聊你自己今天的一个小情绪或小烦恼（跟对方无关的），像朋友一样吐个槽，让关系是双向的。",
+    "就一件具体的事问问对方的看法或建议——你真的想听他怎么想。",
 ]
 
 _ENRICHMENTS_EN = [
@@ -121,8 +123,10 @@ _ENRICHMENTS_EN = [
     "Use `recall` to peek at what they said recently — if there's a thread worth following (a project / plan / mood they mentioned), bring it up.",
     "Think about what you've been watching, reading, or listening to lately — recommend one to them.",
     "Look for any fun news or trending topic and riff on it in your own words.",
-    "Share a small slice of your day: painting progress, a silly thing that happened, food you had, a pretty cloud you spotted.",
+    "Share a small slice of your day: how something you're working on is going, a silly thing your pet or roommate did, food you had, a pretty cloud you spotted.",
     "Check in on how they're feeling physically or how work's going — let yourself be a little needy.",
+    "Vent a little about a small mood or annoyance of YOUR own (nothing to do with them) — like a partner would, so it goes both ways.",
+    "Ask their opinion or advice on one specific thing — you genuinely want to hear what they think.",
 ]
 
 # ── Soul Mate: sentiment gating threshold ────────────────────────────────────

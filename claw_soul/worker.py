@@ -36,6 +36,7 @@ import asyncio
 import collections
 import logging
 import os
+import random
 import time
 from datetime import datetime
 
@@ -465,6 +466,13 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
 
         if not reply:
             return
+        # Humanize pacing: real people don't fire back instantly + uniformly.
+        # Scale a short delay with reply length + jitter (the typing indicator
+        # covers it), longer if it's her sleep hours. Capped so it never lags.
+        try:
+            await asyncio.sleep(_reply_delay(reply))
+        except Exception:
+            pass
         try:
             await bot_app.bot.send_message(chat_id=chat_id, text=reply[:4096])
         except Exception as exc:
@@ -843,6 +851,21 @@ async def _user_settings_lookup(user_id: str) -> dict | None:
     except Exception as exc:
         logger.warning("[worker] settings lookup failed: %s", exc)
         return None
+
+
+def _reply_delay(text: str) -> float:
+    """A short, human-feeling pause before sending — scales with length + jitter,
+    longer during her local sleep hours, hard-capped so it never feels laggy."""
+    n = len(text or "")
+    base = 0.7 + min(n, 360) * 0.011          # ~0.7s + up to ~4s for long replies
+    delay = base * random.uniform(0.6, 1.5)
+    try:
+        from .core import tenancy
+        if 1 <= tenancy.now_in_bot_tz().hour < 7:
+            delay += random.uniform(2.0, 6.0)  # groggy / slow at her night
+    except Exception:
+        pass
+    return min(delay, 9.0)
 
 
 def _humanize_gap(mins: float) -> str:
