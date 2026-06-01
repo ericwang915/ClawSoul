@@ -627,7 +627,11 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
    出门、闷热就只去有空调的、晴天可以约人散步。天气未知时按季节
    合理猜（5 月末上海多云偏凉，午后可能阵雨）。
 4. **日期 / 周末 / 假期**：
-   - 周一到周五：必须有工作内容（接稿 / 改稿 / 沟通客户 / 提案）；
+   - 周一到周五：必须有**符合你真实职业**的工作内容（看上面 profile 里的职业，
+     不要默认成画画/接稿）。**除非你的职业本就在家办公（自由职业、远程），
+     否则工作时段你人就在工作地点**——通勤路上、公司工位、店里、医院、
+     学校、工地、片场等，和同事在一起、出门吃午饭，而不是一直待在家。
+     上下班的通勤、午休、下班路上也都写出来；
    - 周六周日：作息后移、更松散，有 brunch / 约朋友 / 逛街 / 看展；
    - 节假日（春节、清明、五一、端午、中秋、国庆、圣诞、跨年等）：
      体现仪式感（吃饺子、看烟花、跨年倒数等），出现节日相关消费场景
@@ -716,7 +720,12 @@ Time moves forward, **never reverse**; format `HH:MM`.
 3. **Weather drives behavior**: use the "weather" field above for indoor / outdoor. Rain → stay in;
    muggy → air-conditioned places; clear → a walk. If weather's unknown, guess from the season.
 4. **Date / weekend / holidays**:
-   - Mon–Fri: include real work (tasks, revisions, client calls, a pitch);
+   - Mon–Fri: include real work **that fits your actual job** (see the profile
+     above — don't default to drawing/freelance). **Unless your job is genuinely
+     home-based (freelance, fully remote), you're physically AT your workplace
+     during work hours** — the commute, your desk/office/shop/site/hospital/
+     school, coworkers around you, lunch out — not holed up at home all day.
+     Write the commute in and out, the lunch break, the walk home;
    - Sat–Sun: later wake-up, looser — brunch / friends / errands / a show;
    - Holidays: show the ritual of the day + holiday spending (markets, gifts, prep);
    - As a holiday nears: show anticipation ("day off tomorrow", "heading home next week").
