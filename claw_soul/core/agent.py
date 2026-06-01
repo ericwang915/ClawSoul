@@ -1151,6 +1151,19 @@ Don't repeat this if `bot_name` already exists in memory.
             chat_msgs = chat_msgs[-self.max_chat_history:]
 
         chat_msgs = self._sanitize_tool_pairs(chat_msgs)
+
+        # Drop any assistant turn with neither content nor tool_calls. The vision
+        # provider (Gemini) can hand back an empty assistant message; re-sending
+        # it to a strict provider (DeepSeek) 400s with "Invalid assistant
+        # message: content or tool_calls must be set", which then surfaces to the
+        # user as a raw error. Safe to drop — nothing references such a turn.
+        def _empty_assistant(m: dict) -> bool:
+            if m.get("role") != "assistant" or m.get("tool_calls"):
+                return False
+            c = m.get("content")
+            return not (c.strip() if isinstance(c, str) else c)
+        chat_msgs = [m for m in chat_msgs if not _empty_assistant(m)]
+
         return system_msgs + chat_msgs
 
     def _build_volatile_context(self) -> str:
