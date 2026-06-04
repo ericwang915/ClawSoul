@@ -360,6 +360,56 @@ def _save_choices_pg(cleaned: dict[str, Any]) -> bool:
         return False
 
 
+def save_applied_sig(user_id: str, sig: str) -> bool:
+    """Persist the last-applied identity signature to Pg (the ``events`` table,
+    kind ``identity_applied``) as a durable fallback for the local
+    ``context/.identity_sig`` file — which is lost if the worker machine is
+    destroyed.  Keeps a single row: drops any prior one, inserts the new.
+
+    Used by the re-customization reset so a machine that lost its local /data
+    can still tell whether the identity actually changed.  Best-effort.
+    """
+    if not _pg_configured() or not user_id:
+        return False
+    try:
+        import httpx
+        httpx.request(
+            "DELETE", f"{_pg_url()}/rest/v1/events",
+            params={"user_id": f"eq.{user_id}", "kind": "eq.identity_applied"},
+            headers=_pg_headers("return=minimal"), timeout=10,
+        )
+        r = httpx.post(
+            f"{_pg_url()}/rest/v1/events",
+            headers=_pg_headers("return=minimal"),
+            json={"user_id": user_id, "kind": "identity_applied",
+                  "payload": {"sig": sig}},
+            timeout=10,
+        )
+        return r.is_success
+    except Exception:
+        return False
+
+
+def load_applied_sig(user_id: str) -> str | None:
+    """Read the last-applied identity signature from Pg, or None."""
+    if not _pg_configured() or not user_id:
+        return None
+    try:
+        import httpx
+        r = httpx.get(
+            f"{_pg_url()}/rest/v1/events",
+            params={"user_id": f"eq.{user_id}", "kind": "eq.identity_applied",
+                    "select": "payload", "order": "ts.desc", "limit": "1"},
+            headers=_pg_headers(), timeout=10,
+        )
+        if not r.is_success:
+            return None
+        rows = r.json() or []
+        return (rows[0].get("payload") or {}).get("sig") if rows else None
+    except Exception:
+        return None
+
+
 def _in_saas_dashboard_mode() -> bool:
     """True when we're running on the legacy dashboard host inside SaaS
     Phase 2 — i.e. Telegram traffic goes through the per-user worker

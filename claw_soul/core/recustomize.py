@@ -75,7 +75,7 @@ def identity_signature(choices: dict) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def _read_stored_sig() -> str | None:
+def _read_local_sig() -> str | None:
     try:
         with open(_sig_path(), "r", encoding="utf-8") as f:
             return f.read().strip() or None
@@ -83,14 +83,35 @@ def _read_stored_sig() -> str | None:
         return None
 
 
-def _write_sig(sig: str) -> None:
+def _read_stored_sig(user_id: str) -> str | None:
+    """Last-applied signature. Local file is primary (fast, no network); the Pg
+    copy is a durable fallback for when the worker machine was destroyed and
+    /data (the local file) was wiped — without it, a fresh machine couldn't
+    tell that the identity changed and would skip the reset."""
+    local = _read_local_sig()
+    if local is not None:
+        return local
+    try:
+        from .. import companion
+        return companion.load_applied_sig(user_id)
+    except Exception:
+        return None
+
+
+def _write_sig(user_id: str, sig: str) -> None:
+    # Local file (primary) + Pg (durable fallback).
     try:
         path = _sig_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(sig)
     except OSError as exc:
-        logger.warning("[recustomize] could not persist identity sig: %s", exc)
+        logger.warning("[recustomize] could not persist identity sig locally: %s", exc)
+    try:
+        from .. import companion
+        companion.save_applied_sig(user_id, sig)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[recustomize] could not persist identity sig to Pg: %s", exc)
 
 
 def _wipe_filesystem_memory() -> None:
@@ -145,11 +166,11 @@ def maybe_reset_on_identity_change(user_id: str, choices: dict) -> bool:
     actually change something material.
     """
     new_sig = identity_signature(choices or {})
-    old_sig = _read_stored_sig()
+    old_sig = _read_stored_sig(user_id)
     changed = old_sig is not None and old_sig != new_sig
     if changed:
         logger.info("[recustomize] identity changed for %s — resetting memory", user_id[:8])
         reset_memory(user_id)
     # Record regardless, so the signature tracks the latest applied identity.
-    _write_sig(new_sig)
+    _write_sig(user_id, new_sig)
     return changed
