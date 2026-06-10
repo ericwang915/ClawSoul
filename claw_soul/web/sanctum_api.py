@@ -24,7 +24,7 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from ..core import tenancy
 from ..core.image_gen import tigris
@@ -160,11 +160,39 @@ async def photos(request: Request) -> JSONResponse:
     return JSONResponse({"items": items, "total": len(items)})
 
 
-async def photo(filename: str, request: Request) -> FileResponse:
-    """Stream a photo file from the current tenant's album.
+async def _fetch_photo_row_by_name(uid: str, filename: str) -> dict | None:
+    """Look up ONE photo row by (user_id, filename) — the ownership check."""
+    if not _pg_configured():
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            r = await c.get(
+                f"{_pg_url()}/rest/v1/photos",
+                params={
+                    "user_id":  f"eq.{uid}",
+                    "filename": f"eq.{filename}",
+                    "select":   "object_key",
+                    "limit":    "1",
+                },
+                headers=_pg_headers(),
+            )
+        rows = r.json() if r.is_success else []
+        return rows[0] if rows else None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[sanctum_api] photo ownership lookup failed: %s", exc)
+        return None
 
-    Validates the filename can't escape the album dir (no path traversal)
-    and returns 404 for anything missing.
+
+async def photo(filename: str, request: Request):
+    """Serve a photo — ONLY if it belongs to the current tenant.
+
+    Cloud mode (Pg + Tigris): ownership is checked against the ``photos``
+    table by (user_id, filename); a match redirects to a short-lived
+    presigned Tigris URL.  A filename that exists but belongs to another
+    tenant 404s — never leaks across tenants.
+
+    Local / single-tenant mode falls back to streaming from the on-disk
+    album (one tenant, no isolation concern), with a path-traversal guard.
     """
     uid = tenancy.get_current_user()
     if not uid:
@@ -174,6 +202,16 @@ async def photo(filename: str, request: Request) -> FileResponse:
     safe_name = Path(filename).name
     if safe_name != filename:
         raise HTTPException(status_code=400, detail="bad filename")
+
+    if _pg_configured() and tigris.is_configured():
+        row = await _fetch_photo_row_by_name(uid, safe_name)
+        if not row:
+            raise HTTPException(status_code=404, detail="not found")
+        url = tigris.presign_get(row["object_key"])
+        if not url:
+            raise HTTPException(status_code=404, detail="not found")
+        return RedirectResponse(url, status_code=302,
+                                headers={"Cache-Control": "private, no-store"})
 
     album = PhotoAlbum()
     full_path = os.path.join(album.root, safe_name)
