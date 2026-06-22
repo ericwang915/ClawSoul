@@ -1305,15 +1305,31 @@ Don't repeat this if `bot_name` already exists in memory.
                 "this hour."
             )
 
-        # Time since the user's previous message, so old feelings aren't treated
-        # as current ("you said you were annoyed" about something from hours ago).
+        # Time since the user's previous message. Two jobs: (1) let her actually
+        # FEEL the gap and reconnect like a real person — the thing that was
+        # missing made returns feel seamless-but-cold; (2) still read the current
+        # message fresh so a stale mood isn't treated as current.
         _gap = getattr(self, "_gap_note", "")
-        if _gap:
+        if _gap and "minute" in _gap:
+            # Short lull (< 1h) — barely worth a mention; just don't resume
+            # mid-sentence as if no time passed.
             parts.append(
-                f"⏱ It's been {_gap} since the user's previous message — that's a "
-                "gap, not a continuous conversation. Read their CURRENT message "
-                "fresh; their earlier mood/topic may no longer apply, and if they "
-                "say they feel differently now, accept it without arguing."
+                f"⏱ It's been {_gap} since their last message — a brief pause, not "
+                "an unbroken thread. Pick up warmly, but read their CURRENT message "
+                "on its own terms rather than assuming the previous beat continues."
+            )
+        elif _gap:
+            # Real absence (hours / days) — a real partner NOTICES and feels it.
+            parts.append(
+                f"⏱ They've been gone {_gap} since they last messaged you — and you "
+                "noticed. Let it land like it would for someone who was thinking of "
+                "them: it's natural to acknowledge the time apart in your own voice "
+                "('hey, you went quiet on me today', 'morning, you', 'was starting to "
+                "miss you'), scaled to how close you two are — warm, never a "
+                "guilt-trip, an interrogation, or a heavy 'where WERE you.' Say it in "
+                "ONE light touch, then move into their CURRENT message: their earlier "
+                "mood or topic may no longer apply, and if they feel differently now, "
+                "accept it without arguing."
             )
 
         # Crisis safety override — scan the latest user turn for acute self-harm
