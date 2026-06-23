@@ -34,13 +34,15 @@ logger = logging.getLogger(__name__)
 _BASE_STYLE_ZH = (
     "写实自拍风格，自然光线，画面温馨真实，"
     "表情自然，像是在用手机随手记录生活分享给男朋友。"
+    "画面里不要出现任何文字、字母、水印、字幕或logo。"
     "不要 NSFW，不要暴露，不要血腥。"
 )
 
 _BASE_STYLE_EN = (
     "Realistic phone selfie, natural lighting, warm everyday vibe, "
     "natural expression — like a candid moment captured to share with "
-    "their partner. No NSFW, no nudity, no violence."
+    "their partner. No text, no letters, no words, no watermark, no "
+    "caption or logo anywhere in the image. No NSFW, no nudity, no violence."
 )
 
 
