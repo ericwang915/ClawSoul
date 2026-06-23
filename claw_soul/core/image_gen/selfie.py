@@ -82,6 +82,90 @@ def _build_prompt(appearance: str, scene: Scene, extra_hint: str | None) -> str:
     return "\n\n".join(c for c in chunks if c)
 
 
+# Face-card style: a clean, front-facing portrait whose ONLY job is to capture
+# the face well, so it can anchor every later selfie (no scene, no outfit
+# variety — those would pollute the identity anchor).
+_REFERENCE_STYLE_ZH = (
+    "正脸清晰肖像，中性自然表情，柔和均匀光线，头肩特写，简洁纯色背景，"
+    "五官清晰锐利，写实人像。画面里不要任何文字、字母、水印、logo。不要 NSFW，不要暴露。"
+)
+_REFERENCE_STYLE_EN = (
+    "Clear front-facing portrait, neutral natural expression, soft even "
+    "lighting, head-and-shoulders, plain solid background, sharp realistic "
+    "facial features. No text, letters, watermark or logo anywhere. No NSFW, no nudity."
+)
+
+
+def _build_reference_prompt(appearance: str) -> str:
+    is_zh = _looks_chinese(appearance)
+    style = _REFERENCE_STYLE_ZH if is_zh else _REFERENCE_STYLE_EN
+    return "\n\n".join(c for c in (appearance.strip(), style) if c)
+
+
+def ensure_reference(
+    album: "PhotoAlbum",
+    generator: "SeedreamGenerator",
+    *,
+    model: str | None = None,
+) -> str | None:
+    """Return a local path to the companion's canonical face reference,
+    creating or restoring it if it doesn't exist locally yet.
+
+    Order: local file → restore from Tigris (survives machine destroy) →
+    bootstrap a fresh face-card and persist it both places.  Best-effort:
+    any failure returns None and the caller just generates without a
+    reference (degrades to the old seed-only behaviour).
+    """
+    local = album.primary_reference()
+    if local:
+        return local
+
+    from .. import tenancy
+    uid = tenancy.get_current_user()
+
+    # Restore from Tigris if a prior machine already built one.
+    if uid:
+        try:
+            from . import tigris
+            if tigris.is_configured():
+                data = tigris.get_bytes(tigris.object_key(uid, album.REFERENCE_NAME))
+                if data:
+                    return album.save_reference_bytes(data)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[selfie] reference restore skipped: %s", exc)
+
+    # Bootstrap: generate a clean face-card once, persist it.
+    appearance = load_appearance()
+    if not appearance.strip():
+        return None
+    try:
+        with tempfile.TemporaryDirectory(prefix="faceref_") as tmp:
+            paths = generator.generate_and_download(
+                _build_reference_prompt(appearance),
+                output_dir=tmp,
+                filename_prefix="faceref",
+                size=DEFAULT_SIZE,
+                n=1,
+                seed=_stable_seed(appearance),
+                model=model,
+            )
+            if not paths:
+                return None
+            dst = album.set_reference(paths[0])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[selfie] reference bootstrap failed: %s", exc)
+        return None
+
+    if uid:
+        try:
+            from . import tigris
+            tigris.upload_photo(uid, dst, filename=album.REFERENCE_NAME)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[selfie] reference Tigris upload skipped: %s", exc)
+    logger.info("[selfie] bootstrapped canonical face reference")
+    return dst
+
+
 def _stable_seed(appearance: str) -> int:
     """Deterministic seed derived from the appearance description.
 
@@ -149,9 +233,12 @@ def take_selfie(
     actual_seed = seed if seed is not None else _stable_seed(appearance)
 
     album = album or PhotoAlbum()
-    reference_path = album.primary_reference() if use_reference else None
-
     generator = generator or SeedreamGenerator(model=model)
+
+    # Canonical face reference — built once and reused, so the face stays the
+    # same person across changing scenes/outfits (seed + text alone drift when
+    # the prompt varies). Restores from Tigris on a fresh machine.
+    reference_path = ensure_reference(album, generator, model=model) if use_reference else None
 
     with tempfile.TemporaryDirectory(prefix="selfie_") as tmp:
         paths = generator.generate_and_download(
