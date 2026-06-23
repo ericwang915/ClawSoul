@@ -81,6 +81,43 @@ class PhotoAlbum:
         refs = self.list_references()
         return refs[0] if refs else None
 
+    # Canonical face reference filename — one per companion, deterministic so
+    # the Tigris key (users/<uid>/companion_reference.jpg) is stable too.
+    REFERENCE_NAME = "companion_reference.jpg"
+
+    def set_reference(self, src_path: str) -> str:
+        """Promote ``src_path`` to THE canonical face reference (replacing any
+        existing one).  Returns the stored path."""
+        import shutil
+        d = _reference_dir()
+        os.makedirs(d, exist_ok=True)
+        for old in self.list_references():     # one face only — clear the rest
+            try:
+                os.remove(old)
+            except OSError:
+                pass
+        dst = os.path.join(d, self.REFERENCE_NAME)
+        shutil.copyfile(src_path, dst)
+        return dst
+
+    def save_reference_bytes(self, data: bytes) -> str:
+        """Write raw image bytes as the canonical reference (used when
+        restoring it from Tigris on a fresh machine)."""
+        d = _reference_dir()
+        os.makedirs(d, exist_ok=True)
+        dst = os.path.join(d, self.REFERENCE_NAME)
+        with open(dst, "wb") as f:
+            f.write(data)
+        return dst
+
+    def clear_references(self) -> None:
+        """Drop all reference images (e.g. appearance changed on re-customize)."""
+        for old in self.list_references():
+            try:
+                os.remove(old)
+            except OSError:
+                pass
+
     # ── Save ─────────────────────────────────────────────────────────────
 
     def add(self, src_path: str, *, kind: str, prompt: str, metadata: dict[str, Any]) -> str:

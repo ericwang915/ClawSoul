@@ -154,6 +154,18 @@ def reset_memory(user_id: str) -> None:
         logger.warning("[recustomize] Tigris memory purge failed for %s: %s",
                        user_id[:8], exc)
 
+    # The canonical face reference is appearance-bound — a new identity means a
+    # new face, so drop it (local + Tigris) and let the next selfie rebuild it.
+    # Past photos themselves are kept as keepsakes.
+    try:
+        from .image_gen import tigris
+        from .image_gen.photo_album import PhotoAlbum
+        PhotoAlbum().clear_references()
+        if tigris.is_configured():
+            tigris.delete_key(tigris.object_key(user_id, PhotoAlbum.REFERENCE_NAME))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[recustomize] face-reference invalidation failed: %s", exc)
+
     logger.info("[recustomize] memory reset complete for %s (photos kept)", user_id[:8])
 
 
