@@ -32,17 +32,25 @@ logger = logging.getLogger(__name__)
 # the surrounding Chinese context.
 
 _BASE_STYLE_ZH = (
-    "写实自拍风格，自然光线，画面温馨真实，"
-    "表情自然，像是在用手机随手记录生活分享给男朋友。"
+    "手机前置摄像头随手自拍，未经修饰的生活快照，像随手发给男朋友的那种。"
+    "真实自然的皮肤质感，看得到毛孔和细小瑕疵、几缕碎发，没有磨皮、没有美颜滤镜、没有瘦脸。"
+    "现场自然光，光线略不均匀，景深浅、背景轻微虚化，可有一点点噪点或轻微动态模糊，构图随意不刻意。"
+    "看起来就是真人用手机拍的普通照片，不是渲染图、不是CG、不是精修棚拍、不是杂志封面。"
     "画面里不要出现任何文字、字母、水印、字幕或logo。"
     "不要 NSFW，不要暴露，不要血腥。"
 )
 
 _BASE_STYLE_EN = (
-    "Realistic phone selfie, natural lighting, warm everyday vibe, "
-    "natural expression — like a candid moment captured to share with "
-    "their partner. No text, no letters, no words, no watermark, no "
-    "caption or logo anywhere in the image. No NSFW, no nudity, no violence."
+    "Casual front-camera phone selfie, an unedited everyday snapshot like one "
+    "you'd fire off to your partner. Real natural skin texture — visible pores, "
+    "tiny imperfections, a few flyaway hairs; NO airbrushing, NO beauty filter, "
+    "NO skin smoothing, NO face slimming. Available ambient light, slightly "
+    "uneven, shallow depth of field with a softly blurred background, a touch of "
+    "sensor grain or mild motion blur, casual un-staged framing. It should look "
+    "like an ordinary photo a real person took on a phone — NOT a render, NOT "
+    "CGI, NOT a retouched studio shot, NOT a magazine cover, not glossy or "
+    "plastic. No text, no letters, no words, no watermark, no caption or logo "
+    "anywhere in the image. No NSFW, no nudity, no violence."
 )
 
 
@@ -86,13 +94,17 @@ def _build_prompt(appearance: str, scene: Scene, extra_hint: str | None) -> str:
 # the face well, so it can anchor every later selfie (no scene, no outfit
 # variety — those would pollute the identity anchor).
 _REFERENCE_STYLE_ZH = (
-    "正脸清晰肖像，中性自然表情，柔和均匀光线，头肩特写，简洁纯色背景，"
-    "五官清晰锐利，写实人像。画面里不要任何文字、字母、水印、logo。不要 NSFW，不要暴露。"
+    "正脸清晰肖像，中性自然表情，柔和自然光，头肩特写，简洁纯色背景。"
+    "真实皮肤质感，看得到毛孔和细小瑕疵，没有磨皮、没有美颜滤镜，"
+    "像真人用手机拍的，不是精修棚拍、不是渲染图。"
+    "画面里不要任何文字、字母、水印、logo。不要 NSFW，不要暴露。"
 )
 _REFERENCE_STYLE_EN = (
-    "Clear front-facing portrait, neutral natural expression, soft even "
-    "lighting, head-and-shoulders, plain solid background, sharp realistic "
-    "facial features. No text, letters, watermark or logo anywhere. No NSFW, no nudity."
+    "Clear front-facing portrait, neutral natural expression, soft natural "
+    "light, head-and-shoulders, plain solid background. Real skin texture with "
+    "visible pores and tiny imperfections — NO airbrushing, NO beauty filter, "
+    "NO skin smoothing; like a real phone photo, not a retouched studio shot or "
+    "a render. No text, letters, watermark or logo anywhere. No NSFW, no nudity."
 )
 
 
