@@ -171,8 +171,25 @@ def _pick_subject(category: Category, hint: str | None) -> tuple[str, str]:
     if category == "random":
         category = random.choice([*pools.keys(), "place"])  # type: ignore[assignment]
 
+    # An animal photo reads as "my pet" — so use the persona's ONE canonical
+    # pet (same species/colour every time) instead of a random street cat/dog.
+    pet = ""
+    if category == "animal":
+        try:
+            from .persona_render import canonical_pet
+            pet = canonical_pet()
+        except Exception:
+            pet = ""
+
     if category == "place":
         base = _place_subject(is_zh)
+    elif category == "animal" and pet:
+        base = (
+            f"我家养的{pet}，随手拍的日常一张，自然放松的姿态，在家里的环境中"
+            if is_zh else
+            f"my own pet — {pet} — a casual everyday snapshot, natural relaxed "
+            "pose, at home"
+        )
     else:
         bucket = pools.get(category, pools["scenery"])
         base = random.choice(bucket)
