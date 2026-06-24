@@ -36,13 +36,18 @@ Category = Literal["animal", "scenery", "food", "fun", "place", "random"]
 # suffix (Seedream's strongest prompting language); others get EN so the
 # look isn't biased by surrounding Chinese context.
 _CANDID_STYLE_ZH = (
-    "写实手机随拍风格，自然光线，不要修图感，"
-    "构图随意像是顺手按下快门，画面有生活气息。"
+    "手机随手抓拍的生活快照，现场自然光、光线略不均匀，构图随意像是顺手按下快门，"
+    "真实质感、有一点点噪点或轻微动态模糊，景深浅、背景自然虚化，完全没有修图美化感。"
+    "像真人用手机拍的普通照片，不是渲染图、不是CG、不是棚拍、不是商业广告图。"
     "不要文字、不要水印、不要 NSFW。"
 )
 _CANDID_STYLE_EN = (
-    "Realistic candid phone snapshot, natural lighting, un-retouched, "
-    "casual framing like a quick everyday shot. "
+    "An everyday phone snapshot grabbed in the moment, available ambient light "
+    "(slightly uneven), casual un-staged framing like a quick tap of the shutter. "
+    "Real texture with a touch of sensor grain or mild motion blur, shallow depth "
+    "of field with a naturally blurred background, zero retouching or beautifying. "
+    "Looks like an ordinary photo a real person took on a phone — NOT a render, "
+    "NOT CGI, NOT a studio shot, NOT a commercial/stock image, not glossy. "
     "No text, no watermark, no NSFW."
 )
 
