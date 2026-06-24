@@ -1439,6 +1439,21 @@ Don't repeat this if `bot_name` already exists in memory.
         except Exception:
             pass
 
+        # Canonical pet — pinned so it never drifts (cat↔dog, colour↔colour)
+        # across chat, proactive, and photos. Parsed once from the profile.
+        if not hasattr(self, "_pet_fact"):
+            try:
+                from .image_gen.persona_render import canonical_pet
+                self._pet_fact = canonical_pet(self.profile_instruction)
+            except Exception:
+                self._pet_fact = ""
+        if self._pet_fact:
+            parts.append(
+                f"🐾 Your pet is ALWAYS the same one: {self._pet_fact}. Never swap "
+                "its species, breed, name, or colour, and never invent a second "
+                "pet — it's the same animal every time you mention or photograph it."
+            )
+
         # Upcoming cultural holidays for the persona's country — pulled
         # from the seeded ``culture_calendars`` store (Pg/Tigris).  Helps
         # the agent ground proactive messages ("happy Thanksgiving!", "have
