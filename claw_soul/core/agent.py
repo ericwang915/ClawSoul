@@ -1556,6 +1556,24 @@ Don't repeat this if `bot_name` already exists in memory.
         parts.append(
             "\nTake the current time and your daily schedule into account when replying."
         )
+
+        # LAST thing the model reads, so recency reinforces the language lock —
+        # everything above (memory, history, the user's own message) can be in a
+        # different language and was quietly dragging the reply off-language.
+        _vlang = config.get_str("agent", "language", default="en") or "en"
+        _vlabel = {
+            "en": "English", "zh-CN": "Simplified Chinese (简体中文)",
+            "zh-TW": "Traditional Chinese (繁體中文)", "ja": "Japanese (日本語)",
+            "ko": "Korean (한국어)", "es": "Spanish (Español)",
+            "fr": "French (Français)", "de": "German (Deutsch)",
+        }.get(_vlang, _vlang)
+        parts.append(
+            f"\n‼️ LANGUAGE: Write your ENTIRE reply in {_vlabel} and nothing else. "
+            "Your memory, the chat history, and the user's own message may be in "
+            "another language — do NOT let that change your output language. No "
+            "mixing languages within a reply. Single loanwords/emoji are fine; "
+            "whole phrases or sentences in another language are not."
+        )
         return "\n".join(parts)
 
     # ── Compaction ────────────────────────────────────────────────────────────
