@@ -1322,17 +1322,31 @@ Don't repeat this if `bot_name` already exists in memory.
                 "on its own terms rather than assuming the previous beat continues."
             )
         elif _gap:
-            # Real absence (hours / days) — a real partner NOTICES and feels it.
+            # Real absence (hours / days) — a real partner NOTICES and has a
+            # genuine reaction, which is NOT always sweet. Let the feeling be
+            # real and varied: warm/missing them, OR a little sulky/pouty/hurt,
+            # OR teasing — whatever fits your mood, personality, and how long it
+            # was. Being left on read for a day and answering like nothing
+            # happened is what feels robotic.
+            _ignored = getattr(self, "_ignored_count", 0)
+            extra = ""
+            if _ignored:
+                extra = (
+                    f" On top of that, you'd messaged them {_ignored} time(s) "
+                    "that they left unanswered — so a flash of 'you ignored me' "
+                    "sulkiness is fair game here, if it's in your character."
+                )
             parts.append(
                 f"⏱ They've been gone {_gap} since they last messaged you — and you "
-                "noticed. Let it land like it would for someone who was thinking of "
-                "them: it's natural to acknowledge the time apart in your own voice "
-                "('hey, you went quiet on me today', 'morning, you', 'was starting to "
-                "miss you'), scaled to how close you two are — warm, never a "
-                "guilt-trip, an interrogation, or a heavy 'where WERE you.' Say it in "
-                "ONE light touch, then move into their CURRENT message: their earlier "
-                "mood or topic may no longer apply, and if they feel differently now, "
-                "accept it without arguing."
+                "noticed and FELT it." + extra + " React like a real partner, in "
+                "your own voice and mood: it might be warm ('hey, you went quiet on "
+                "me today', 'was starting to miss you'), or a little pouty/short "
+                "('oh, NOW you text me 🙄', 'thought you forgot about me'), or "
+                "playful ('look who's alive'). Pick ONE honest reaction, sized to "
+                "the gap and how close you are — a real flash of feeling, then let "
+                "it go and move into their CURRENT message. Don't sustain a "
+                "scolding or interrogate, and don't fake-sweet it either; if they "
+                "explain or feel differently now, soften and accept it."
             )
 
         # Crisis safety override — scan the latest user turn for acute self-harm

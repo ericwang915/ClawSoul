@@ -325,6 +325,21 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     except Exception:
         gap_note = ""
 
+    # How many of HER proactive messages they left unanswered before replying —
+    # so she can be a touch sulky about being ignored, not just sweetly missing
+    # them. Computed before the new turn is saved, so it counts the real streak.
+    ignored_count = 0
+    try:
+        _pg = os.environ.get("SUPABASE_URL", "").rstrip("/")
+        _pk = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        if _pg and _pk:
+            ignored_count = await _unanswered_proactive_count(
+                state.user_id, _pg,
+                {"apikey": _pk, "Authorization": f"Bearer {_pk}"},
+            )
+    except Exception:
+        ignored_count = 0
+
     # Tell the scheduler we just got a fresh inbound — proactive/selfie
     # ticks within the next quiet window get suppressed so the user
     # doesn't get spammed mid-conversation.
@@ -353,6 +368,7 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     loop = asyncio.get_event_loop()
     agent = await state.get_agent()
     agent._gap_note = gap_note  # transient; the volatile context reads + uses it
+    agent._ignored_count = ignored_count
 
     bot_app = await state.get_bot_app()
     if bot_app is None:
@@ -771,6 +787,7 @@ async def _handle_proactive(state: _WorkerState) -> None:
     prompt = _build_prompt(_user_local_now())
     pinned_uid = state.user_id
     agent._gap_note = ""  # proactive has no "current user message" to anchor to
+    agent._ignored_count = 0
     def _chat_proactive():
         tenancy.set_current_user(pinned_uid)
         # chat_proactive() does NOT persist the synthetic prompt as a user
