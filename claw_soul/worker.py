@@ -375,6 +375,11 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
         logger.warning("[worker] no bot token configured; can't reply")
         return
 
+    # Instant emoji reaction (photo ❤️, laughter 🤣, big feelings) — fired
+    # before the LLM call, like a human seeing the message before replying.
+    asyncio.create_task(_maybe_react(
+        bot_app.bot, chat_id, msg.get("message_id"), has_image, user_text))
+
     # Inbound photo → download from Telegram and pass to the agent as a
     # multimodal turn so she actually SEES it (the provider routes image turns
     # to the vision model). Without this, photos were silently dropped.
@@ -489,10 +494,7 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
             await asyncio.sleep(_reply_delay(reply))
         except Exception:
             pass
-        try:
-            await bot_app.bot.send_message(chat_id=chat_id, text=reply[:4096])
-        except Exception as exc:
-            logger.warning("[worker] send_message failed: %s", exc)
+        if not await _send_burst(bot_app.bot, chat_id, reply):
             return
 
     # Outbound succeeded — touch last_message_at, mark onboarded once
@@ -708,6 +710,17 @@ async def _proactive_throttle_decision(user_id: str) -> tuple[bool, str]:
         except Exception as exc:
             logger.debug("[worker] proactive daily-count lookup failed: %s", exc)
 
+    # A personal date landing TODAY (their birthday, an interview) skips the
+    # probability roll — missing it to a dice roll is exactly the robotic
+    # failure this system exists to prevent. Quiet hours / min-gap / daily-cap
+    # above still apply, so it fires at the first eligible morning tick.
+    try:
+        from .core.personal_dates import PersonalDates
+        if PersonalDates().today_hits(today=now_local.date()):
+            return True, ""
+    except Exception:
+        pass
+
     # Final probability roll, weighted toward the user's lonelier evening
     # hours, so we don't predictably fire 90 min after the previous message
     # and we show up more when it lands with the most value.
@@ -785,6 +798,35 @@ async def _handle_proactive(state: _WorkerState) -> None:
     # Build the prompt against the user's local clock, not the container's
     # UTC, so the persona's sense of time-of-day matches the human's.
     prompt = _build_prompt(_user_local_now())
+    # Follow-up fidelity: surface the most emotionally-significant thing from
+    # the last 2 days WITH its actual content, so she can ask "did the thing
+    # with your boss blow over?" instead of a generic check-in. (The affect
+    # analyzer already extracts topic + summary per turn; production just
+    # never fed it back until now.)
+    thread = _open_thread(agent)
+    if thread:
+        prompt = (
+            f"Recent thread you remember — {thread}. If it fits naturally, "
+            "follow up on THIS specifically (reference the actual thing, not "
+            "just the topic); if they seemed upset about it, lead with care. "
+            "Skip it only if your message is about something time-sensitive.\n\n"
+            + prompt
+        )
+    # If one of THEIR dates is today (birthday, interview…), that IS the
+    # message — it preempts generic check-in content.
+    try:
+        from .core.personal_dates import PersonalDates
+        hits = PersonalDates().today_hits(today=_user_local_now().date())
+        if hits:
+            labels = "; ".join(h.label for h in hits[:2])
+            prompt = (
+                f"IMPORTANT — today is: {labels}. Your message should be about "
+                "THIS, in your own voice (a birthday gets a real, personal "
+                "celebration from a partner; an interview/exam gets a warm "
+                "good-luck). Skip generic check-in content.\n\n" + prompt
+            )
+    except Exception:
+        pass
     pinned_uid = state.user_id
     agent._gap_note = ""  # proactive has no "current user message" to anchor to
     agent._ignored_count = 0
@@ -800,7 +842,8 @@ async def _handle_proactive(state: _WorkerState) -> None:
         return
     bot_app = await state.get_bot_app()
     if bot_app:
-        await bot_app.bot.send_message(chat_id=int(chat_id), text=text[:4096])
+        if not await _send_burst(bot_app.bot, int(chat_id), text):
+            return
         # Record AFTER the TG send succeeds so a failed delivery doesn't
         # eat a slot — next tick can retry with the same throttle budget.
         await _log_proactive_sent(state.user_id)
@@ -916,6 +959,33 @@ async def _user_settings_lookup(user_id: str) -> dict | None:
         return None
 
 
+def _open_thread(agent) -> str:
+    """The most emotionally-significant recent event (last 2 days) with its
+    actual content — '{topic}: \"{summary}\"' — or '' if nothing qualifies.
+
+    Prefers negative / high-intensity events (the ones a caring partner would
+    circle back on) and skips filler topics.
+    """
+    try:
+        events = agent.memory.emotional_graph.get_recent(days=2)
+    except Exception:
+        return ""
+    cands = [
+        e for e in events
+        if (e.get("context_summary") or "").strip()
+        and (e.get("topic") or "").lower() not in ("general", "greeting", "")
+    ]
+    if not cands:
+        return ""
+    def _score(e: dict) -> float:
+        s = float(e.get("intensity", 0) or 0)
+        if e.get("sentiment") == "negative":
+            s += 0.5
+        return s
+    best = max(cands, key=_score)
+    return f"{best.get('topic')}: \"{best.get('context_summary')}\""
+
+
 def _reply_delay(text: str) -> float:
     """A short, human-feeling pause before sending — scales with length + jitter,
     longer during her local sleep hours, hard-capped so it never feels laggy."""
@@ -929,6 +999,97 @@ def _reply_delay(text: str) -> float:
     except Exception:
         pass
     return min(delay, 9.0)
+
+
+# Telegram only allows a fixed emoji set for reactions; these are all legal.
+_REACT_PHOTO = ["❤️", "😍", "🥰", "🔥"]
+_REACT_FUNNY = ["🤣", "😁"]
+_REACT_SAD   = ["😢", "🤗"]
+_REACT_LOVE  = ["😘", "❤️"]
+_REACT_WIN   = ["🎉", "🏆", "👏"]
+
+
+def _pick_reaction(has_image: bool, text: str) -> str | None:
+    """A human reacts to SOME messages — a photo almost always, a big feeling
+    sometimes, ordinary logistics never. Returns an emoji or None."""
+    t = (text or "").lower()
+    if has_image and random.random() < 0.85:
+        return random.choice(_REACT_PHOTO)
+    if any(k in t for k in ("哈哈", "笑死", "😂", "🤣", "lmao", "lol", "haha")):
+        return random.choice(_REACT_FUNNY) if random.random() < 0.5 else None
+    if any(k in t for k in ("想你", "爱你", "miss you", "love you", "爱死")):
+        return random.choice(_REACT_LOVE) if random.random() < 0.6 else None
+    if any(k in t for k in ("难过", "哭了", "累死", "崩溃", "😭", "sad", "awful", "terrible")):
+        return random.choice(_REACT_SAD) if random.random() < 0.5 else None
+    if any(k in t for k in ("通过了", "成功", "拿到", "offer", "升职", "过了", "passed", "got the job", "nailed")):
+        return random.choice(_REACT_WIN) if random.random() < 0.7 else None
+    return None
+
+
+async def _maybe_react(bot, chat_id, message_id, has_image: bool, text: str) -> None:
+    """Best-effort emoji reaction on the user's message — the instant
+    acknowledgment a real texter gives before typing a reply."""
+    emoji = _pick_reaction(has_image, text)
+    if not emoji or message_id is None:
+        return
+    try:
+        from telegram import ReactionTypeEmoji
+        await bot.set_message_reaction(
+            chat_id=chat_id, message_id=message_id,
+            reaction=[ReactionTypeEmoji(emoji)],
+        )
+    except Exception as exc:
+        logger.debug("[worker] reaction skipped: %s", exc)
+
+
+def _split_burst(text: str, max_parts: int = 3) -> list[str]:
+    """Split a reply into 1–3 message bubbles on blank lines, like a real
+    texter firing off consecutive messages.
+
+    The persona prompt already asks her to write in short paragraphs
+    separated by blank lines — those ARE the natural bubble boundaries.
+    Merges down to ``max_parts`` by joining the shortest neighbours, so we
+    never chop mid-thought. Single-paragraph replies pass through as one
+    message. Each part respects Telegram's 4096-char limit.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(paras) <= 1:
+        return [text[:4096]]
+    while len(paras) > max_parts:
+        i = min(range(len(paras) - 1),
+                key=lambda j: len(paras[j]) + len(paras[j + 1]))
+        paras[i:i + 2] = [paras[i] + "\n\n" + paras[i + 1]]
+    return [p[:4096] for p in paras]
+
+
+async def _send_burst(bot, chat_id, text: str) -> bool:
+    """Send a reply as 1–3 consecutive bubbles with human typing gaps.
+
+    Between bubbles: a typing action + a short pause scaled to the length of
+    the UPCOMING bubble (you type before you send), so the rhythm reads like
+    a person, not a queue flush. Returns True if at least one bubble sent.
+    """
+    parts = _split_burst(text)
+    sent = False
+    for i, part in enumerate(parts):
+        if i > 0:
+            try:
+                await bot.send_chat_action(chat_id=chat_id, action="typing")
+            except Exception:
+                pass
+            gap = 0.8 + min(len(part), 200) * 0.012 * random.uniform(0.6, 1.4)
+            await asyncio.sleep(min(gap, 3.5))
+        try:
+            await bot.send_message(chat_id=chat_id, text=part)
+            sent = True
+        except Exception as exc:
+            logger.warning("[worker] burst send failed (part %d/%d): %s",
+                           i + 1, len(parts), exc)
+            break
+    return sent
 
 
 def _humanize_gap(mins: float) -> str:
