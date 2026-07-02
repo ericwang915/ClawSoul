@@ -1253,6 +1253,50 @@ WISHLIST_TOOLS: list[dict] = [
 ]
 
 
+PERSONAL_DATE_TOOLS: list[dict] = [
+    _fn(
+        "remember_date",
+        (
+            "Record a REAL date in the user's life the moment it comes up — "
+            "birthday, anniversary, exam, interview, flight, a friend's wedding, "
+            "a doctor's appointment. ALWAYS use this when the user mentions a "
+            "specific upcoming or recurring date ('my birthday is March 3', "
+            "'面试在下周四', 'we met on June 1st'). This is what lets you "
+            "anticipate the day and never miss it — flat memory alone will "
+            "forget. Convert relative dates ('next Thursday') to absolute "
+            "YYYY-MM-DD using the current date from your context."
+        ),
+        {
+            "date": {
+                "type": "string",
+                "description": "The date in YYYY-MM-DD (resolve relative expressions first).",
+            },
+            "label": {
+                "type": "string",
+                "description": "Short label in their life's terms (e.g. 'their birthday', '新公司面试', 'trip to Tokyo').",
+            },
+            "recurring": {
+                "type": "boolean",
+                "description": "true for yearly dates (birthdays, anniversaries); false for one-offs (interview, flight).",
+            },
+        },
+        ["date", "label"],
+    ),
+    _fn(
+        "list_dates",
+        "List the personal dates you've recorded for the user (id + date + label).",
+        {},
+        [],
+    ),
+    _fn(
+        "forget_date",
+        "Remove a recorded personal date (it was wrong, cancelled, or the user asks).",
+        {"date_id": {"type": "string", "description": "The id returned by remember_date/list_dates."}},
+        ["date_id"],
+    ),
+]
+
+
 BUCKET_LIST_TOOLS: list[dict] = [
     _fn(
         "bucket_add",

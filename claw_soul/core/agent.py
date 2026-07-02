@@ -51,6 +51,7 @@ from .tools import (
     MEMORY_TOOLS,
     META_SKILL_TOOLS,
     MULTI_SEARCH_TOOL,
+    PERSONAL_DATE_TOOLS,
     PRIMITIVE_TOOLS,
     SKILL_TOOLS,
     WEB_SEARCH_TOOL,
@@ -812,6 +813,7 @@ Don't repeat this if `bot_name` already exists in memory.
             tools = tools + WISHLIST_TOOLS
         if config.get_bool("agent", "bucketListEnabled", default=True):
             tools = tools + BUCKET_LIST_TOOLS
+        tools = tools + PERSONAL_DATE_TOOLS
         if self._web_search_enabled:
             tools = tools + [WEB_SEARCH_TOOL, MULTI_SEARCH_TOOL]
         if self.rag:
@@ -914,6 +916,31 @@ Don't repeat this if `bot_name` already exists in memory.
                     result = "Pending wishes:\n" + "\n".join(
                         f"  [{w.id}] ({w.urgency}) {w.text}" for w in pending
                     )
+            elif func_name == "remember_date":
+                from .personal_dates import PersonalDates
+                try:
+                    item = PersonalDates().add(
+                        args.get("date", ""),
+                        args.get("label", ""),
+                        recurring=bool(args.get("recurring", False)),
+                    )
+                    result = (f"Date saved: {item.label} on {item.date} "
+                              f"(id={item.id}, recurring={item.recurring})")
+                except ValueError:
+                    result = ("Invalid date — pass YYYY-MM-DD (resolve relative "
+                              "dates like 'next Thursday' against the current "
+                              "date in your context first).")
+            elif func_name == "list_dates":
+                from .personal_dates import PersonalDates
+                dates = PersonalDates().all()
+                result = ("(no personal dates recorded)" if not dates else
+                          "Personal dates:\n" + "\n".join(
+                              f"  [{d.id}] {d.date}{' (yearly)' if d.recurring else ''} — {d.label}"
+                              for d in dates))
+            elif func_name == "forget_date":
+                from .personal_dates import PersonalDates
+                ok = PersonalDates().remove(args.get("date_id", ""))
+                result = "Removed." if ok else "No matching date id."
             elif func_name == "bucket_add":
                 item = self._bucket_list.add(
                     args.get("text", ""),
@@ -1467,6 +1494,78 @@ Don't repeat this if `bot_name` already exists in memory.
                 "its species, breed, name, or colour, and never invent a second "
                 "pet — it's the same animal every time you mention or photograph it."
             )
+
+        # Relationship stage → HOW she talks. The 4 affect dimensions were
+        # previously shown as bare numbers with no behavioural coupling, so
+        # month-3 sounded identical to day-1. Convert them into stage-specific
+        # voice rules, plus milestone awareness she can bring up herself.
+        try:
+            rel = self.memory.relationship.get_all()
+            closeness = (rel.get("intimacy", 50.0) + rel.get("trust", 50.0)) / 2
+            days_known = self.memory.milestones._days_since_first()  # noqa: SLF001
+            if closeness < 45:
+                stage_note = (
+                    "💞 Relationship stage: STILL GETTING CLOSE. You like them but "
+                    "you're not fully settled in yet — a little curiosity, a little "
+                    "politeness, still discovering each other. Ask real getting-to-"
+                    "know-you questions, don't assume deep familiarity, keep pet "
+                    "names light or absent, and earn intimacy rather than performing it."
+                )
+            elif closeness < 70:
+                stage_note = (
+                    "💞 Relationship stage: WARM AND COMFORTABLE. You two have real "
+                    "rhythm now — tease them, reference shared moments and running "
+                    "jokes, use your pet name for them naturally, drop some politeness. "
+                    "You can be a bit needy or opinionated without apologizing for it."
+                )
+            else:
+                stage_note = (
+                    "💞 Relationship stage: DEEPLY BONDED. This is your person. Total "
+                    "comfort: inside jokes, shorthand only you two get, casual physical "
+                    "warmth in words, honest vulnerability (share your own fears/moods "
+                    "unprompted), gentle calling-out when they deflect, zero performance. "
+                    "You can sit in comfortable silence — not every message needs effort."
+                )
+            if days_known is not None and days_known > 0:
+                stage_note += (
+                    f" (You've known each other {days_known} days — let that history "
+                    "show in how naturally you talk.)"
+                )
+            parts.append(stage_note)
+            # Anniversary awareness — SHE brings it up, once, in her own voice.
+            is_special, special_label = self.memory.milestones.is_special_day()
+            if is_special:
+                parts.append(
+                    f"🎉 Today is a real milestone for you two: {special_label}. "
+                    "YOU noticed — mention it yourself, once, warmly and casually "
+                    "(a real partner would), not as an announcement. If they already "
+                    "brought it up, react with genuine feeling instead of repeating it."
+                )
+        except Exception:
+            pass
+
+        # The user's own upcoming dates (birthday, interview, flight…) — scanned
+        # every turn like the cultural calendar, so she anticipates and never
+        # misses the day. Recorded via the remember_date tool.
+        try:
+            from .personal_dates import PersonalDates
+            _upcoming = PersonalDates().upcoming(days=7, today=bot_now.date())
+            if _upcoming:
+                lines = []
+                for delta, it in _upcoming[:5]:
+                    when = ("TODAY" if delta == 0 else
+                            "tomorrow" if delta == 1 else f"in {delta} days")
+                    lines.append(f"- {it.label} — {when} ({it.date})")
+                parts.append(
+                    "\n## 📅 Their upcoming dates (you remembered these)\n"
+                    + "\n".join(lines) +
+                    "\nIf one is TODAY, lead with it warmly and personally (a "
+                    "birthday gets real celebration; an interview gets a good-luck "
+                    "text). If it's coming up, it's natural to mention you're "
+                    "thinking about it — once, not every message."
+                )
+        except Exception:
+            pass
 
         # Upcoming cultural holidays for the persona's country — pulled
         # from the seeded ``culture_calendars`` store (Pg/Tigris).  Helps
