@@ -1,6 +1,13 @@
 """
 Telegram channel for claw_soul.
 
+⚠️ DEPRECATED for SaaS: production traffic goes through ``claw_soul/worker.py``
+(per-user Fly machine, webhook via the router). This long-polling bot remains
+ONLY for single-tenant / dev installs. Its human-feel features (voice
+transcription, reactions, sentiment-boosted proactivity) have been ported to
+the worker — add new capabilities THERE, not here, or production won't see
+them (that drift already happened once).
+
 Telegram is purely a *channel* — it handles sending and receiving messages.
 Session lifecycle (which Agent handles which chat) is delegated to the
 SessionManager, which is shared across all channels and the cron scheduler.

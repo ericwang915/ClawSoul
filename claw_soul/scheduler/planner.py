@@ -487,6 +487,120 @@ def _season_en(month: int) -> str:
 
 # ── Core generation ──────────────────────────────────────────────────────────
 
+def _recent_affect_events(days: int = 1) -> list[dict]:
+    """Read the tenant's emotional-graph events from the last N days.
+
+    The live affect data sits under the per-group dir
+    (context/groups/<sid>/affect/emotional_graph.jsonl); fall back to the
+    non-group path for single-tenant installs. Best-effort: [] on anything.
+    """
+    import glob as _glob
+    home = str(config.CLAWSOUL_HOME)
+    paths = _glob.glob(os.path.join(
+        home, "context", "groups", "*", "affect", "emotional_graph.jsonl"))
+    paths.append(os.path.join(home, "context", "affect", "emotional_graph.jsonl"))
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+    events: list[dict] = []
+    for p in paths:
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        e = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if e.get("ts", "") >= cutoff:
+                        events.append(e)
+        except OSError:
+            continue
+    return events
+
+
+def _yesterday_mood_bias(is_zh: bool) -> str:
+    """A clause appended to today's random mood so yesterday's real emotional
+    residue carries over — nobody wakes up factory-reset after a rough day."""
+    events = _recent_affect_events(days=1)
+    if len(events) < 2:
+        return ""
+    score = 0.0
+    for e in events:
+        w = float(e.get("intensity", 0) or 0)
+        if e.get("sentiment") == "negative":
+            score -= w
+        elif e.get("sentiment") == "positive":
+            score += w
+    if score <= -1.0:
+        return ("（昨天心情有点低落，今天醒来还带着一点余绪，白天慢慢缓过来）"
+                if is_zh else
+                " (yesterday left you a bit low — today starts slightly subdued "
+                "and gradually lifts through the day)")
+    if score >= 1.5:
+        return ("（昨天过得很开心，今天还带着那股好心情的余温）"
+                if is_zh else
+                " (yesterday was genuinely good — today still carries that lift)")
+    return ""
+
+
+def _maybe_distill_relationship(provider: LLMProvider, now: datetime,
+                                is_zh: bool) -> None:
+    """Monthly 'how we've grown' distillation → context/persona/evolution.md.
+
+    The persona dir is loaded whole into the system prompt, so this file makes
+    month-3 actually FEEL different from day-1: the nicknames that stuck, the
+    running jokes, the rituals, what she's learned about how to talk to them.
+    Runs on the 1st of the month (or once bootstrap if missing and there's
+    enough history). Best-effort; never blocks the plan.
+    """
+    evo_path = os.path.join(str(config.CLAWSOUL_HOME), "context", "persona",
+                            "evolution.md")
+    if now.day != 1 and os.path.isfile(evo_path):
+        return
+    # Need some history to distill — use the memory file as the source.
+    import glob as _glob
+    mem_paths = _glob.glob(os.path.join(
+        str(config.CLAWSOUL_HOME), "context", "groups", "*", "memory", "MEMORY.md"))
+    mem = ""
+    for p in mem_paths:
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                mem = f.read().strip()
+            break
+        except OSError:
+            continue
+    if len(mem) < 400:        # not enough shared history yet
+        return
+    recent = _recent_affect_events(days=30)
+    tone = ""
+    if recent:
+        pos = sum(1 for e in recent if e.get("sentiment") == "positive")
+        neg = sum(1 for e in recent if e.get("sentiment") == "negative")
+        tone = f"(last 30 days: {pos} warm moments, {neg} rough ones)"
+    lang_name = "中文" if is_zh else "English"
+    prompt = (
+        f"You are distilling a couple's relationship from the companion's own "
+        f"memory notes. Write in {lang_name}, in second person addressed to HER "
+        f"(the companion), max 180 words, as a markdown section titled "
+        f"'## Us — how we've grown'. Cover ONLY what's actually evidenced in "
+        f"the notes: pet names that stuck, running jokes, little rituals, what "
+        f"you've learned about how they like to be talked to, how your own way "
+        f"of talking to them has changed. No dates, no lists of facts, no "
+        f"invented events. {tone}\n\n--- MEMORY NOTES ---\n{mem[:3000]}"
+    )
+    try:
+        r = provider.chat(messages=[{"role": "user", "content": prompt}],
+                          tools=[], temperature=0.5, max_tokens=400, timeout=60)
+        body = (r.choices[0].message.content or "").strip()
+        if len(body) < 60:
+            return
+        os.makedirs(os.path.dirname(evo_path), exist_ok=True)
+        with open(evo_path, "w", encoding="utf-8") as f:
+            f.write("<!-- auto-distilled monthly from memory; do not hand-edit -->\n"
+                    + body + "\n")
+        logger.info("[Planner] relationship evolution distilled (%d chars)", len(body))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[Planner] evolution distillation skipped: %s", exc)
+
+
 async def generate_daily_plan(provider: LLMProvider) -> None:
     """Generate the daily plan and save it to context/calendar/today_plan.md.
 
@@ -559,8 +673,11 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
     now = tenancy.now_in_bot_tz()
     holiday_info = _get_holiday_info(now)
     season = _season(now.month) if is_zh else _season_en(now.month)
+    # Mood inertia: yesterday's real emotional residue colors today's random
+    # mood — a person who had a rough day doesn't wake up factory-reset.
+    _bias = _yesterday_mood_bias(is_zh)
     if is_zh:
-        mood = random.choice(_MOODS)
+        mood = random.choice(_MOODS) + _bias
         date_str = now.strftime("%Y年%m月%d日")
         weekday = _WEEKDAYS_ZH[now.weekday()]
         realtime_block = (
@@ -569,7 +686,7 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
             "\n## 实时检索\n（无实时检索结果——保持模糊，不要编造具体活动名称、嘉宾、地点）\n"
         )
     else:
-        mood = random.choice(_MOODS_EN)
+        mood = random.choice(_MOODS_EN) + _bias
         date_str = now.strftime("%B %d, %Y")
         weekday = now.strftime("%A")
         realtime_block = (
@@ -779,6 +896,14 @@ Output the schedule list directly (**at least 36 lines** of `- HH:MM ...`) — n
             f.write(header + content)
 
         logger.info("[Planner] Successfully generated today's schedule → %s (%d chars)", plan_file, len(content))
+
+        # Monthly relationship distillation (1st of month / bootstrap) — makes
+        # the persona itself evolve with the relationship. Runs in a thread so
+        # its sync LLM call doesn't block the loop.
+        try:
+            await asyncio.to_thread(_maybe_distill_relationship, provider, now, is_zh)
+        except Exception as exc:
+            logger.debug("[Planner] distillation hook skipped: %s", exc)
     except Exception as exc:
         logger.error("[Planner] Failed to generate daily plan: %s", exc, exc_info=True)
 

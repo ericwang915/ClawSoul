@@ -35,23 +35,32 @@ from .. import config
 
 logger = logging.getLogger(__name__)
 
-# Fields that define identity / place / language.  Changing any of these makes
-# her a materially different companion → reset.  Deliberately EXCLUDED:
-# proactivity, quiet-hours, quota, telegram token, the user's own name, the
-# user's timezone — tweaking those shouldn't make her forget the relationship.
-_MATERIAL_FIELDS = (
+# Identity fields split into two tiers:
+#
+#   WIPE — changing WHO she is (a different person, place, or language).
+#          The old memories describe someone else → full reset.
+#   GROW — her life evolving (new job, tone maturing, backstory enriched).
+#          A real partner doesn't get amnesia because she changed careers →
+#          keep everything, record the change AS a memory instead.
+#
+# Deliberately excluded from both: proactivity, quiet-hours, quota, telegram
+# token, the user's own name/timezone — tweaking those never touches memory.
+_WIPE_FIELDS = (
     "companionName",
     "companionGender",
     "companionAge",
     "companionCountry",
     "companionRegion",
+    "userLanguage",
+)
+_GROW_FIELDS = (
     "companionOccupation",
     "archetype",
     "dynamic",
     "tone",
     "backstory",
-    "userLanguage",
 )
+_MATERIAL_FIELDS = _WIPE_FIELDS + _GROW_FIELDS
 
 
 def _home() -> str:
@@ -68,11 +77,20 @@ def _norm(v) -> str:
     return str(v if v is not None else "").strip().lower()
 
 
-def identity_signature(choices: dict) -> str:
-    """Stable hash over the material identity fields of a choices blob."""
-    payload = {k: _norm(choices.get(k)) for k in _MATERIAL_FIELDS}
+def _sig_over(fields: tuple, choices: dict) -> str:
+    payload = {k: _norm(choices.get(k)) for k in fields}
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def identity_signature(choices: dict) -> str:
+    """Stable hash over the WIPE-tier identity fields of a choices blob.
+
+    GROW-tier fields are intentionally excluded: their changes must not
+    trigger a reset. (Sig format: "<wipe_sig>:<grow_sig>" so grow changes are
+    still detectable for the memory-event path.)
+    """
+    return _sig_over(_WIPE_FIELDS, choices) + ":" + _sig_over(_GROW_FIELDS, choices)
 
 
 def _read_local_sig() -> str | None:
@@ -179,10 +197,77 @@ def maybe_reset_on_identity_change(user_id: str, choices: dict) -> bool:
     """
     new_sig = identity_signature(choices or {})
     old_sig = _read_stored_sig(user_id)
-    changed = old_sig is not None and old_sig != new_sig
-    if changed:
-        logger.info("[recustomize] identity changed for %s — resetting memory", user_id[:8])
-        reset_memory(user_id)
+
+    reset = False
+    if old_sig is None or ":" not in old_sig:
+        # First hydrate, or a pre-two-tier signature (single hash) — format
+        # changed under us, so we can't compare meaningfully. Never wipe on
+        # ambiguity: just start tracking in the new format.
+        pass
+    else:
+        new_wipe, new_grow = new_sig.split(":", 1)
+        old_wipe, old_grow = old_sig.split(":", 1)
+        if old_wipe != new_wipe:
+            # WHO she is changed (person/place/language) → full reset.
+            logger.info("[recustomize] identity changed for %s — resetting memory",
+                        user_id[:8])
+            reset_memory(user_id)
+            reset = True
+        elif old_grow != new_grow:
+            # Her life evolved (job/tone/backstory) → keep the relationship,
+            # record the change AS a memory so she can talk about it naturally.
+            _record_growth(user_id, choices or {})
+
     # Record regardless, so the signature tracks the latest applied identity.
     _write_sig(user_id, new_sig)
-    return changed
+    _save_grow_snapshot(choices or {})
+    return reset
+
+
+# ── GROW-tier support ────────────────────────────────────────────────────
+
+
+def _grow_path() -> str:
+    return os.path.join(_home(), "context", ".identity_grow.json")
+
+
+def _save_grow_snapshot(choices: dict) -> None:
+    try:
+        with open(_grow_path(), "w", encoding="utf-8") as f:
+            json.dump({k: _norm(choices.get(k)) for k in _GROW_FIELDS}, f,
+                      ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def _record_growth(user_id: str, choices: dict) -> None:
+    """Diff GROW fields against the last snapshot and write the change into
+    long-term memory — 'she changed jobs', not amnesia."""
+    try:
+        with open(_grow_path(), "r", encoding="utf-8") as f:
+            old = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        old = {}
+    changes = []
+    for k in _GROW_FIELDS:
+        before, after = old.get(k, ""), _norm(choices.get(k))
+        if before != after and after:
+            label = {"companionOccupation": "occupation", "archetype": "archetype",
+                     "dynamic": "relationship dynamic", "tone": "tone",
+                     "backstory": "backstory"}.get(k, k)
+            changes.append(f"{label}: {before or '(unset)'} → {after}"
+                           if k != "backstory" else f"{label} updated")
+    if not changes:
+        return
+    try:
+        from .memory.manager import MemoryManager
+        MemoryManager().remember(
+            "Life update — these changed recently, and it's part of MY story "
+            "(bring it up naturally, don't act like it was always so): "
+            + "; ".join(changes),
+            key="companion_life_update",
+        )
+        logger.info("[recustomize] growth recorded for %s: %s",
+                    user_id[:8], "; ".join(changes)[:120])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[recustomize] growth memory write failed: %s", exc)

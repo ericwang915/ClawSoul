@@ -304,9 +304,11 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     doc = msg.get("document") or {}
     is_image_doc = isinstance(doc, dict) and str(doc.get("mime_type", "")).startswith("image/")
     has_image = bool(photos) or is_image_doc
+    voice = msg.get("voice") or msg.get("audio") or {}    # voice note / audio
+    has_voice = bool(voice.get("file_id"))
     chat_id = ((msg.get("chat") or {}).get("id"))
-    if (not text and not has_image) or chat_id is None:
-        return  # unsupported (sticker/voice/etc.) or no chat
+    if (not text and not has_image and not has_voice) or chat_id is None:
+        return  # unsupported (sticker/etc.) or no chat
     user_text = text or caption                            # caption rides with a photo
 
     # How long since the user's PREVIOUS message (read before we bump it below),
@@ -380,6 +382,27 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
     asyncio.create_task(_maybe_react(
         bot_app.bot, chat_id, msg.get("message_id"), has_image, user_text))
 
+    # Inbound voice note → transcribe via Deepgram so she actually HEARS them.
+    # (Previously voice was silently dropped in the worker — the STT existed
+    # but only the legacy bot used it.) Understanding-side only by design;
+    # she still replies in text.
+    if has_voice and not user_text:
+        try:
+            from .core.stt import transcribe_bytes_async
+            tg_file = await bot_app.bot.get_file(voice["file_id"])
+            raw = bytes(await tg_file.download_as_bytearray())
+            mime = voice.get("mime_type") or "audio/ogg"
+            transcript = await transcribe_bytes_async(raw, mime)
+            if transcript and transcript.strip():
+                user_text = transcript.strip()
+                logger.info("[worker] voice transcribed (%d chars)", len(user_text))
+            else:
+                logger.info("[worker] voice note: no STT key or empty transcript")
+                return
+        except Exception as exc:
+            logger.warning("[worker] voice transcription failed: %s", exc)
+            return
+
     # Inbound photo → download from Telegram and pass to the agent as a
     # multimodal turn so she actually SEES it (the provider routes image turns
     # to the vision model). Without this, photos were silently dropped.
@@ -397,6 +420,13 @@ async def _handle_telegram_update(update: dict, state: _WorkerState) -> None:
                  "text": user_text or "（我发了一张照片给你，看看然后自然地回应～）"},
                 {"type": "image_url", "image_url": {"url": url}},
             ]
+            # Archive THEIR photo + a one-line description into memory, so she
+            # can reference it later ("that beach pic you sent last week").
+            # Previously inbound photos were seen once and gone forever.
+            _raw_photo = bytes(raw)
+            asyncio.create_task(asyncio.get_event_loop().run_in_executor(
+                None, _archive_user_photo,
+                state.user_id, _raw_photo, mime, agent))
         except Exception as exc:
             logger.warning("[worker] inbound photo download failed: %s", exc)
             if not user_text:
@@ -628,7 +658,7 @@ async def _unanswered_proactive_count(user_id: str, pg_url: str, headers: dict) 
     return 0
 
 
-async def _proactive_throttle_decision(user_id: str) -> tuple[bool, str]:
+async def _proactive_throttle_decision(user_id: str, agent=None) -> tuple[bool, str]:
     """Decide whether to send a proactive message now.
 
     Returns ``(should_send, reason_if_not)``.  Best-effort: any Pg
@@ -725,6 +755,19 @@ async def _proactive_throttle_decision(user_id: str) -> tuple[bool, str]:
     # hours, so we don't predictably fire 90 min after the previous message
     # and we show up more when it lands with the most value.
     prob = _proactive_prob_for_hour(now_local.hour)
+    # When they were recently upset, a check-in is worth much more — boost the
+    # roll (legacy ProactiveMessenger did ×2.5; production lost it in the
+    # rewrite). Reads the agent's group-scoped emotional graph.
+    if agent is not None:
+        try:
+            recent = agent.memory.emotional_graph.get_recent(days=1)
+            if recent:
+                latest = recent[-1]
+                if (latest.get("sentiment") == "negative"
+                        and float(latest.get("intensity", 0) or 0) > 0.6):
+                    prob = min(prob * 2.5, 0.9)
+        except Exception:
+            pass
     if _random.random() > prob:
         return False, f"probability-roll (p={prob:.2f} @ {now_local.hour}h)"
 
@@ -777,14 +820,17 @@ async def _handle_proactive(state: _WorkerState) -> None:
     if chat_id is None:
         return
 
-    should_send, reason = await _proactive_throttle_decision(state.user_id)
+    # Agent first (cached singleton) so the throttle can read the group-scoped
+    # emotional graph for the upset-boost.
+    loop = asyncio.get_event_loop()
+    agent = await state.get_agent()
+
+    should_send, reason = await _proactive_throttle_decision(state.user_id, agent)
     if not should_send:
         logger.info("[worker] proactive skipped for %s: %s",
                     state.user_id[:8], reason)
         return
 
-    loop = asyncio.get_event_loop()
-    agent = await state.get_agent()
     sid = agent._session_id  # noqa: SLF001
     sm = state.sm()
     # If a user turn is being processed right now, drop this proactive tick
@@ -957,6 +1003,49 @@ async def _user_settings_lookup(user_id: str) -> dict | None:
     except Exception as exc:
         logger.warning("[worker] settings lookup failed: %s", exc)
         return None
+
+
+def _archive_user_photo(user_id: str, raw: bytes, mime: str, agent) -> None:
+    """Background: persist a photo THE USER sent + a one-line description into
+    long-term memory, so she can bring it up later. Best-effort throughout —
+    runs in an executor thread, so bind tenancy first.
+    """
+    from datetime import datetime as _dt
+    try:
+        tenancy.set_current_user(user_id)
+        stamp = _dt.now().strftime("%Y-%m-%d_%H%M%S")
+        # 1. Keep the bytes (their photos deserve the same durability as hers).
+        try:
+            from .core.image_gen import tigris
+            if tigris.is_configured():
+                ext = "png" if "png" in (mime or "") else "jpg"
+                tigris.put_bytes(f"users/{user_id}/inbox/{stamp}.{ext}", raw,
+                                 mime or "image/jpeg")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[worker] inbox photo upload skipped: %s", exc)
+        # 2. One cheap vision call → one-line description → memory.
+        import base64
+        url = f"data:{mime or 'image/jpeg'};base64," + base64.b64encode(raw).decode()
+        provider = _build_provider()
+        r = provider.chat(
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text":
+                 "Describe this photo in ONE short line (max 15 words) — what/"
+                 "where/mood. Output only the line, no preamble."},
+                {"type": "image_url", "image_url": {"url": url}},
+            ]}],
+            tools=[], temperature=0.2, max_tokens=60,
+        )
+        desc = (r.choices[0].message.content or "").strip()
+        if desc:
+            day = stamp[:10]
+            agent.memory.remember(
+                f"Photo they sent me on {day}: {desc}",
+                key=f"their_photo_{stamp}",
+            )
+            logger.info("[worker] archived user photo (%s): %s", day, desc[:60])
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[worker] user-photo archive failed: %s", exc)
 
 
 def _open_thread(agent) -> str:
