@@ -278,9 +278,18 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
     if not _in_saas_dashboard_mode():
         context_dir = str(config.CLAWSOUL_HOME / "context")
         Path(context_dir).mkdir(parents=True, exist_ok=True)
-        _generate_soul_file(cleaned, context_dir)
-        _generate_persona_file(cleaned, context_dir)
-        _generate_profile_file(cleaned, context_dir)
+        # Non-CN/EN personas get their identity docs LLM-localized once per
+        # (identity, language). When that's already done, skip regenerating
+        # the English templates — they'd overwrite the localized files.
+        from .core import localize as _localize
+        from .core import recustomize as _recust
+        _sig = _recust.identity_signature(cleaned)
+        _lang = cleaned.get("userLanguage") or "en"
+        if not _localize.is_current(context_dir, _lang, _sig):
+            _generate_soul_file(cleaned, context_dir)
+            _generate_persona_file(cleaned, context_dir)
+            _generate_profile_file(cleaned, context_dir)
+            _localize.localize_identity_files_async(context_dir, _lang, _sig)
         _generate_appearance_file(cleaned, context_dir)
 
     # 4. Best-effort: flip onboarded on the user's user_machines row so

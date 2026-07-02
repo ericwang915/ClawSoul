@@ -1796,12 +1796,13 @@ let _wizardStep = 0;
 let _wizardChoices = {};
 let _origChoices = null;   // snapshot when re-opening to edit (for reset warning)
 
-// Identity fields that, if changed, make the companion a different person —
-// the backend wipes accumulated memory + chat history (photos are kept). Keep
-// in sync with _MATERIAL_FIELDS in claw_soul/core/recustomize.py.
+// Identity fields that, if changed, make the companion a DIFFERENT PERSON —
+// the backend wipes accumulated memory + chat history (photos are kept).
+// Keep in sync with _WIPE_FIELDS in claw_soul/core/recustomize.py.
+// Growth-tier edits (occupation/tone/backstory/archetype/dynamic) do NOT
+// wipe — they become part of her story — so no scary warning for those.
 const MATERIAL_FIELDS = ['companionName','companionGender','companionAge',
-  'companionCountry','companionRegion','companionOccupation','archetype',
-  'dynamic','tone','backstory','userLanguage'];
+  'companionCountry','companionRegion','userLanguage'];
 
 function _normChoiceVal(v) {
   if (Array.isArray(v)) return v.map(_normChoiceVal).sort().join(',');
@@ -2094,6 +2095,23 @@ function renderWizardStep() {
   document.getElementById('wiz-back').classList.toggle('invisible', _wizardStep === 0);
   document.getElementById('wiz-next').textContent =
     _wizardStep === WIZARD_STEPS.length - 1 ? 'Finish' : 'Next →';
+
+  // Quick start: once "you" + "who they are" are answered (end of step 2),
+  // first-time users can skip personality fine-tuning and start chatting now.
+  // Edits (existing users) keep the full flow.
+  const qsId = 'wiz-quickstart';
+  let qs = document.getElementById(qsId);
+  const showQS = !_origChoices && _wizardStep >= 1 && _wizardStep < WIZARD_STEPS.length - 1;
+  if (showQS && !qs) {
+    qs = document.createElement('button');
+    qs.id = qsId;
+    qs.className = 'text-sm text-brand-400 hover:text-brand-300 underline underline-offset-4 mt-3 block mx-auto';
+    qs.textContent = '⚡ Quick start — skip the rest and chat now (fine-tune later)';
+    qs.onclick = wizardQuickFinish;
+    document.getElementById('wiz-fields').after(qs);
+  } else if (!showQS && qs) {
+    qs.remove();
+  }
 }
 
 let _traitGroupsExpanded = false;
@@ -2327,6 +2345,34 @@ async function wizardNext() {
     if (!ok) return;
   }
 
+  await _wizardSubmit(submitChoices, /*quick=*/false);
+}
+
+// Personality defaults used by Quick Start — a warm, balanced companion the
+// user can fine-tune later from Settings (growth-tier edits don't wipe memory).
+const QUICKSTART_DEFAULTS = {
+  archetype: 'playful', dynamic: 'romance', tone: 'casual',
+  proactivity: 'attentive', stress: 'listen', deepTalk: 'everyday',
+  userGender: 'other', userAge: '26-35', companionAge: '26-35',
+};
+
+async function wizardQuickFinish() {
+  // The one thing we won't guess: what they are. Everything else defaults.
+  if (!_wizardChoices.companionGender) {
+    flashStatus('Pick what they are first — then quick start.', 'error');
+    return;
+  }
+  // Fill anything not yet chosen with defaults and submit right away.
+  // Steps 1–2 (you + who they are) should be done; the rest is tunable later.
+  for (const [k, v] of Object.entries(QUICKSTART_DEFAULTS)) {
+    if (!_wizardChoices[k]) _wizardChoices[k] = v;
+  }
+  if (!Array.isArray(_wizardChoices.traits)) _wizardChoices.traits = [];
+  const submitChoices = { ..._wizardChoices, userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  await _wizardSubmit(submitChoices, /*quick=*/true);
+}
+
+async function _wizardSubmit(submitChoices, quick) {
   const btn = document.getElementById('wiz-next');
   btn.disabled = true;
   btn.textContent = 'Saving…';
@@ -2352,8 +2398,14 @@ async function wizardNext() {
       // Refresh the dashboard view so stats reflect the new identity
       refreshDashboard();
       if (currentTab === 'settings') loadPersona();
-      // Hand off to Telegram-connect step.  Required to actually use the bot.
-      openConnectTelegramPanel();
+      if (quick) {
+        // Quick start: straight into the web chat — first message NOW.
+        // Telegram (and personality fine-tuning) are follow-ups, not gates.
+        switchTab('chat');
+      } else {
+        // Full flow: hand off to Telegram-connect step.
+        openConnectTelegramPanel();
+      }
     }, 900);
   } catch (e) {
     flashStatus('Network error.', 'error');
