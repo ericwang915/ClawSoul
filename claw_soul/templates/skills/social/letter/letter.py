@@ -13,7 +13,6 @@ import os
 import sys
 from datetime import datetime
 
-
 _OCCASIONS = {"anniversary", "reunion", "comfort", "celebrate", "apology", "freeform"}
 
 

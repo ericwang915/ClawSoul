@@ -107,12 +107,12 @@ async def start_telegram(
 
     if _multi_tenant_mode():
         logger.info("[ClawSoul] Multi-tenant mode — starting per-user Telegram bots + scheduler")
-        from .channels import telegram_multi
-
         # One global APScheduler shared across all users. Each user's daily
         # planner / proactive / selfie jobs are registered with it, wrapped in
         # tenancy.user_context() so they read & write only their own data.
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+        from .channels import telegram_multi
         _tz = _detect_local_timezone()
         _global_scheduler = AsyncIOScheduler(timezone=_tz)
 

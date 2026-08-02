@@ -432,6 +432,7 @@ def _register_user_selfie_jobs(
 ) -> None:
     """Register the configured scheduled-selfie slots for one user."""
     from apscheduler.triggers.cron import CronTrigger
+
     from .. import config as _cfg
     from ..core.image_gen import take_selfie
     from ..scheduler.selfie_task import DEFAULT_SCHEDULE

@@ -17,7 +17,6 @@ import hashlib
 import sys
 from datetime import datetime
 
-
 # Each line: (text, attribution, mood_tags, lang)
 _POOL: list[tuple[str, str, list[str], str]] = [
     # Yearning / missing

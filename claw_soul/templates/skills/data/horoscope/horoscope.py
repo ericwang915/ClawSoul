@@ -13,7 +13,6 @@ import json
 import sys
 from datetime import datetime
 
-
 _VALID_CULTURES = ("cn", "en", "jp", "in")
 
 

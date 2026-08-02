@@ -152,6 +152,7 @@ def bot_timezone() -> str:
       3. ``Asia/Shanghai`` (default — matches bundled Chinese personas)
     """
     import os
+
     from .. import config as _cfg
     try:
         tz = _cfg.get_str("persona", "timezone", default="") or ""

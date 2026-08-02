@@ -56,6 +56,7 @@ from telegram.ext import (
 
 from .. import config
 from ..core import tenancy
+from ..core.humanize import humanize_gap, maybe_react, reply_delay, send_burst
 
 if TYPE_CHECKING:
     from ..session_manager import SessionManager
@@ -96,6 +97,10 @@ class TelegramBot:
         # scheduler job on the fly, so unprompted messages start flowing
         # without needing a daemon restart.
         self._on_chat_id_learned = None
+        # Per-chat timestamp of the previous inbound message — feeds the
+        # companion's absence awareness (agent._gap_note) in local mode,
+        # where there's no Postgres last_message_at to read.
+        self._last_seen: dict[int, float] = {}
 
     # ── Session ID convention ─────────────────────────────────────────────────
 
@@ -322,9 +327,35 @@ class TelegramBot:
         sid = self._session_id(update.effective_chat.id)
         agent = self._sm.get_or_create(sid)
 
-        # Photo without caption → queue, don't generate. The next text from
-        # the user pops the queue and we answer once with all parts together.
-        if has_photo and not user_text:
+        # Companion mode (a soul/persona is configured) delivers like a real
+        # person texting: selective emoji reactions, absence awareness, a
+        # human pause, and 1–3 message bubbles — the same behaviour as the
+        # hosted worker, via the shared core.humanize module. Bare-assistant
+        # sessions keep the streaming/edit-in-place flow below.
+        is_companion = bool(getattr(agent, "soul_instruction", "")
+                            or getattr(agent, "persona_instruction", ""))
+
+        if is_companion:
+            # Absence awareness: how long since THEIR previous message.
+            now_ts = time.time()
+            prev_ts = self._last_seen.get(update.effective_chat.id)
+            self._last_seen[update.effective_chat.id] = now_ts
+            gap_note = ""
+            if prev_ts:
+                mins = (now_ts - prev_ts) / 60.0
+                if mins >= 20:
+                    gap_note = humanize_gap(mins)
+            agent._gap_note = gap_note
+            agent._ignored_count = 0   # no proactive ledger in local mode
+            # Selective reaction — a photo almost always, big feelings
+            # sometimes, logistics never. Fired before the reply, like a
+            # human seeing the message first.
+            asyncio.create_task(maybe_react(
+                context.bot, update.effective_chat.id,
+                update.message.message_id, has_photo, user_text))
+        elif has_photo and not user_text:
+            # Assistant mode: photo without caption → queue, don't generate.
+            # The next text pops the queue and we answer once with all parts.
             try:
                 parts = await self._build_image_input(update, "")
             except Exception:
@@ -339,11 +370,11 @@ class TelegramBot:
             except Exception:
                 pass
             return
-
-        try:
-            await update.message.set_reaction([ReactionTypeEmoji("\U0001f440")])
-        except Exception:
-            pass
+        else:
+            try:
+                await update.message.set_reaction([ReactionTypeEmoji("\U0001f440")])
+            except Exception:
+                pass
 
         # Build the multimodal turn: queued images (from earlier photo-only
         # turns) + this turn's new image (if any) + the caption / text.
@@ -355,14 +386,14 @@ class TelegramBot:
 
         all_attachments = queued + new_parts
         if all_attachments:
+            photo_placeholder = ("（我发了一张照片给你，看看然后自然地回应～）"
+                                 if is_companion else "What's in this image?")
             chat_input = [
-                {"type": "text", "text": user_text or "What's in this image?"},
+                {"type": "text", "text": user_text or photo_placeholder},
                 *all_attachments,
             ]
         else:
             chat_input = user_text or ""
-
-        token_queue: _queue.Queue[str] = _queue.Queue()
 
         typing_task = asyncio.create_task(
             self._keep_typing(update.message.chat_id)
@@ -372,20 +403,37 @@ class TelegramBot:
                 loop = asyncio.get_event_loop()
                 chat_id = update.effective_chat.id
                 self._register_file_sender(loop, chat_id)
-                future = loop.run_in_executor(
-                    None, agent.chat_stream, chat_input, token_queue.put,
-                )
-                await self._flush_stream(update, token_queue, future)
+                if is_companion:
+                    # Humanized delivery: full reply, then a length-scaled
+                    # pause + 1-3 bubbles. (No live edit-in-place — watching
+                    # a message rewrite itself reads as a bot, not a partner.)
+                    reply = await loop.run_in_executor(None, agent.chat, chat_input)
+                    typing_task.cancel()
+                    if reply:
+                        try:
+                            await asyncio.sleep(reply_delay(reply))
+                        except Exception:
+                            pass
+                        await send_burst(context.bot, chat_id, _clean_response(reply))
+                else:
+                    token_queue: _queue.Queue[str] = _queue.Queue()
+                    future = loop.run_in_executor(
+                        None, agent.chat_stream, chat_input, token_queue.put,
+                    )
+                    await self._flush_stream(update, token_queue, future)
         except Exception as exc:
             logger.exception("[Telegram] Agent error")
             await update.message.reply_text(f"Sorry, something went wrong: {exc}")
         finally:
             typing_task.cancel()
 
-        try:
-            await update.message.set_reaction([])
-        except Exception:
-            pass
+        # Assistant mode clears its 👀 "reading" reaction when done; a
+        # companion's reaction (❤️ on your photo) is a real response — keep it.
+        if not is_companion:
+            try:
+                await update.message.set_reaction([])
+            except Exception:
+                pass
 
     _AGENT_TIMEOUT = 600
 
