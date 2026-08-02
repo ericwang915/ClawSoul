@@ -20,7 +20,7 @@ import os
 import re
 import threading
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)

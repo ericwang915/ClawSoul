@@ -31,7 +31,6 @@ from pathlib import Path
 
 from . import config
 
-
 # Files/dirs at the data root that belong to a single user's old layout.
 # (anything not in this list is left untouched, including /data/users/.)
 LEGACY_ENTRIES = [

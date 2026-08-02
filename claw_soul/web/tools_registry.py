@@ -16,7 +16,6 @@ import os
 from dataclasses import dataclass, field
 from typing import Literal
 
-
 # Auth model
 AuthType = Literal[
     "none",          # always-on, no credentials needed (weather, summarize, …)

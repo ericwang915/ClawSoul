@@ -360,8 +360,8 @@ def outfit_today(
     """
     if choices is None:
         try:
-            from .. import config  # noqa: F401  (kept lazy; choices usually passed in)
             from ... import companion as _comp
+            from .. import config  # noqa: F401  (kept lazy; choices usually passed in)
             choices = _comp.load_choices() or {}
         except Exception:
             choices = {}

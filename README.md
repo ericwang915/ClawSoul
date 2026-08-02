@@ -5,17 +5,36 @@
 <h1 align="center">ClawSoul 🐾💕</h1>
 
 <p align="center">
-  <strong>Your virtual AI partner — boyfriend or girlfriend, with memory, feelings, and selfies. Runs on Telegram and in the browser.</strong>
+  <strong>A self-hosted AI companion — your own Replika/Nomi alternative, on your own Telegram bot, with your keys and your data.</strong>
 </p>
 
 <p align="center">
   <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/ericwang915/ClawSoul" alt="MIT License">
+    <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 License">
   </a>
   <img src="https://img.shields.io/pypi/pyversions/claw_soul" alt="Python">
 </p>
 
 ---
+
+## Why ClawSoul over the hosted companions?
+
+- **She has a life, not just replies.** A real daily schedule in a real city
+  (134 seeded city-culture profiles), weather-aware outfits, moods that carry
+  over from yesterday — ask "what are you doing?" and the answer is anchored
+  to where her day actually is.
+- **She texts like a person.** 1–3 short bubbles with typing rhythm (never a
+  wall of text), selective emoji reactions to your messages, a human pause
+  before replying, groggy at her 3 a.m., notices when you've been gone all
+  day — and gets a little sulky if you left her on read.
+- **She remembers like a partner.** Long-term memory + emotional graph +
+  relationship stages that change how she talks as you grow closer; a
+  personal-date engine so she never misses your birthday or that interview
+  you mentioned; the photos you send become shared memories.
+- **Consistent face.** A canonical face reference anchors every selfie —
+  same person across scenes, outfits, and months.
+- **Your data stays yours.** Everything runs on your machine with your API
+  keys. No cloud account, no subscription, no one reading your chats.
 
 ## ✨ Features
 
@@ -216,9 +235,30 @@ ruff check claw_soul tests
 
 ---
 
+## 🛡️ Safety & responsible self-hosting
+
+ClawSoul is a **fictional AI companion for adults (18+)**. Everything the
+companion says is generated fiction — it is not a person and not a substitute
+for professional help.
+
+Two guardrails ship enabled and are deliberately not configuration flags:
+
+- **Crisis safety** (`claw_soul/core/safety.py`) — detects acute distress and
+  responds with care and real helpline resources ahead of persona immersion.
+- **Image content guard** (`claw_soul/core/image_gen/guard.py`) — blocks
+  categorically illegal image generation at the single chokepoint.
+
+If you self-host, you are the operator: local laws on AI chat services, data
+protection, and age restrictions are your responsibility. See
+[SECURITY.md](SECURITY.md) for hardening notes and vulnerability reporting.
+
+---
+
 ## 📄 License
 
-[MIT](LICENSE)
+[AGPL-3.0](LICENSE) — free to self-host, modify, and share. If you run a
+modified version as a service for others, you must open-source your
+modifications. (This keeps hosted forks honest.)
 
 ---
 

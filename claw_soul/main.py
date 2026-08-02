@@ -15,10 +15,10 @@ import logging
 import os
 
 from . import config
-
-logger = logging.getLogger(__name__)
 from .core.persistent_agent import PersistentAgent
 from .core.session_store import SessionStore
+
+logger = logging.getLogger(__name__)
 
 # ── Provider builder ─────────────────────────────────────────────────────────
 

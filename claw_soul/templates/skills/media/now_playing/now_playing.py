@@ -21,7 +21,6 @@ import os
 import sys
 from datetime import datetime
 
-
 # ── Hand-curated pool, light on hits, heavy on companionable mood music ─────
 #
 # Each entry is (artist, title, vibe, time_slot, genre, query_hint).
@@ -70,9 +69,12 @@ _TRACKS: list[tuple[str, str, str, str, str]] = [
 
 
 def _time_slot(hour: int) -> str:
-    if 5 <= hour < 11:  return "morning"
-    if 11 <= hour < 17: return "afternoon"
-    if 17 <= hour < 22: return "evening"
+    if 5 <= hour < 11:
+        return "morning"
+    if 11 <= hour < 17:
+        return "afternoon"
+    if 17 <= hour < 22:
+        return "evening"
     return "night"
 
 

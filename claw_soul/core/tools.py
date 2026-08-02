@@ -361,7 +361,7 @@ _photo_senders: dict[str, callable] = {}
 
 def set_file_sender(session_id: str | None, fn: callable | None) -> None:
     """Register a callback for sending files for a specific session.
-    
+
     When *session_id* is None (legacy), uses the empty-string key.
     When *fn* is None, removes the callback for that session.
     """
@@ -374,7 +374,7 @@ def set_file_sender(session_id: str | None, fn: callable | None) -> None:
 
 def set_photo_sender(session_id: str | None, fn: callable | None) -> None:
     """Register a callback for sending images with inline preview for a specific session.
-    
+
     When *session_id* is None (legacy), uses the empty-string key.
     When *fn* is None, removes the callback for that session.
     """
@@ -405,7 +405,7 @@ def send_photo(path: str, caption: str = "", session_id: str = "") -> str:
 
 def send_file(path: str, caption: str = "", session_id: str = "") -> str:
     """Send a file to the user via the active channel (Telegram/Discord/WhatsApp/Web).
-    
+
     *session_id* identifies which channel/session to send through.
     """
     resolved = os.path.realpath(os.path.abspath(path))
