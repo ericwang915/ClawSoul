@@ -5,7 +5,13 @@
 <h1 align="center">ClawSoul 🐾💕</h1>
 
 <p align="center">
-  <strong>A self-hosted AI companion — your own Replika/Nomi alternative, on your own Telegram bot, with your keys and your data.</strong>
+  <strong>A self-hosted AI companion with a life of her own.</strong>
+</p>
+
+<p align="center">
+  She keeps a real daily schedule in a real city, remembers what matters to you,<br>
+  texts like a person, and takes selfies that always look like the same person.<br>
+  <b>Your keys · your data · your machine.</b> No account, no subscription, no one reading your chats.
 </p>
 
 <p align="center">
@@ -370,9 +376,16 @@ ruff check claw_soul tests
 
 ## 🛡️ Safety & responsible self-hosting
 
-ClawSoul is a **fictional AI companion for adults (18+)**. Everything the
-companion says is generated fiction — it is not a person and not a substitute
-for professional help.
+ClawSoul is a **relationship-simulation engine for adults (18+)** — an
+emotional-companionship research project, not an adult-content generator.
+Everything the companion says is generated fiction: it is not a person, and not
+a substitute for professional help.
+
+**It ships SFW.** The bundled personas, prompts, and image pipeline are written
+for everyday companionship — a friend who texts you about her day. Explicit
+sexual content is not a feature, is not included, and the image guard refuses
+categorically illegal generation outright. Personas depicting minors are blocked
+at the code level and are never acceptable, in any form, including text.
 
 Two guardrails ship enabled and are deliberately not configuration flags:
 
