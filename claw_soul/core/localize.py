@@ -21,11 +21,29 @@ EN/zh, and selfie.py branches on that.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import threading
 
 logger = logging.getLogger(__name__)
+
+# Fields that define the companion's identity. A change here means the
+# generated soul/persona/profile docs change, so the localization marker must
+# too — that's the only thing this signature gates.
+_IDENTITY_FIELDS = (
+    "companionName", "companionGender", "companionAge", "companionCountry",
+    "companionRegion", "companionOccupation", "archetype", "dynamic",
+    "tone", "backstory", "userLanguage",
+)
+
+
+def identity_signature(choices: dict) -> str:
+    """Stable hash of the identity fields, used to cache localized docs."""
+    payload = {k: str(choices.get(k) or "").strip().lower() for k in _IDENTITY_FIELDS}
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 _LANG_NAMES = {
     "ja": "Japanese (日本語)", "ko": "Korean (한국어)",

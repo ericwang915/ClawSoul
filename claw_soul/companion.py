@@ -282,8 +282,7 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
         # (identity, language). When that's already done, skip regenerating
         # the English templates — they'd overwrite the localized files.
         from .core import localize as _localize
-        from .core import recustomize as _recust
-        _sig = _recust.identity_signature(cleaned)
+        _sig = _localize.identity_signature(cleaned)
         _lang = cleaned.get("userLanguage") or "en"
         if not _localize.is_current(context_dir, _lang, _sig):
             _generate_soul_file(cleaned, context_dir)

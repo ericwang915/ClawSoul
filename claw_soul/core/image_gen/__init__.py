@@ -1,7 +1,6 @@
 """Image generation module — Seedream API + persona-aware selfie pipeline."""
 
 from .candid import take_candid
-from .cast import take_cast_photo
 from .generator import SeedreamError, SeedreamGenerator
 from .photo_album import PhotoAlbum
 from .selfie import take_selfie
@@ -11,6 +10,5 @@ __all__ = [
     "SeedreamError",
     "SeedreamGenerator",
     "take_candid",
-    "take_cast_photo",
     "take_selfie",
 ]

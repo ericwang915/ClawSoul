@@ -9,85 +9,112 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/ericwang915/ClawSoul/stargazers">
+    <img src="https://img.shields.io/github/stars/ericwang915/ClawSoul?style=social" alt="GitHub stars">
+  </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 License">
   </a>
-  <img src="https://img.shields.io/pypi/pyversions/claw_soul" alt="Python">
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
+  <a href="https://github.com/ericwang915/ClawSoul/pkgs/container/clawsoul">
+    <img src="https://img.shields.io/badge/ghcr.io-clawsoul-2496ED?logo=docker&logoColor=white" alt="Docker image">
+  </a>
 </p>
+
+<p align="center">
+  <sub><a href="#-run-it-one-command">Run it</a> ·
+  <a href="#-why-she-feels-real">Why it feels real</a> ·
+  <a href="#-vs-the-hosted-apps">vs. Replika/Nomi</a> ·
+  <a href="#%EF%B8%8F-safety--responsible-self-hosting">Safety</a></sub>
+</p>
+
+> ⭐ If ClawSoul makes you smile, **star the repo** — it's what keeps the project going.
 
 ---
 
-## Why ClawSoul over the hosted companions?
+## 🚀 Run it (one command)
 
-- **She has a life, not just replies.** A real daily schedule in a real city
-  (134 seeded city-culture profiles), weather-aware outfits, moods that carry
-  over from yesterday — ask "what are you doing?" and the answer is anchored
-  to where her day actually is.
-- **She texts like a person.** 1–3 short bubbles with typing rhythm (never a
-  wall of text), selective emoji reactions to your messages, a human pause
-  before replying, groggy at her 3 a.m., notices when you've been gone all
-  day — and gets a little sulky if you left her on read.
-- **She remembers like a partner.** Long-term memory + emotional graph +
-  relationship stages that change how she talks as you grow closer; a
-  personal-date engine so she never misses your birthday or that interview
-  you mentioned; the photos you send become shared memories.
-- **Consistent face.** A canonical face reference anchors every selfie —
+```bash
+docker run -e CLAW_DEEPSEEK_API_KEY=sk-... -p 7788:7788 -v clawsoul:/data ghcr.io/ericwang915/clawsoul
+```
+
+Open **http://localhost:7788**, design your companion in the wizard, and start
+talking. The only key you need is a text-LLM key (a DeepSeek key is ~free to
+start). Want her on your phone? Add a Telegram bot token — that's it.
+
+<details>
+<summary>Other ways to run (compose · pip · Fly)</summary>
+
+```bash
+# docker compose (edit deploy/local/.env first)
+cp deploy/local/.env.example deploy/local/.env
+docker compose -f deploy/local/docker-compose.yml up --build
+
+# pip (Python 3.10+)
+pip install -e .
+claw_soul onboard    # pick a provider, paste your key, design your companion
+claw_soul start      # dashboard at http://localhost:7788   (or: claw_soul chat)
+```
+
+Deploy your own instance to the cloud: see [deploy/docker/README.md](deploy/docker/README.md).
+</details>
+
+---
+
+## 💗 Why she feels real
+
+Most AI companions answer you. ClawSoul lives a life and texts you like a person.
+
+- **She has a day.** A real schedule in a real city (weather-aware outfits,
+  meals, a commute) — ask "what are you up to?" and the answer is anchored to
+  where her day actually is, not generic filler.
+- **She texts like a human.** Short messages, sometimes 2–3 in a row with a
+  typing pause between; reacts to your photo with a ❤️ before she replies;
+  groggy at 3am her time; notices when you vanished all day — and gets a little
+  sulky if you left her on read.
+- **She remembers what matters.** Long-term memory + an emotional graph +
+  relationship stages that change *how* she talks as you grow closer. A
+  personal-date engine means she won't miss your birthday or that interview you
+  mentioned last week. The photos you send become shared memories.
+- **She looks like herself.** A canonical face reference keeps every selfie the
   same person across scenes, outfits, and months.
-- **Your data stays yours.** Everything runs on your machine with your API
-  keys. No cloud account, no subscription, no one reading your chats.
+- **She's yours.** Runs entirely on your machine with your keys. No account, no
+  subscription, no one reading your chats.
 
 ## ✨ Features
 
-| | Feature | Details |
-|---|---------|---------|
-| 💕 | **Boyfriend or girlfriend** | Pick the partner type during onboarding; both come with built-in personas you can further customize |
-| 🎭 | **Three-layer identity** | Soul (core personality) + Persona (current role) + Profile (life background) — each independently customizable |
-| 🧠 | **Multi-model support** | DeepSeek, Grok, Claude, Gemini, Kimi, GLM |
-| 💖 | **Emotional memory (Soulmate)** | Emotional graph + relationship milestones + temporal memory — she remembers, and she cares |
-| 📷 | **AI selfies (Seedream)** | Generated from today's schedule + current mood. Scheduled, proactive, or on demand |
-| 📅 | **Daily planner** | A realistic 24-hour schedule auto-generated each morning, shaping what she says all day |
-| ⏰ | **Sentiment-aware proactive messaging** | Probabilistic triggers; tone and frequency adapt to recent emotional state |
-| 💾 | **Persistent long-term memory** | Markdown-based memory + per-day conversation logs |
-| 🔍 | **Hybrid RAG** | BM25 + dense vectors + RRF fusion + LLM reranker |
-| 🌊 | **Streaming + multimodal** | Token-by-token output; voice and image input supported |
-| 🎙️ | **Voice input** | Deepgram STT with automatic language fallback |
-| 🌐 | **Web dashboard** | `http://localhost:7788` — chat, configure, manage skills, inspect memory |
-| 📱 | **Telegram bot** | Text, voice, images, files — all supported |
-| 🛠️ | **Extensible skills** | Three-tier progressive loading; the LLM can author new skills itself |
-| 🔄 | **Background daemon** | PID-managed lifecycle: `start` / `stop` / `status` |
+| | | |
+|---|---|---|
+| 💕 **Boyfriend or girlfriend** | 🎭 **Three-layer identity** (soul · persona · profile) | 🧠 **Any LLM** (DeepSeek · Claude · Grok · Gemini · Kimi · GLM) |
+| 💬 **Human texting** (bursts, reactions, typing rhythm) | 💖 **Emotional memory** + relationship stages | 📅 **Personal-date engine** (birthdays, plans) |
+| 📷 **AI selfies** with a consistent face | 🌆 **Daily life** grounded in a real city + weather | ⏰ **Proactive messages** that back off when ignored |
+| 🎙️ **Understands voice notes** (Deepgram) | 👀 **Sees your photos** (vision) | 🗣️ **8 languages**, native soul/persona |
+| 🌐 **Web dashboard** + 📱 **Telegram** | 🛠️ **Extensible skills** (LLM writes its own) | 💾 **All local** — SQLite + Markdown, zero cloud |
 
 ---
 
-## 🚀 Quick start
-
-```bash
-pip install -e .
-
-# First-time setup (pick an LLM provider, drop in API keys)
-claw_soul onboard
-
-# Start the daemon (web dashboard at http://localhost:7788)
-claw_soul start
-
-# Or chat in the terminal
-claw_soul chat
-
-# Stop the daemon
-claw_soul stop
-```
-
----
-
-## 📋 CLI commands
+## 📋 CLI
 
 | Command | Description |
 |---------|-------------|
 | `claw_soul onboard` | Interactive setup wizard |
 | `claw_soul start` | Start the daemon (web + Telegram) |
-| `claw_soul start -f` | Run in foreground |
-| `claw_soul stop` | Stop the daemon |
-| `claw_soul status` | Show daemon status |
-| `claw_soul chat` | Interactive CLI chat |
+| `claw_soul chat` | Interactive terminal chat |
+| `claw_soul status` / `stop` | Daemon lifecycle |
+
+---
+
+## 🆚 vs. the hosted apps
+
+| | ClawSoul | Replika | Nomi | Character.AI |
+|---|:---:|:---:|:---:|:---:|
+| Self-hosted, your data | ✅ | ❌ | ❌ | ❌ |
+| Your own API keys / model | ✅ any | ❌ | ❌ | ❌ |
+| Runs on Telegram | ✅ | ❌ | ❌ | ❌ |
+| AI selfies, consistent face | ✅ | 💰 | ✅ | ❌ |
+| Lives a daily life (city/weather) | ✅ | ❌ | ❌ | ❌ |
+| Open source | ✅ AGPL | ❌ | ❌ | ❌ |
+| Price | **free** | $20/mo | $16/mo | $10/mo |
 
 ---
 
@@ -215,7 +242,7 @@ ClawSoul/
 │   │   └── heartbeat.py         # heartbeat monitor
 │   ├── web/                     # FastAPI dashboard + WebSocket chat
 │   └── templates/               # built-in persona / soul / skills
-├── tests/                       # 176+ tests
+├── tests/                       # 208 tests
 ├── pyproject.toml
 └── LICENSE
 ```

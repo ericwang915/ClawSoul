@@ -1,0 +1,20 @@
+# Keep the Docker build context small and reproducible.
+.git
+.github
+frontend
+supabase
+deploy/fly-router
+tests
+assets
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+.venv
+venv
+*.env
+.env
+node_modules
+dist
+*.tar.gz
+*.md
+!README.md

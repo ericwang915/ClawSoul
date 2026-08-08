@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING
 
 from .agent import Agent
 from .storage import StorageManager
-from .storage_pg import make_storage_manager
 
 if TYPE_CHECKING:
     from .session_store import SessionStore
@@ -52,12 +51,11 @@ class PersistentAgent(Agent):
         self._store = store
         self._session_id = session_id
 
-        # Unified storage (events + FTS5 transcript index, OR Postgres in
-        # SaaS worker mode).  The Agent reads back via attribute name
-        # ``_session_index`` (legacy) so the recall_conversation tool
-        # dispatcher in agent.py keeps working.
+        # Unified local storage: events + FTS5 transcript index (SQLite).
+        # The Agent reads back via attribute name ``_session_index`` so the
+        # recall_conversation tool dispatcher in agent.py keeps working.
         try:
-            self._session_index: StorageManager | None = make_storage_manager()
+            self._session_index: StorageManager | None = StorageManager.instance()
         except Exception as exc:
             logger.warning("[PersistentAgent] StorageManager init failed: %s", exc)
             self._session_index = None

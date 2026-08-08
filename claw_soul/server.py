@@ -102,32 +102,8 @@ async def start_telegram(
         logger.info("[ClawSoul] CLAW_BOTS_DISABLED — skipping Telegram bot startup")
         return []
 
-    global _global_scheduler, _active_provider
+    global _active_provider
     _active_provider = provider
-
-    if _multi_tenant_mode():
-        logger.info("[ClawSoul] Multi-tenant mode — starting per-user Telegram bots + scheduler")
-        # One global APScheduler shared across all users. Each user's daily
-        # planner / proactive / selfie jobs are registered with it, wrapped in
-        # tenancy.user_context() so they read & write only their own data.
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-        from .channels import telegram_multi
-        _tz = _detect_local_timezone()
-        _global_scheduler = AsyncIOScheduler(timezone=_tz)
-
-        bots = await telegram_multi.start_all_user_bots(
-            provider, scheduler=_global_scheduler,
-        )
-
-        if not _global_scheduler.running:
-            _global_scheduler.start()
-            logger.info(
-                "[ClawSoul] Global scheduler started (%s) — %d job(s) across %d user(s)",
-                _tz, len(_global_scheduler.get_jobs()), len(bots),
-            )
-
-        return bots
 
     store = SessionStore()
     session_manager = SessionManager(agent_factory=lambda sid: None, store=store)

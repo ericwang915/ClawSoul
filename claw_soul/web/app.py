@@ -327,42 +327,26 @@ async def _api_auth_logout(request: Request):
 # ── User settings (proxy Supabase via service_role) ───────────────────────────
 
 async def _api_user_telegram_get(request: Request):
-    """Return whether the current user has a Telegram bot token saved.
-
-    We never echo the token back to the browser — only the presence flag and
-    the (non-sensitive) chat id.
-    """
-    from ..channels import telegram_multi
-
-    user_id = tenancy.get_current_user()
-    if not user_id:
-        return JSONResponse({"hasToken": False, "chatId": None})
-
-    row = await telegram_multi.get_user_settings(user_id)
-    return JSONResponse({
-        "hasToken": bool(row and row.get("telegram_bot_token")),
-        "chatId":   row.get("telegram_chat_id") if row else None,
-    })
+    """Return whether a Telegram bot token is saved (never echoes the token)."""
+    from ..core import local_settings
+    return JSONResponse(local_settings.get_telegram())
 
 
 async def _api_user_telegram_save(request: Request):
-    """Save / clear the current user's Telegram bot token.
+    """Save / clear the Telegram bot token in the local config, then hot-start
+    (or stop) the bot in-process.
 
-    Pass ``{"token": "..."}`` to set, ``{"token": ""}`` (or omit) to clear.
-    Optional ``"chatId"`` integer for proactive messaging.
+    Pass ``{"token": "..."}`` to set, ``{"token": ""}`` to clear. Optional
+    ``"chatId"`` integer enables proactive messaging.
     """
-    from ..channels import telegram_multi
-
-    user_id = tenancy.get_current_user()
-    if not user_id:
-        return JSONResponse({"error": "not authenticated"}, status_code=401)
+    from ..core import local_settings
 
     body = await request.json() if await request.body() else {}
     token_raw = (body or {}).get("token", "")
     token = token_raw.strip() if isinstance(token_raw, str) else ""
     chat_id_raw = (body or {}).get("chatId")
 
-    if token and not telegram_multi.BOT_TOKEN_RE.match(token):
+    if token and not local_settings.BOT_TOKEN_RE.match(token):
         return JSONResponse(
             {"error": "Doesn't look like a bot token — format is 123456789:AA…"},
             status_code=400,
@@ -375,95 +359,34 @@ async def _api_user_telegram_save(request: Request):
         except (TypeError, ValueError):
             return JSONResponse({"error": "chatId must be an integer"}, status_code=400)
 
-    ok, err = await telegram_multi.upsert_user_settings(
-        user_id,
-        telegram_bot_token=token or None,
-        telegram_chat_id=chat_id,
-    )
-    if not ok:
-        return JSONResponse({"error": err or "save failed"}, status_code=400)
-
-    # Phase 2 routing: if ROUTER_PUBLIC_URL is set, the SaaS router exists
-    # and we should drive bot lifecycle through it (setWebhook + Fly machine
-    # provisioning).  Legacy single-process mode falls back to the in-process
-    # hot-add.
-    saas_mode = bool(os.environ.get("ROUTER_PUBLIC_URL", "").strip())
+    local_settings.set_telegram(token=token, chat_id=chat_id)
 
     note = "Token saved."
     hot_status = "no_change"
     try:
         if not token:
-            if saas_mode:
-                # Tell router to drop the webhook AND destroy the machine —
-                # leaving an idle worker around when the user has no token
-                # wastes resources (it still receives scheduler ticks).
-                await _router_call(f"/admin/users/{user_id}/webhook",
-                                   {"action": "delete"})
-                await _router_call(f"/admin/users/{user_id}/destroy", {})
-                hot_status = "webhook_cleared"
+            stopped = await _stop_channels()
+            hot_status = "stopped" if stopped else "no_change"
+            if stopped:
                 note = "Token cleared; bot stopped."
-            else:
-                stopped = await telegram_multi.stop_user_bot(user_id)
-                hot_status = "stopped" if stopped else "no_change"
-                if stopped:
-                    note = "Token cleared; bot stopped."
+        elif _provider is None:
+            hot_status = "deferred_no_provider"
+            note = "Token saved. Add your LLM key, then the bot activates."
         else:
-            if saas_mode:
-                # #7: refuse if the user hasn't completed the web wizard.
-                # The worker can't function without companion choices, and
-                # provisioning a machine that immediately tells the user
-                # "go to dashboard" is a worse UX than blocking save.
-                from .. import companion as comp
-                if not comp.load_choices():
-                    return JSONResponse({
-                        "error": "Please complete the companion setup wizard "
-                                 "before connecting your Telegram bot.",
-                    }, status_code=400)
-
-                # 1. Ensure the user has a Fly machine (provision if not).
-                # Default tier is "paid" — billing wires the real value
-                # later; "free" would have meant the scheduler never
-                # fires proactive/selfie/planner for anyone.
-                prov_tier = os.environ.get("CLAW_DEFAULT_TIER", "paid")
-                prov_status, prov_resp = await _router_call(
-                    f"/admin/users/{user_id}/provision", {"tier": prov_tier},
-                )
-                # 2. Set the Telegram webhook to point at the router.
-                wh_status, wh_resp = await _router_call(
-                    f"/admin/users/{user_id}/webhook", {"action": "set"},
-                )
-                if wh_status == 200:
-                    hot_status = "webhook_set"
-                    note = "Bot wired — send it a message."
-                else:
-                    hot_status = "webhook_failed"
-                    note = f"Token saved but webhook setup failed: {wh_resp}"
+            started = await _maybe_start_channels()
+            if "telegram" in started:
+                hot_status = "started"
+                note = "Bot active now — try messaging it."
             else:
-                provider = _current_provider()
-                scheduler = _global_scheduler()
-                if provider is None:
-                    hot_status = "deferred_no_provider"
-                    note = "Token saved. Bot will activate on next daemon restart (LLM provider not bound)."
-                else:
-                    ok_hot, err_hot = await telegram_multi.start_user_bot(
-                        user_id, provider, scheduler=scheduler,
-                    )
-                    if ok_hot:
-                        hot_status = "started"
-                        note = "Bot active now — try messaging it."
-                    else:
-                        hot_status = "failed"
-                        note = f"Token saved but bot failed to start: {err_hot}"
+                hot_status = "already_running"
+                note = "Token saved."
     except Exception as exc:
         logger.exception("[telegram] post-save flow failed: %s", exc)
         hot_status = "exception"
 
     return JSONResponse({
-        "ok": True,
-        "hasToken": bool(token),
-        "hotStatus": hot_status,
-        "activeUsers": telegram_multi.active_user_count(),
-        "note": note,
+        "ok": True, "hasToken": bool(token),
+        "hotStatus": hot_status, "note": note,
     })
 
 
@@ -509,25 +432,19 @@ async def _api_setup_companion_get(request: Request):
 
 async def _api_tools_list(request: Request):
     """Return the full tool catalog with this user's connection status."""
-    from ..channels import telegram_multi
+    from ..core import local_settings
     from . import tools_registry
 
-    user_id = tenancy.get_current_user()
-    integrations = await telegram_multi.get_user_integrations(user_id) if user_id else {}
+    integrations = local_settings.get_integrations()
     return JSONResponse({
         "tools": [tools_registry.serialize_tool(t, integrations) for t in tools_registry.CATALOG]
     })
 
 
 async def _api_tool_connect(name: str, request: Request):
-    """Save credentials for an API-key tool. Returns 4xx for OAuth tools (those
-    flow through a separate /api/oauth/start endpoint, added in Phase 2)."""
-    from ..channels import telegram_multi
+    """Save credentials for an API-key tool into the local config."""
+    from ..core import local_settings
     from . import tools_registry
-
-    user_id = tenancy.get_current_user()
-    if not user_id:
-        return JSONResponse({"error": "not authenticated"}, status_code=401)
 
     tool = tools_registry.find(name)
     if not tool:
@@ -544,47 +461,32 @@ async def _api_tool_connect(name: str, request: Request):
     if len(api_key) < 8:
         return JSONResponse({"error": "that key looks too short"}, status_code=400)
 
-    ok, err = await telegram_multi.set_user_integration(
-        user_id, tool.name, {"api_key": api_key},
-    )
-    if not ok:
-        return JSONResponse({"error": err or "save failed"}, status_code=500)
+    local_settings.set_integration(tool.name, {"api_key": api_key})
     return JSONResponse({"ok": True, "name": tool.name, "status": "activated"})
 
 
 async def _api_tool_disconnect(name: str, request: Request):
-    from ..channels import telegram_multi
+    from ..core import local_settings
     from . import tools_registry
-
-    user_id = tenancy.get_current_user()
-    if not user_id:
-        return JSONResponse({"error": "not authenticated"}, status_code=401)
 
     tool = tools_registry.find(name)
     if not tool:
         return JSONResponse({"error": "unknown tool"}, status_code=404)
 
-    ok, err = await telegram_multi.set_user_integration(user_id, tool.name, None)
-    if not ok:
-        return JSONResponse({"error": err or "remove failed"}, status_code=500)
+    local_settings.set_integration(tool.name, None)
     return JSONResponse({"ok": True, "name": tool.name, "status": "not_connected"})
 
 
 async def _api_chat_history(limit: int = 50):
     """Return the user's recent user+assistant turns for the chat UI.
 
-    Honours ``CLAW_USE_POSTGRES`` via make_session_store — in SaaS mode
-    this reads from the shared Postgres ``turns`` table that the worker
-    also writes to, so Telegram conversations show up in the web Chat
-    tab and vice versa.  Single-tenant / dev installs still hit the
-    local Markdown file.
-
-    Falls back to the legacy ``web:<uid>`` session file if the unified
-    one is empty, to preserve history across the older session_id
-    refactor.
+    Reads the local Markdown session store, so Telegram conversations and
+    the web Chat tab share one history. Falls back to the legacy
+    ``web:<uid>`` session file if the unified one is empty, to preserve
+    history across the older session_id refactor.
     """
-    from ..core.storage_pg import make_session_store
-    store = make_session_store()
+    from ..core.session_store import SessionStore
+    store = SessionStore()
     primary = _session_id_for_current_user()
     messages = store.load(primary)
 
@@ -1215,6 +1117,21 @@ async def _maybe_start_channels() -> list[str]:
     except Exception as exc:
         logger.warning("[Web] Channel start failed: %s", exc)
         return list(running_types)
+
+
+async def _stop_channels() -> bool:
+    """Stop all running channel bots in-process. Returns True if any stopped."""
+    global _active_bots
+    stopped = False
+    for bot in _active_bots:
+        if hasattr(bot, "stop_async"):
+            try:
+                await bot.stop_async()
+                stopped = True
+            except Exception:
+                pass
+    _active_bots = []
+    return stopped
 
 
 async def _api_channels_status():
