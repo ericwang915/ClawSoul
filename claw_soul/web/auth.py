@@ -76,17 +76,35 @@ def cookie_domain() -> str | None:
     return os.environ.get("COOKIE_DOMAIN", "").strip() or None
 
 
-def dev_no_auth() -> bool:
-    """Explicit opt-out for laptop / single-tenant dev.
-
-    Auth is ON by default.  The ONLY way to disable it is to set
-    ``CLAW_DEV_NO_AUTH=1`` — so a misconfigured deploy (cleared secret,
-    botched rotation) fails closed instead of silently serving every
-    tenant from one shared namespace.
-    """
-    return os.environ.get("CLAW_DEV_NO_AUTH", "").strip().lower() in (
-        "1", "true", "yes",
+def _multi_tenant_signal() -> bool:
+    """Any sign this process is a hosted / multi-tenant deployment rather than
+    a laptop self-host: a Supabase backend, or the SaaS role/tenant env vars."""
+    return bool(
+        os.environ.get("SUPABASE_JWT_SECRET", "").strip()
+        or os.environ.get("SUPABASE_URL", "").strip()
+        or os.environ.get("CLAW_ROLE", "").strip()
+        or os.environ.get("CLAW_USER_ID", "").strip()
     )
+
+
+def dev_no_auth() -> bool:
+    """Whether the web dashboard runs without login (open local access).
+
+    Two ways in:
+      1. Explicit ``CLAW_DEV_NO_AUTH=1``.
+      2. **Standalone self-host** — no auth backend AND no multi-tenant signal
+         at all. This is the open-source single-user case: run it on your
+         laptop with zero cloud env vars and the dashboard just opens.
+
+    A hosted deploy always carries a Supabase / role signal, so a *misconfigured*
+    multi-tenant deploy (cleared secret, botched rotation) still fails closed in
+    ``verify_auth_config`` rather than silently sharing one namespace.
+    """
+    if os.environ.get("CLAW_DEV_NO_AUTH", "").strip().lower() in (
+        "1", "true", "yes",
+    ):
+        return True
+    return not _multi_tenant_signal() and not (jwt_secret() or supabase_url())
 
 
 def auth_enabled() -> bool:
@@ -109,8 +127,9 @@ def verify_auth_config() -> None:
     if dev_no_auth():
         import logging
         logging.getLogger(__name__).warning(
-            "[auth] CLAW_DEV_NO_AUTH set — auth DISABLED, single-tenant dev "
-            "mode.  Never set this in a deployed/multi-tenant environment."
+            "[auth] auth DISABLED — open local access (standalone self-host / "
+            "no Supabase backend). Do NOT expose this dashboard to the public "
+            "internet without putting a login in front of it."
         )
         return
     if not (jwt_secret() or supabase_url()):

@@ -43,9 +43,16 @@ dependencies = [
     "scikit-learn>=1.3",
     "beautifulsoup4",
     "requests",
-    "tweepy>=4.14",
-    "boto3>=1.34",
 ]
+
+# Optional feature sets — a single-user self-host needs none of these.
+#   pip install -e ".[cloud]"    # Tigris/S3 photo storage (multi-machine SaaS)
+#   pip install -e ".[twitter]"  # the Twitter/X skill
+#   pip install -e ".[all]"      # everything
+[project.optional-dependencies]
+cloud = ["boto3>=1.34"]
+twitter = ["tweepy>=4.14"]
+all = ["boto3>=1.34", "tweepy>=4.14"]
 
 [project.scripts]
 claw_soul = "claw_soul.main:main"

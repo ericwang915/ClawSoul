@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from ..core import tenancy
 from ..core.image_gen import tigris
 from ..core.image_gen.photo_album import PhotoAlbum
+from . import auth
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ async def hero(request: Request) -> JSONResponse:
     so the frontend can show the "no photo yet" placeholder.
     """
     uid = tenancy.get_current_user()
-    if not uid:
+    if not uid and auth.auth_enabled():
         return JSONResponse({"error": "not authenticated"}, status_code=401)
 
     if _pg_configured() and tigris.is_configured():
@@ -116,7 +117,7 @@ async def photos(request: Request) -> JSONResponse:
     configured (dev / single-tenant), keeping the original behaviour.
     """
     uid = tenancy.get_current_user()
-    if not uid:
+    if not uid and auth.auth_enabled():
         return JSONResponse({"error": "not authenticated"}, status_code=401)
 
     try:
@@ -195,7 +196,7 @@ async def photo(filename: str, request: Request):
     album (one tenant, no isolation concern), with a path-traversal guard.
     """
     uid = tenancy.get_current_user()
-    if not uid:
+    if not uid and auth.auth_enabled():
         raise HTTPException(status_code=401, detail="not authenticated")
 
     # Path traversal guard — only allow basename matches.
@@ -241,7 +242,7 @@ def _status_for_gap(seconds_since_last: float | None) -> tuple[str, str, str]:
 
 async def status(request: Request) -> JSONResponse:
     uid = tenancy.get_current_user()
-    if not uid:
+    if not uid and auth.auth_enabled():
         return JSONResponse({"error": "not authenticated"}, status_code=401)
 
     last_at = await _fetch_last_message_at(uid)
@@ -296,7 +297,7 @@ def _format_milestone_when(ts_str: str, *, now: datetime | None = None) -> str:
 
 async def milestones(request: Request) -> JSONResponse:
     uid = tenancy.get_current_user()
-    if not uid:
+    if not uid and auth.auth_enabled():
         return JSONResponse({"error": "not authenticated"}, status_code=401)
 
     rows = await _fetch_events(uid, kinds=["milestone", "bonding_level"], limit=20)
