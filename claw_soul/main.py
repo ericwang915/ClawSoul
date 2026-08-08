@@ -60,41 +60,120 @@ def _build_provider():
         return primary
 
 
+# OpenAI-compatible providers — the vast majority. Each entry is
+#   key: (aliases, env var, default base URL, default model, needs_key)
+# Adding a vendor is one line here; nothing else in the codebase changes.
+_OPENAI_COMPATIBLE: dict[str, dict] = {
+    "openai": {
+        "aliases": (),
+        "env": "OPENAI_API_KEY",
+        "base": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+    },
+    "openrouter": {
+        "aliases": (),
+        "env": "OPENROUTER_API_KEY",
+        "base": "https://openrouter.ai/api/v1",
+        "model": "deepseek/deepseek-chat",
+    },
+    "ollama": {
+        # Local models: no key, no upstream provider, no content policy.
+        "aliases": ("local",),
+        "env": "OLLAMA_API_KEY",
+        "base": "http://localhost:11434/v1",
+        "model": "llama3.1",
+        "needs_key": False,
+    },
+    "deepseek": {
+        "aliases": (),
+        "env": "DEEPSEEK_API_KEY",
+        "base": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
+    },
+    "grok": {
+        "aliases": ("xai",),
+        "env": "GROK_API_KEY",
+        "base": "https://api.x.ai/v1",
+        "model": "grok-3",
+    },
+    "kimi": {
+        "aliases": ("moonshot",),
+        "env": "KIMI_API_KEY",
+        "base": "https://api.moonshot.cn/v1",
+        "model": "moonshot-v1-128k",
+    },
+    "glm": {
+        "aliases": ("zhipu", "chatglm"),
+        "env": "GLM_API_KEY",
+        "base": "https://open.bigmodel.cn/api/paas/v4/",
+        "model": "glm-4-flash",
+    },
+    "qwen": {
+        "aliases": ("dashscope", "tongyi"),
+        "env": "QWEN_API_KEY",
+        "base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen-plus",
+    },
+    "mistral": {
+        "aliases": (),
+        "env": "MISTRAL_API_KEY",
+        "base": "https://api.mistral.ai/v1",
+        "model": "mistral-large-latest",
+    },
+    "groq": {
+        "aliases": (),
+        "env": "GROQ_API_KEY",
+        "base": "https://api.groq.com/openai/v1",
+        "model": "llama-3.3-70b-versatile",
+    },
+    "together": {
+        "aliases": (),
+        "env": "TOGETHER_API_KEY",
+        "base": "https://api.together.xyz/v1",
+        "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    },
+    "siliconflow": {
+        "aliases": ("silicon",),
+        "env": "SILICONFLOW_API_KEY",
+        "base": "https://api.siliconflow.cn/v1",
+        "model": "deepseek-ai/DeepSeek-V3",
+    },
+    "lmstudio": {
+        "aliases": (),
+        "env": "LMSTUDIO_API_KEY",
+        "base": "http://localhost:1234/v1",
+        "model": "local-model",
+        "needs_key": False,
+    },
+    "custom": {
+        # Any other OpenAI-compatible endpoint: set baseUrl + model yourself.
+        "aliases": (),
+        "env": "CUSTOM_API_KEY",
+        "base": "",
+        "model": "",
+        "needs_key": False,
+    },
+}
+
+# Alias → canonical key, resolved once.
+_PROVIDER_ALIASES = {
+    alias: key
+    for key, spec in _OPENAI_COMPATIBLE.items()
+    for alias in spec["aliases"]
+}
+
+
 def _build_primary_provider():
-    """Instantiate the LLM provider selected by config."""
+    """Instantiate the LLM provider selected by config.
+
+    Anything with an OpenAI-compatible API is table-driven (see
+    ``_OPENAI_COMPATIBLE``); Anthropic and Gemini have native SDKs and are
+    handled separately.
+    """
     provider_name = config.get_str(
         "llm", "provider", env="LLM_PROVIDER", default="deepseek"
     ).lower()
-
-    if provider_name == "deepseek":
-        from .core.llm.openai_compatible import OpenAICompatibleProvider
-        api_key = config.get_str("llm", "deepseek", "apiKey", env="DEEPSEEK_API_KEY")
-        if not api_key:
-            raise ValueError("DEEPSEEK_API_KEY not set (env or claw_soul.json)")
-        return OpenAICompatibleProvider(
-            api_key=api_key,
-            base_url=config.get_str(
-                "llm", "deepseek", "baseUrl", default="https://api.deepseek.com/v1",
-            ),
-            model_name=config.get_str(
-                "llm", "deepseek", "model", default="deepseek-chat",
-            ),
-        )
-
-    if provider_name == "grok":
-        from .core.llm.openai_compatible import OpenAICompatibleProvider
-        api_key = config.get_str("llm", "grok", "apiKey", env="GROK_API_KEY")
-        if not api_key:
-            raise ValueError("GROK_API_KEY not set (env or claw_soul.json)")
-        return OpenAICompatibleProvider(
-            api_key=api_key,
-            base_url=config.get_str(
-                "llm", "grok", "baseUrl", default="https://api.x.ai/v1",
-            ),
-            model_name=config.get_str(
-                "llm", "grok", "model", default="grok-3",
-            ),
-        )
+    provider_name = _PROVIDER_ALIASES.get(provider_name, provider_name)
 
     if provider_name in ("claude", "anthropic"):
         from .core.llm.anthropic_client import AnthropicProvider
@@ -115,38 +194,29 @@ def _build_primary_provider():
             raise ValueError("GEMINI_API_KEY not set (env or claw_soul.json)")
         return GeminiProvider(api_key=api_key)
 
-    if provider_name in ("kimi", "moonshot"):
-        from .core.llm.openai_compatible import OpenAICompatibleProvider
-        api_key = config.get_str("llm", "kimi", "apiKey", env="KIMI_API_KEY")
-        if not api_key:
-            raise ValueError("KIMI_API_KEY not set (env or claw_soul.json)")
-        return OpenAICompatibleProvider(
-            api_key=api_key,
-            base_url=config.get_str(
-                "llm", "kimi", "baseUrl", default="https://api.moonshot.cn/v1",
-            ),
-            model_name=config.get_str(
-                "llm", "kimi", "model", env="KIMI_MODEL", default="moonshot-v1-128k",
-            ),
-        )
+    spec = _OPENAI_COMPATIBLE.get(provider_name)
+    if spec is None:
+        known = ", ".join(sorted(_OPENAI_COMPATIBLE) + ["claude", "gemini"])
+        raise ValueError(f"Unknown LLM_PROVIDER: '{provider_name}'. Known: {known}")
 
-    if provider_name in ("glm", "zhipu", "chatglm"):
-        from .core.llm.openai_compatible import OpenAICompatibleProvider
-        api_key = config.get_str("llm", "glm", "apiKey", env="GLM_API_KEY")
-        if not api_key:
-            raise ValueError("GLM_API_KEY not set (env or claw_soul.json)")
-        return OpenAICompatibleProvider(
-            api_key=api_key,
-            base_url=config.get_str(
-                "llm", "glm", "baseUrl",
-                default="https://open.bigmodel.cn/api/paas/v4/",
-            ),
-            model_name=config.get_str(
-                "llm", "glm", "model", env="GLM_MODEL", default="glm-4-flash",
-            ),
-        )
+    from .core.llm.openai_compatible import OpenAICompatibleProvider
+    api_key = config.get_str("llm", provider_name, "apiKey", env=spec["env"])
+    if not api_key:
+        if spec.get("needs_key", True):
+            raise ValueError(f"{spec['env']} not set (env or claw_soul.json)")
+        # Local servers accept any non-empty token.
+        api_key = "local"
 
-    raise ValueError(f"Unknown LLM_PROVIDER: '{provider_name}'")
+    base_url = config.get_str("llm", provider_name, "baseUrl", default=spec["base"])
+    model = config.get_str("llm", provider_name, "model", default=spec["model"])
+    if not base_url or not model:
+        raise ValueError(
+            f"Provider '{provider_name}' needs llm.{provider_name}.baseUrl and "
+            f"llm.{provider_name}.model set in claw_soul.json"
+        )
+    return OpenAICompatibleProvider(
+        api_key=api_key, base_url=base_url, model_name=model,
+    )
 
 
 # ── Ensure config is ready (auto-onboard if needed) ─────────────────────────

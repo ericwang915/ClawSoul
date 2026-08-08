@@ -38,10 +38,10 @@
 ## 🚀 一条命令跑起来
 
 ```bash
-docker run -e CLAW_DEEPSEEK_API_KEY=sk-... -p 7788:7788 -v clawsoul:/data ghcr.io/ericwang915/clawsoul
+docker run -e CLAW_OPENROUTER_API_KEY=sk-or-... -p 7788:7788 -v clawsoul:/data ghcr.io/ericwang915/clawsoul
 ```
 
-打开 **http://localhost:7788**，在向导里捏好你的伴侣，就可以聊了。**唯一必需的是一个文本大模型的 key**（DeepSeek 起步几乎免费）。想让她住进你手机？加一个 Telegram bot token 就行。
+打开 **http://localhost:7788**，在向导里捏好你的伴侣，就可以聊了。**只需要一个文本大模型的 key** —— 而且会自动识别，`CLAW_OPENAI_API_KEY`、`CLAW_DEEPSEEK_API_KEY`、`CLAW_CLAUDE_API_KEY`、`CLAW_QWEN_API_KEY`、`CLAW_GLM_API_KEY`…… 任意一个都行。希望数据完全不出本机？指向 [Ollama](https://ollama.com)，连 key 都不用。想让她住进你手机？再加一个 Telegram bot token。
 
 <details>
 <summary>其他运行方式（compose · pip · Fly）</summary>
@@ -125,7 +125,7 @@ claw_soul start      # 面板在 http://localhost:7788   （或者：claw_soul c
 
 | | | |
 |---|---|---|
-| 💕 **男友或女友** | 🎭 **三层身份**（灵魂 · 人设 · 生平） | 🧠 **任意大模型**（DeepSeek · Claude · Grok · Gemini · Kimi · GLM） |
+| 💕 **男友或女友** | 🎭 **三层身份**（灵魂 · 人设 · 生平） | 🧠 **16 家模型厂商**（OpenAI · Claude · Gemini · Grok · DeepSeek · 通义千问 · 智谱 · **Ollama 本地**…） |
 | 💬 **真人式发消息**（连发、表情反应、打字节奏） | 💖 **情感记忆** + 关系阶段 | 📅 **个人日期引擎**（生日、约定） |
 | 📷 **AI 自拍**，人脸始终一致 | 🌆 **有生活的一天**（真实城市 + 天气） | ⏰ **主动消息**，被冷落会自动退让 |
 | 🎙️ **听得懂语音条**（Deepgram） | 👀 **看得见你发的图**（视觉） | 🗣️ **8 种语言**，灵魂/人设按母语生成 |

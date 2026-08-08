@@ -49,12 +49,15 @@
 ## 🚀 Run it (one command)
 
 ```bash
-docker run -e CLAW_DEEPSEEK_API_KEY=sk-... -p 7788:7788 -v clawsoul:/data ghcr.io/ericwang915/clawsoul
+docker run -e CLAW_OPENROUTER_API_KEY=sk-or-... -p 7788:7788 -v clawsoul:/data ghcr.io/ericwang915/clawsoul
 ```
 
 Open **http://localhost:7788**, design your companion in the wizard, and start
-talking. The only key you need is a text-LLM key (a DeepSeek key is ~free to
-start). Want her on your phone? Add a Telegram bot token — that's it.
+talking. **One text-LLM key is all you need** — it's auto-detected, so any of
+`CLAW_OPENAI_API_KEY`, `CLAW_DEEPSEEK_API_KEY`, `CLAW_CLAUDE_API_KEY`,
+`CLAW_GEMINI_API_KEY`, `CLAW_GROK_API_KEY`, `CLAW_QWEN_API_KEY`… works the same
+way. Prefer nothing leaving your machine? Point it at [Ollama](https://ollama.com)
+and use no key at all. Want her on your phone? Add a Telegram bot token.
 
 <details>
 <summary>Other ways to run (compose · pip · Fly)</summary>
@@ -202,7 +205,7 @@ Photos are generated with [Seedream](https://www.byteplus.com/en/product/modelar
 
 | | | |
 |---|---|---|
-| 💕 **Boyfriend or girlfriend** | 🎭 **Three-layer identity** (soul · persona · profile) | 🧠 **Any LLM** (DeepSeek · Claude · Grok · Gemini · Kimi · GLM) |
+| 💕 **Boyfriend or girlfriend** | 🎭 **Three-layer identity** (soul · persona · profile) | 🧠 **16 model providers** (OpenAI · Claude · Gemini · Grok · DeepSeek · Qwen · Groq · **Ollama**…) |
 | 💬 **Human texting** (bursts, reactions, typing rhythm) | 💖 **Emotional memory** + relationship stages | 📅 **Personal-date engine** (birthdays, plans) |
 | 📷 **AI selfies** with a consistent face | 🌆 **Daily life** grounded in a real city + weather | ⏰ **Proactive messages** that back off when ignored |
 | 🎙️ **Understands voice notes** (Deepgram) | 👀 **Sees your photos** (vision) | 🗣️ **8 languages**, native soul/persona |

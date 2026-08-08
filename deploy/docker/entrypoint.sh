@@ -33,43 +33,61 @@ echo "[entrypoint] Writing config from env vars → $CONFIG_FILE"
 python - <<'PY'
 import json, os, pathlib
 
-provider = os.environ.get("CLAW_LLM_PROVIDER", "deepseek").lower()
-
 def env(key, default=""):
     return os.environ.get(key, default)
 
+# provider key -> (default model, default base URL). Keep in sync with
+# _OPENAI_COMPATIBLE in claw_soul/main.py. Claude and Gemini use native SDKs
+# and take no base URL.
+PROVIDERS = {
+    "openai":      ("gpt-4o-mini",                             "https://api.openai.com/v1"),
+    "openrouter":  ("deepseek/deepseek-chat",                  "https://openrouter.ai/api/v1"),
+    "ollama":      ("llama3.1",                                "http://localhost:11434/v1"),
+    "lmstudio":    ("local-model",                             "http://localhost:1234/v1"),
+    "deepseek":    ("deepseek-chat",                           "https://api.deepseek.com/v1"),
+    "grok":        ("grok-3",                                  "https://api.x.ai/v1"),
+    "kimi":        ("moonshot-v1-128k",                        "https://api.moonshot.cn/v1"),
+    "glm":         ("glm-4-flash",                             "https://open.bigmodel.cn/api/paas/v4/"),
+    "qwen":        ("qwen-plus",                               "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+    "mistral":     ("mistral-large-latest",                    "https://api.mistral.ai/v1"),
+    "groq":        ("llama-3.3-70b-versatile",                 "https://api.groq.com/openai/v1"),
+    "together":    ("meta-llama/Llama-3.3-70B-Instruct-Turbo", "https://api.together.xyz/v1"),
+    "siliconflow": ("deepseek-ai/DeepSeek-V3",                 "https://api.siliconflow.cn/v1"),
+    "custom":      ("",                                        ""),
+}
+
+# Default to whichever provider actually has a key, so `docker run -e
+# CLAW_OPENAI_API_KEY=...` just works without also setting CLAW_LLM_PROVIDER.
+provider = env("CLAW_LLM_PROVIDER").lower()
+if not provider:
+    for name in list(PROVIDERS) + ["claude", "gemini"]:
+        if env(f"CLAW_{name.upper()}_API_KEY"):
+            provider = name
+            break
+    else:
+        provider = "deepseek"
+
+llm = {"provider": provider}
+for name, (model, base) in PROVIDERS.items():
+    entry = {
+        "apiKey": env(f"CLAW_{name.upper()}_API_KEY"),
+        "model":  env(f"CLAW_{name.upper()}_MODEL", model),
+    }
+    base_url = env(f"CLAW_{name.upper()}_BASE_URL", base)
+    if base_url:
+        entry["baseUrl"] = base_url
+    llm[name] = entry
+llm["claude"] = {
+    "apiKey": env("CLAW_CLAUDE_API_KEY"),
+    "model":  env("CLAW_CLAUDE_MODEL", "claude-sonnet-4-20250514"),
+}
+llm["gemini"] = {
+    "apiKey": env("CLAW_GEMINI_API_KEY"),
+    "model":  env("CLAW_GEMINI_MODEL", "gemini-2.0-flash"),
+}
+
 config = {
-    "llm": {
-        "provider": provider,
-        "deepseek": {
-            "apiKey": env("CLAW_DEEPSEEK_API_KEY"),
-            "model":  env("CLAW_DEEPSEEK_MODEL", "deepseek-chat"),
-            "baseUrl": "https://api.deepseek.com/v1",
-        },
-        "claude": {
-            "apiKey": env("CLAW_CLAUDE_API_KEY"),
-            "model":  env("CLAW_CLAUDE_MODEL", "claude-sonnet-4-20250514"),
-        },
-        "gemini": {
-            "apiKey": env("CLAW_GEMINI_API_KEY"),
-            "model":  env("CLAW_GEMINI_MODEL", "gemini-2.0-flash"),
-        },
-        "grok": {
-            "apiKey": env("CLAW_GROK_API_KEY"),
-            "model":  env("CLAW_GROK_MODEL", "grok-3"),
-            "baseUrl": "https://api.x.ai/v1",
-        },
-        "kimi": {
-            "apiKey": env("CLAW_KIMI_API_KEY"),
-            "model":  env("CLAW_KIMI_MODEL", "moonshot-v1-128k"),
-            "baseUrl": "https://api.moonshot.cn/v1",
-        },
-        "glm": {
-            "apiKey": env("CLAW_GLM_API_KEY"),
-            "model":  env("CLAW_GLM_MODEL", "glm-4-flash"),
-            "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
-        },
-    },
+    "llm": llm,
     "channels": {
         "telegram": {
             "token": env("CLAW_TELEGRAM_TOKEN"),

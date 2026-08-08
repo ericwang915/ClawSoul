@@ -199,6 +199,28 @@ def _ask_multi_select(
 
 PROVIDERS = [
     {
+        "key": "openrouter",
+        "name": "OpenRouter — one key, hundreds of models (recommended)",
+        "default_model": "deepseek/deepseek-chat",
+        "default_base": "https://openrouter.ai/api/v1",
+        "env": "OPENROUTER_API_KEY",
+    },
+    {
+        "key": "ollama",
+        "name": "Ollama — local models, no API key, nothing leaves your machine",
+        "default_model": "llama3.1",
+        "default_base": "http://localhost:11434/v1",
+        "env": "OLLAMA_API_KEY",
+        "needs_key": False,
+    },
+    {
+        "key": "openai",
+        "name": "OpenAI",
+        "default_model": "gpt-4o-mini",
+        "default_base": "https://api.openai.com/v1",
+        "env": "OPENAI_API_KEY",
+    },
+    {
         "key": "deepseek",
         "name": "DeepSeek",
         "default_model": "deepseek-chat",
@@ -239,6 +261,57 @@ PROVIDERS = [
         "default_model": "glm-4-flash",
         "default_base": "https://open.bigmodel.cn/api/paas/v4/",
         "env": "GLM_API_KEY",
+    },
+    {
+        "key": "qwen",
+        "name": "Qwen (Alibaba DashScope)",
+        "default_model": "qwen-plus",
+        "default_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "env": "QWEN_API_KEY",
+    },
+    {
+        "key": "mistral",
+        "name": "Mistral",
+        "default_model": "mistral-large-latest",
+        "default_base": "https://api.mistral.ai/v1",
+        "env": "MISTRAL_API_KEY",
+    },
+    {
+        "key": "groq",
+        "name": "Groq — very fast open models",
+        "default_model": "llama-3.3-70b-versatile",
+        "default_base": "https://api.groq.com/openai/v1",
+        "env": "GROQ_API_KEY",
+    },
+    {
+        "key": "together",
+        "name": "Together AI",
+        "default_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "default_base": "https://api.together.xyz/v1",
+        "env": "TOGETHER_API_KEY",
+    },
+    {
+        "key": "siliconflow",
+        "name": "SiliconFlow 硅基流动",
+        "default_model": "deepseek-ai/DeepSeek-V3",
+        "default_base": "https://api.siliconflow.cn/v1",
+        "env": "SILICONFLOW_API_KEY",
+    },
+    {
+        "key": "lmstudio",
+        "name": "LM Studio — local models, no API key",
+        "default_model": "local-model",
+        "default_base": "http://localhost:1234/v1",
+        "env": "LMSTUDIO_API_KEY",
+        "needs_key": False,
+    },
+    {
+        "key": "custom",
+        "name": "Custom — any other OpenAI-compatible endpoint",
+        "default_model": "",
+        "default_base": "",
+        "env": "CUSTOM_API_KEY",
+        "needs_key": False,
     },
 ]
 
@@ -2466,9 +2539,15 @@ def _get_api_key(provider: dict, cfg: dict) -> str:
         masked = existing[:4] + "****" + existing[-4:] if len(existing) > 8 else "****"
         hint = f" (current: {masked}, press Enter to keep)"
 
+    # Local runtimes (Ollama, LM Studio, a custom endpoint) have no key.
+    keyless = not provider.get("needs_key", True)
+
     if provider["key"] == "claude":
         print(f"  {provider['name']} Authentication{hint}")
         print(_c("    Supports: API key (sk-ant-...) or setup-token (from `claude setup-token`)", _DIM))
+    elif keyless:
+        print(f"  {provider['name']} API Key{hint}")
+        print(_c("    Optional — local servers don't need one. Press Enter to skip.", _DIM))
     else:
         print(f"  {provider['name']} API Key{hint}")
 
@@ -2477,6 +2556,9 @@ def _get_api_key(provider: dict, cfg: dict) -> str:
     if not key and has_existing:
         print("  → Keeping existing key")
         return existing
+    if not key and keyless:
+        print("  → No key (local endpoint)")
+        return "local"
     if not key:
         print(_c("  API key is required.", _RED))
         return _get_api_key(provider, cfg)
@@ -2609,10 +2691,14 @@ def _validate_key(cfg: dict, provider: dict) -> None:
     api_key = cfg["llm"][prov_key]["apiKey"]
 
     try:
-        if prov_key in ("deepseek", "grok", "kimi", "glm"):
+        # Everything except Claude/Gemini speaks the OpenAI API.
+        if prov_key not in ("claude", "gemini"):
             from .core.llm.openai_compatible import OpenAICompatibleProvider
             base_url = cfg["llm"][prov_key].get("baseUrl", provider["default_base"])
             model = cfg["llm"][prov_key].get("model", provider["default_model"])
+            if not base_url or not model:
+                print(_c("skipped (set baseUrl + model first)", _DIM))
+                return
             p = OpenAICompatibleProvider(api_key=api_key, base_url=base_url, model_name=model)
             p.chat([{"role": "user", "content": "hi"}], max_tokens=5)
         elif prov_key == "claude":
