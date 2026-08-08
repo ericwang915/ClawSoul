@@ -37,7 +37,8 @@
   <a href="#%EF%B8%8F-safety--responsible-self-hosting">Safety</a></sub>
 </p>
 
-> ⭐ If ClawSoul makes you smile, **star the repo** — it's what keeps the project going.
+> ⭐ **Star the repo** to get release notifications — new personas, models, and
+> features land often, and GitHub will tell you the moment they do.
 
 ---
 
@@ -395,8 +396,20 @@ Two guardrails ship enabled and are deliberately not configuration flags:
   categorically illegal image generation at the single chokepoint.
 
 If you self-host, you are the operator: local laws on AI chat services, data
-protection, and age restrictions are your responsibility. See
-[SECURITY.md](SECURITY.md) for hardening notes and vulnerability reporting.
+protection, and age restrictions are your responsibility.
+
+📄 **[SAFETY.md](SAFETY.md)** — the full crisis protocol, content limits, and
+anti-dark-pattern design decisions.
+🔒 **[SECURITY.md](SECURITY.md)** — hardening notes and vulnerability reporting.
+
+### Status
+
+**v0.1.0 — early but real.** Runs daily on the maintainer's own machine. The
+companion engine (memory, daily life, photos, humanized delivery) is stable;
+the web dashboard is functional but plain. Expect rough edges in setup.
+
+Roadmap: local-model (Ollama) first-class support · voice notes both directions ·
+a desktop avatar mode · more languages. Ideas and issues welcome.
 
 ---
 
