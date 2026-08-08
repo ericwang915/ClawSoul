@@ -12,6 +12,9 @@
   <a href="https://github.com/ericwang915/ClawSoul/stargazers">
     <img src="https://img.shields.io/github/stars/ericwang915/ClawSoul?style=social" alt="GitHub stars">
   </a>
+  <a href="https://github.com/ericwang915/ClawSoul/actions/workflows/ci.yml">
+    <img src="https://github.com/ericwang915/ClawSoul/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 License">
   </a>
