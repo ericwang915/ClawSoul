@@ -97,25 +97,6 @@ path = pathlib.Path(os.environ.get("CONFIG_FILE", "/data/claw_soul.json"))
 path.write_text(json.dumps(config, indent=2))
 PY
 
-# ── Launch mode dispatch ────────────────────────────────────────────────
-#
-# Three modes share this image:
-#   1. CLAW_ROLE=router      → run the central router/scheduler service
-#                              (one machine, always-on, no per-tenant state)
-#   2. CLAW_USER_ID=<uuid>   → run as a per-user worker bound to one tenant
-#                              (auto-suspend; woken by router via Fly API)
-#   3. (neither)             → legacy single-process mode — current default,
-#                              kept for self-hosted / single-tenant deploys.
-
-if [ -n "${CLAW_ROLE:-}" ] && [ "${CLAW_ROLE}" = "router" ]; then
-    echo "[entrypoint] Launching as router/scheduler service"
-    exec python -m claw_soul.router
-fi
-
-if [ -n "${CLAW_USER_ID:-}" ]; then
-    echo "[entrypoint] Launching as per-user worker for ${CLAW_USER_ID}"
-    exec python -m claw_soul.worker
-fi
-
-# Legacy default: single-process foreground daemon (current production path).
+# ── Launch ──────────────────────────────────────────────────────────────
+# Single-process daemon: web dashboard + (if a Telegram token is set) the bot.
 exec python -m claw_soul --config "$CONFIG_FILE" start --foreground
