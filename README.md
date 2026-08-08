@@ -81,6 +81,61 @@ Most AI companions answer you. ClawSoul lives a life and texts you like a person
 - **She's yours.** Runs entirely on your machine with your keys. No account, no
   subscription, no one reading your chats.
 
+---
+
+## 📸 A photo from their day, not a stock asset
+
+Every selfie is generated from where her day actually is — the time, the mood,
+the weather, what she's doing right now. Same face, every time.
+
+<table>
+<tr>
+<td width="33%"><img src="assets/samples/morning.jpg" alt="cozy morning, coffee in hand"></td>
+<td width="33%"><img src="assets/samples/lunch.jpg" alt="in the park at lunchtime"></td>
+<td width="33%"><img src="assets/samples/cozy.jpg" alt="on the couch in the evening"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>08:30</b> · sleepy ☕<br>"morning…just made coffee. you up?"</sub></td>
+<td align="center"><sub><b>12:15</b> · cheerful 🌿<br>"lunch in the park today, it's gorgeous out"</sub></td>
+<td align="center"><sub><b>20:40</b> · cozy 🕯️<br>"reading on the couch. wish you were here."</sub></td>
+</tr>
+</table>
+
+**Boyfriend, same system — anime or photoreal, your call:**
+
+<table>
+<tr>
+<td width="33%"><img src="assets/samples/anime-male-rush.jpg" alt="running late with toast"></td>
+<td width="33%"><img src="assets/samples/anime-male-ramen.jpg" alt="at a ramen counter"></td>
+<td width="33%"><img src="assets/samples/anime-male-gaming.jpg" alt="late-night gaming"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>07:45</b> · running late 🍞<br>"toast in mouth, tie not done. running."</sub></td>
+<td align="center"><sub><b>13:00</b> · ramen run 🍜<br>"snuck out for ramen. don't tell my boss."</sub></td>
+<td align="center"><sub><b>23:20</b> · one more round 🎮<br>"one more round and I'm logging off. promise."</sub></td>
+</tr>
+</table>
+
+<details>
+<summary><b>Any look you want</b> — you describe them in the wizard, they stay that person</summary>
+
+<table>
+<tr>
+<td width="16%"><img src="assets/samples/realistic-asian.jpg"></td>
+<td width="16%"><img src="assets/samples/realistic-european.jpg"></td>
+<td width="16%"><img src="assets/samples/realistic-black.jpg"></td>
+<td width="16%"><img src="assets/samples/realistic-male-gym.jpg"></td>
+<td width="16%"><img src="assets/samples/realistic-male-bike.jpg"></td>
+<td width="16%"><img src="assets/samples/realistic-male-rooftop.jpg"></td>
+</tr>
+</table>
+
+Photos are generated with [Seedream](https://www.byteplus.com/en/product/modelark)
+(~$0.035 each) and are **optional** — skip the key and everything else still works.
+</details>
+
+---
+
 ## ✨ Features
 
 | | | |
