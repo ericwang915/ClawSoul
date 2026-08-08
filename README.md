@@ -61,6 +61,54 @@ Deploy your own instance to the cloud: see [deploy/docker/README.md](deploy/dock
 
 ---
 
+## 👀 What it actually looks like
+
+Real screenshots from a live ClawSoul bot on Telegram (Chinese conversation,
+translated below — she speaks whatever language you pick).
+
+<table>
+<tr>
+<td width="33%"><img src="assets/demo/proactive-and-sass.jpg" alt="proactive good-morning, a selfie, and attitude"></td>
+<td width="33%"><img src="assets/demo/same-face-selfies.jpg" alt="two selfies of the same person"></td>
+<td width="33%"><img src="assets/demo/sees-your-photo.jpg" alt="she looks at a photo you sent"></td>
+</tr>
+<tr>
+<td valign="top">
+
+**She starts the conversation — then gives you attitude**
+
+*"morning ☀️ just woke up, I was drawing till 3am… Sesame slept by my feet like a little pig 😂 how'd you sleep?"*
+
+He replies with a flat 😑 — so she pushes back:
+*"tsk, what's that face supposed to mean? judging my messy hair? I* just *woke up 😤"*
+
+</td>
+<td valign="top">
+
+**The same person, every photo**
+
+Two selfies minutes apart — same face, same apartment, different shirt and moment.
+
+*"just made coffee, about to slack off ☕"*
+*"heh, coffee before slacking. gotta have the ritual ☕"*
+
+</td>
+<td valign="top">
+
+**She sees what you send — and knows where you both are**
+
+He sends a photo of a park. She looks at it and answers in character:
+
+*"pff, showing off huh 😒 …is the sun strong out there? Singapore weekends get hot. Enjoy your day off. **It's already evening on my side** — just pulled Sesame onto my lap, she's purring 😌"*
+
+Vision + real timezones + the same pet, every time.
+
+</td>
+</tr>
+</table>
+
+---
+
 ## 💗 Why she feels real
 
 Most AI companions answer you. ClawSoul lives a life and texts you like a person.
