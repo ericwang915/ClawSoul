@@ -1,12 +1,11 @@
 """
-Telegram channel for claw_soul.
+Telegram channel for claw_soul — the companion's home on your own bot.
 
-⚠️ DEPRECATED for SaaS: production traffic goes through ``claw_soul/worker.py``
-(per-user Fly machine, webhook via the router). This long-polling bot remains
-ONLY for single-tenant / dev installs. Its human-feel features (voice
-transcription, reactions, sentiment-boosted proactivity) have been ported to
-the worker — add new capabilities THERE, not here, or production won't see
-them (that drift already happened once).
+Long-polling bot: it connects out to Telegram (no public URL / webhook
+needed), so it runs anywhere, including behind a home NAT. Delivery-side
+human-feel (voice transcription, emoji reactions, message bursts, absence
+awareness) lives in ``core/humanize.py`` and is applied here for companion
+sessions.
 
 Telegram is purely a *channel* — it handles sending and receiving messages.
 Session lifecycle (which Agent handles which chat) is delegated to the
@@ -148,42 +147,27 @@ class TelegramBot:
         return user_id in self._allowed_users
 
     async def _maybe_save_chat_id(self, chat_id: int) -> None:
-        """Persist the user's Telegram chat_id to Supabase if not already saved.
-
-        The chat_id is what the proactive scheduler uses to send unprompted
-        messages. We learn it the moment the user first messages the bot.
-        Idempotent — only writes if the row currently has NULL.
-        """
-        if self._chat_id_saved or not self._tenant_user_id:
+        """Learn and persist the user's Telegram chat_id to the local config
+        the first time they message the bot — it's what the proactive
+        scheduler uses to send unprompted messages. Idempotent per process."""
+        if self._chat_id_saved:
             return
         try:
-            from . import telegram_multi
-            row = await telegram_multi.get_user_settings(self._tenant_user_id)
-            if row and row.get("telegram_chat_id"):
+            from ..config import get as _cfg_get
+            if _cfg_get("channels", "telegram", "chatId", default=None):
                 self._chat_id_saved = True
                 return
-            ok, err = await telegram_multi.upsert_user_settings(
-                self._tenant_user_id, telegram_chat_id=chat_id,
-            )
-            if ok:
-                self._chat_id_saved = True
-                logger.info(
-                    "[Telegram] Saved chat_id=%s for tenant=%s",
-                    chat_id, self._tenant_user_id[:8],
-                )
-                # Fire the late-bind hook so the daemon's scheduler can
-                # register this user's proactive job without restarting.
-                cb = self._on_chat_id_learned
-                if cb is not None:
-                    try:
-                        cb(chat_id)
-                    except Exception:
-                        logger.warning(
-                            "[Telegram] chat_id_learned callback failed",
-                            exc_info=True,
-                        )
-            else:
-                logger.warning("[Telegram] chat_id save failed: %s", err)
+            from ..core import local_settings
+            local_settings.set_telegram(chat_id=chat_id)  # token untouched
+            self._chat_id_saved = True
+            logger.info("[Telegram] learned chat_id=%s", chat_id)
+            cb = self._on_chat_id_learned
+            if cb is not None:
+                try:
+                    cb(chat_id)
+                except Exception:
+                    logger.warning("[Telegram] chat_id_learned callback failed",
+                                   exc_info=True)
         except Exception as exc:
             logger.warning("[Telegram] chat_id save errored: %s", exc)
 

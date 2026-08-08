@@ -132,21 +132,8 @@ def ensure_reference(
     if local:
         return local
 
-    from .. import tenancy
-    uid = tenancy.get_current_user()
-
-    # Restore from Tigris if a prior machine already built one.
-    if uid:
-        try:
-            from . import tigris
-            if tigris.is_configured():
-                data = tigris.get_bytes(tigris.object_key(uid, album.REFERENCE_NAME))
-                if data:
-                    return album.save_reference_bytes(data)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("[selfie] reference restore skipped: %s", exc)
-
-    # Bootstrap: generate a clean face-card once, persist it.
+    # Bootstrap: generate a clean face-card once, persist it locally so every
+    # later selfie anchors on the same face.
     appearance = load_appearance()
     if not appearance.strip():
         return None
@@ -168,12 +155,6 @@ def ensure_reference(
         logger.warning("[selfie] reference bootstrap failed: %s", exc)
         return None
 
-    if uid:
-        try:
-            from . import tigris
-            tigris.upload_photo(uid, dst, filename=album.REFERENCE_NAME)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("[selfie] reference Tigris upload skipped: %s", exc)
     logger.info("[selfie] bootstrapped canonical face reference")
     return dst
 

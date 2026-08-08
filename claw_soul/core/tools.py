@@ -494,33 +494,6 @@ def _tool_candid_shot(category: str = "random", hint: str = "",
     return send_photo(result.path, caption=caption or "", session_id=session_id)
 
 
-def _tool_cast_photo(who: str = "", relation: str = "friend",
-                     appearance: str = "", scene_hint: str = "",
-                     caption: str = "", session_id: str = "") -> str:
-    """LLM-callable photo of someone in YOUR world (mom, dad, a friend).
-
-    On the FIRST photo of a person you must pass an ``appearance`` so the
-    face stays consistent in future photos — describe them the way they
-    are in your backstory.  Later photos of the same ``who`` reuse it.
-    ``caption`` ships with the photo (see :func:`_tool_take_selfie`).
-    """
-    _bind_tenancy_from_session(session_id)
-    if not who.strip():
-        return "Error: 'who' is required (e.g. 'mom', 'my friend Lily')."
-    try:
-        from .image_gen import take_cast_photo as _gen_cast
-    except Exception as exc:
-        return f"Error importing cast: {exc}"
-    try:
-        result = _gen_cast(
-            who=who, relation=relation or "friend",
-            appearance=appearance or "", scene_hint=scene_hint or None,
-        )
-    except Exception as exc:
-        return f"Error generating cast photo: {exc}"
-    return send_photo(result.path, caption=caption or "", session_id=session_id)
-
-
 AVAILABLE_TOOLS: dict[str, callable] = {
     "run_command": run_command,
     "read_file": read_file,
@@ -529,7 +502,6 @@ AVAILABLE_TOOLS: dict[str, callable] = {
     "send_photo": send_photo,
     "take_selfie": _tool_take_selfie,
     "candid_shot": _tool_candid_shot,
-    "cast_photo": _tool_cast_photo,
 }
 
 
@@ -613,24 +585,6 @@ PRIMITIVE_TOOLS: list[dict] = [
             "caption": {"type": "string", "description": "Short in-character caption that ships with the photo.", "default": ""},
         },
         [],
-    ),
-    _fn(
-        "cast_photo",
-        "Send a photo of someone in YOUR world — a parent, sibling, or friend — "
-        "in one Telegram message (single person, not you). Use when you want to "
-        "show the user your mom/dad/a friend, or when the conversation naturally "
-        "calls for it. IMPORTANT: the FIRST time you photograph a given person, "
-        "pass an `appearance` describing them (consistent with your backstory) — "
-        "future photos of the same `who` will match automatically. Put your short "
-        "in-character caption in `caption`; do not also write text outside this call.",
-        {
-            "who":        {"type": "string", "description": "Stable identifier for the person — e.g. 'mom', 'dad', 'my friend Lily'. Reuse the same value for the same person."},
-            "relation":   {"type": "string", "description": "Relationship: mom | dad | sibling | friend | grandparent | ...", "default": "friend"},
-            "appearance": {"type": "string", "description": "REQUIRED on first photo of this person: a vivid visual description (age, build, hair, typical clothing, vibe) consistent with your backstory. Omit on later photos of the same person.", "default": ""},
-            "scene_hint": {"type": "string", "description": "Optional one-line scene/context (e.g. 'cooking in the kitchen', 'at the park').", "default": ""},
-            "caption":    {"type": "string", "description": "Short in-character caption that ships with the photo.", "default": ""},
-        },
-        ["who"],
     ),
 ]
 

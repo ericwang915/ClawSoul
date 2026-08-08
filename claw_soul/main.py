@@ -13,6 +13,7 @@ Subcommands
 import argparse
 import logging
 import os
+import sys
 
 from . import config
 from .core.persistent_agent import PersistentAgent
@@ -152,12 +153,21 @@ def _build_primary_provider():
 # ── Ensure config is ready (auto-onboard if needed) ─────────────────────────
 
 def _ensure_configured(config_path: str | None = None) -> None:
-    """If no API key is configured, run the onboard wizard first."""
+    """If no API key is configured, run the onboard wizard — but ONLY when we
+    have a real terminal. In a container / piped context (no TTY) the wizard's
+    input() would EOFError-crash and the container would crash-loop; instead we
+    let the web dashboard boot in a "needs setup" state so the user can paste
+    their key in the browser (or set it via env / the config API)."""
     from .onboard import needs_onboard, run_onboard
 
-    if needs_onboard(config_path):
+    if not needs_onboard(config_path):
+        return
+    if sys.stdin.isatty():
         print("[ClawSoul] No LLM provider configured. Starting setup wizard...\n")
         run_onboard(config_path)
+    else:
+        print("[ClawSoul] No LLM key yet — starting the dashboard in setup mode. "
+              "Open http://localhost:7788 and add your key in the browser.")
 
 
 # ── Subcommand handlers ─────────────────────────────────────────────────────

@@ -237,24 +237,10 @@ def _save_to_pg(cc: str, payload: dict, *, source: str) -> None:
 
 
 def _fetch_from_tigris(cc: str) -> dict | None:
-    try:
-        from .image_gen import tigris
-    except Exception:
-        return None
-    if not tigris.is_configured():
-        return None
-    key = f"{_TIGRIS_PREFIX}/{cc}.json"
-    url = tigris.presign_get(key, expires_sec=120)
-    if not url:
-        return None
-    try:
-        r = httpx.get(url, timeout=10)
-        if not r.is_success:
-            return None
-        return r.json()
-    except Exception as exc:
-        logger.debug("[city] Tigris fetch %s errored: %s", cc, exc)
-        return None
+    # Single-user build has no cloud object store — the seeded city dataset
+    # lived in the hosted deployment. No-op so callers degrade to "no rich
+    # city profile" (the planner still works without it).
+    return None
 
 
 __all__ = ["get_city", "get_country_cities", "get_city_events",

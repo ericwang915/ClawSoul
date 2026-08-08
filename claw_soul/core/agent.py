@@ -96,14 +96,13 @@ def _load_text_dir_or_file(path: str | None, label: str = "File") -> str:
 
 
 def _log_detail(entry: dict) -> None:
-    """Append a detailed interaction event.  Routes through the unified
-    StorageManager (or its Pg counterpart in worker mode) so retention /
-    VACUUM / status all live in one place."""
+    """Append a detailed interaction event through the local StorageManager
+    so retention / VACUUM / status all live in one place."""
     try:
-        from .storage_pg import make_storage_manager
+        from .storage import StorageManager
         kind = str(entry.pop("event", "detail"))
         session_id = entry.pop("session_id", None)
-        make_storage_manager().log_event(kind, entry, session_id=session_id)
+        StorageManager.instance().log_event(kind, entry, session_id=session_id)
     except Exception:
         # Detail logging is best-effort; never crash a chat call on log failures.
         pass
@@ -598,21 +597,14 @@ Two completely different scenarios — do not confuse them:
    - **Candid of something around you** (animals, food, scenery, fun
      things) — call `candid_shot(category, hint?, caption)` where
      category is one of: animal / scenery / food / fun / random.
-   - **Someone in your world** (your mom, dad, a friend) — call
-     `cast_photo(who, relation, appearance?, scene_hint?, caption)`.
-     The FIRST time you photograph a given person, pass an `appearance`
-     describing them consistently with your backstory; later photos of
-     the same `who` will look like the same person automatically. Use
-     this when you want to show them off or the moment calls for it.
 
    - **Default to trying first.** Memories like ``camera_unavailable``,
      ``selfie_failed``, ``seedream_not_configured`` may be stale from
      earlier broken states; only believe them if you actually get an
      error from the tool. Don't preemptively refuse.
    - Only after a real tool error, apologize warmly and explain.
-   - **Never** call `take_selfie`, `candid_shot`, or `cast_photo` more
-     than once per user turn — if the first call fails, write a text
-     apology instead of retrying.
+   - **Never** call `take_selfie` or `candid_shot` more than once per user
+     turn — if the first call fails, write a text apology instead of retrying.
 """
         # Memory snapshot is now injected per-turn via _get_pruned_messages()
         # (see VOLATILE_PREFIX). Keeping it out of the stable system message
@@ -996,7 +988,7 @@ Don't repeat this if `bot_name` already exists in memory.
                 # tools so they route to the correct channel callback
                 # (per-group isolation).
                 if func_name in ('send_file', 'send_photo',
-                                 'take_selfie', 'candid_shot', 'cast_photo'):
+                                 'take_selfie', 'candid_shot'):
                     args.setdefault('session_id', self.session_id or "")
                 result = AVAILABLE_TOOLS[func_name](**args)
             else:

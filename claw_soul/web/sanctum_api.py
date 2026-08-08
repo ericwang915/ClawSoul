@@ -24,10 +24,9 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from ..core import tenancy
-from ..core.image_gen import tigris
 from ..core.image_gen.photo_album import PhotoAlbum
 from . import auth
 
@@ -71,22 +70,6 @@ async def hero(request: Request) -> JSONResponse:
     if not uid and auth.auth_enabled():
         return JSONResponse({"error": "not authenticated"}, status_code=401)
 
-    if _pg_configured() and tigris.is_configured():
-        latest = await _fetch_latest_photo_row(uid)
-        if latest:
-            url = tigris.presign_get(latest["object_key"]) or ""
-            return JSONResponse({
-                "photo": {
-                    "filename":  latest["filename"],
-                    "url":       url,
-                    "caption":   latest.get("caption") or "snapshot from earlier",
-                    "kind":      latest.get("kind"),
-                    "timestamp": latest.get("ts"),
-                },
-            })
-        # Fall through to local-album lookup if cloud has nothing yet
-        # (e.g. first photo just generated, Pg insert raced the read).
-
     album = PhotoAlbum()
     latest = album.latest()  # any kind, just the newest
     if not latest:
@@ -125,22 +108,6 @@ async def photos(request: Request) -> JSONResponse:
     except Exception:
         limit = 24
     limit = max(1, min(limit, 60))
-
-    if _pg_configured() and tigris.is_configured():
-        rows = await _fetch_photo_rows(uid, limit=limit)
-        items: list[dict[str, Any]] = []
-        for r in rows:
-            url = tigris.presign_get(r["object_key"]) or ""
-            if not url:
-                continue
-            items.append({
-                "filename":  r["filename"],
-                "url":       url,
-                "kind":      r.get("kind"),
-                "caption":   r.get("caption") or "",
-                "timestamp": r.get("ts"),
-            })
-        return JSONResponse({"items": items, "total": len(items)})
 
     album = PhotoAlbum()
     entries = album._load_index()  # noqa: SLF001 — internal helper, OK in same package
@@ -203,16 +170,6 @@ async def photo(filename: str, request: Request):
     safe_name = Path(filename).name
     if safe_name != filename:
         raise HTTPException(status_code=400, detail="bad filename")
-
-    if _pg_configured() and tigris.is_configured():
-        row = await _fetch_photo_row_by_name(uid, safe_name)
-        if not row:
-            raise HTTPException(status_code=404, detail="not found")
-        url = tigris.presign_get(row["object_key"])
-        if not url:
-            raise HTTPException(status_code=404, detail="not found")
-        return RedirectResponse(url, status_code=302,
-                                headers={"Cache-Control": "private, no-store"})
 
     album = PhotoAlbum()
     full_path = os.path.join(album.root, safe_name)
