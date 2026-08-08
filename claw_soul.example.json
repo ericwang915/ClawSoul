@@ -1,0 +1,103 @@
+{
+  "llm": {
+    "provider": "deepseek",
+    "deepseek": {
+      "apiKey": "",
+      "model": "deepseek-chat",
+      "baseUrl": "https://api.deepseek.com/v1"
+    },
+    "grok": {
+      "apiKey": "",
+      "model": "grok-3",
+      "baseUrl": "https://api.x.ai/v1"
+    },
+    "claude": {
+      "apiKey": "",
+      "model": "claude-sonnet-4-20250514"
+    },
+    "gemini": {
+      "apiKey": "",
+      "model": "gemini-2.0-flash"
+    },
+    "kimi": {
+      "apiKey": "",
+      "model": "moonshot-v1-128k",
+      "baseUrl": "https://api.moonshot.cn/v1"
+    },
+    "glm": {
+      "apiKey": "",
+      "model": "glm-4-flash",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4/"
+    }
+  },
+  "tavily": {
+    "apiKey": ""
+  },
+  "deepgram": {
+    "apiKey": ""
+  },
+  "elevenlabs": {
+    "apiKey": "",
+    "voiceId": "ByhETIclHirOlWnWKhHc"
+  },
+  "web": {
+    "host": "0.0.0.0",
+    "port": 7788
+  },
+  "channels": {
+    "telegram": {
+      "token": "",
+      "allowedUsers": []
+    }
+  },
+  "isolation": {
+    "perGroup": false
+  },
+  "concurrency": {
+    "maxAgents": 4
+  },
+  "heartbeat": {
+    "intervalSec": 60,
+    "alertChatId": null
+  },
+  "memory": {
+    "dir": null
+  },
+  "storage": {
+    "eventsRetentionDays": 90,
+    "turnsRetentionDays": 365,
+    "autoVacuumOnPrune": true
+  },
+  "skills": {
+    "seedream": {
+      "apiKey": "",
+      "model": "seedream-5-0-lite-260128",
+      "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/v3"
+    },
+    "twitter": {
+      "consumerKey": "",
+      "consumerSecret": "",
+      "accessToken": "",
+      "accessTokenSecret": ""
+    }
+  },
+  "selfie": {
+    "enabled": true,
+    "schedule": ["10:00", "16:00", "20:00"],
+    "chatId": null,
+    "model": null,
+    "maxDaily": 3,
+    "proactiveProbability": 0.15
+  },
+  "proactive": {
+    "enabled": true,
+    "chatId": null,
+    "maxDaily": 6,
+    "quietStart": 0,
+    "quietEnd": 8
+  },
+  "agent": {
+    "autoCompactThreshold": 0,
+    "verbose": false
+  }
+}

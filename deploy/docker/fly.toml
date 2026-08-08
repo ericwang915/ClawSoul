@@ -1,0 +1,48 @@
+# Fly.io config for single-tenant ClawSoul deploy.
+#
+# This runs ONE instance of the daemon (your own personal ClawSoul) in the
+# cloud. Multi-tenant SaaS is a future refactor — see "Future: multi-tenant"
+# in README.md.
+#
+# App name is global on fly.dev — change if "clawsoul" is taken.
+
+app             = "clawsoul"
+primary_region  = "sin"        # Singapore (same AZ as your Seedream API)
+swap_size_mb    = 512
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT          = "7788"
+  CLAWSOUL_HOME = "/data"
+
+[http_service]
+  internal_port        = 7788
+  force_https          = true
+  auto_stop_machines   = "off"   # Telegram polling needs always-on; revisit when we switch to webhooks
+  auto_start_machines  = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval     = "30s"
+    timeout      = "5s"
+    grace_period = "30s"
+    method       = "GET"
+    path         = "/api/status"
+
+# Sized for the multi-tenant in-process model: every active user costs
+# ~30-50 MB in cached agent state + a per-user PTB long-poll Application.
+# 1 GB / 2 vCPU comfortably handles ~25-35 active users; bump again before
+# we cross ~50 users, or move to horizontal Fly Machines sharding.
+[[vm]]
+  size   = "shared-cpu-2x"
+  memory = "1gb"
+
+# Persistent volume for ~/.claw_soul/ contents (config, memory, photos, logs).
+# Volume is created once via `fly volumes create` (see README) and
+# auto-attaches to the machine on every deploy.
+[[mounts]]
+  source       = "claw_data"
+  destination  = "/data"
+  initial_size = "1gb"

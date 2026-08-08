@@ -1,0 +1,16 @@
+services:
+  clawsoul:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      - "7788:7788"
+    env_file:
+      - .env
+    volumes:
+      # Persistent data: memory, chat history, config, photos.
+      - clawsoul_data:/data
+    restart: unless-stopped
+
+volumes:
+  clawsoul_data:

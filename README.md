@@ -1,0 +1,294 @@
+<p align="center">
+  <img src="assets/logo-300.png" alt="ClawSoul" width="160">
+</p>
+
+<h1 align="center">ClawSoul 🐾💕</h1>
+
+<p align="center">
+  <strong>A self-hosted AI companion — your own Replika/Nomi alternative, on your own Telegram bot, with your keys and your data.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ericwang915/ClawSoul/stargazers">
+    <img src="https://img.shields.io/github/stars/ericwang915/ClawSoul?style=social" alt="GitHub stars">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 License">
+  </a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
+  <a href="https://github.com/ericwang915/ClawSoul/pkgs/container/clawsoul">
+    <img src="https://img.shields.io/badge/ghcr.io-clawsoul-2496ED?logo=docker&logoColor=white" alt="Docker image">
+  </a>
+</p>
+
+<p align="center">
+  <sub><a href="#-run-it-one-command">Run it</a> ·
+  <a href="#-why-she-feels-real">Why it feels real</a> ·
+  <a href="#-vs-the-hosted-apps">vs. Replika/Nomi</a> ·
+  <a href="#%EF%B8%8F-safety--responsible-self-hosting">Safety</a></sub>
+</p>
+
+> ⭐ If ClawSoul makes you smile, **star the repo** — it's what keeps the project going.
+
+---
+
+## 🚀 Run it (one command)
+
+```bash
+docker run -e CLAW_DEEPSEEK_API_KEY=sk-... -p 7788:7788 -v clawsoul:/data ghcr.io/ericwang915/clawsoul
+```
+
+Open **http://localhost:7788**, design your companion in the wizard, and start
+talking. The only key you need is a text-LLM key (a DeepSeek key is ~free to
+start). Want her on your phone? Add a Telegram bot token — that's it.
+
+<details>
+<summary>Other ways to run (compose · pip · Fly)</summary>
+
+```bash
+# docker compose (edit deploy/local/.env first)
+cp deploy/local/.env.example deploy/local/.env
+docker compose -f deploy/local/docker-compose.yml up --build
+
+# pip (Python 3.10+)
+pip install -e .
+claw_soul onboard    # pick a provider, paste your key, design your companion
+claw_soul start      # dashboard at http://localhost:7788   (or: claw_soul chat)
+```
+
+Deploy your own instance to the cloud: see [deploy/docker/README.md](deploy/docker/README.md).
+</details>
+
+---
+
+## 💗 Why she feels real
+
+Most AI companions answer you. ClawSoul lives a life and texts you like a person.
+
+- **She has a day.** A real schedule in a real city (weather-aware outfits,
+  meals, a commute) — ask "what are you up to?" and the answer is anchored to
+  where her day actually is, not generic filler.
+- **She texts like a human.** Short messages, sometimes 2–3 in a row with a
+  typing pause between; reacts to your photo with a ❤️ before she replies;
+  groggy at 3am her time; notices when you vanished all day — and gets a little
+  sulky if you left her on read.
+- **She remembers what matters.** Long-term memory + an emotional graph +
+  relationship stages that change *how* she talks as you grow closer. A
+  personal-date engine means she won't miss your birthday or that interview you
+  mentioned last week. The photos you send become shared memories.
+- **She looks like herself.** A canonical face reference keeps every selfie the
+  same person across scenes, outfits, and months.
+- **She's yours.** Runs entirely on your machine with your keys. No account, no
+  subscription, no one reading your chats.
+
+## ✨ Features
+
+| | | |
+|---|---|---|
+| 💕 **Boyfriend or girlfriend** | 🎭 **Three-layer identity** (soul · persona · profile) | 🧠 **Any LLM** (DeepSeek · Claude · Grok · Gemini · Kimi · GLM) |
+| 💬 **Human texting** (bursts, reactions, typing rhythm) | 💖 **Emotional memory** + relationship stages | 📅 **Personal-date engine** (birthdays, plans) |
+| 📷 **AI selfies** with a consistent face | 🌆 **Daily life** grounded in a real city + weather | ⏰ **Proactive messages** that back off when ignored |
+| 🎙️ **Understands voice notes** (Deepgram) | 👀 **Sees your photos** (vision) | 🗣️ **8 languages**, native soul/persona |
+| 🌐 **Web dashboard** + 📱 **Telegram** | 🛠️ **Extensible skills** (LLM writes its own) | 💾 **All local** — SQLite + Markdown, zero cloud |
+
+---
+
+## 📋 CLI
+
+| Command | Description |
+|---------|-------------|
+| `claw_soul onboard` | Interactive setup wizard |
+| `claw_soul start` | Start the daemon (web + Telegram) |
+| `claw_soul chat` | Interactive terminal chat |
+| `claw_soul status` / `stop` | Daemon lifecycle |
+
+---
+
+## 🆚 vs. the hosted apps
+
+| | ClawSoul | Replika | Nomi | Character.AI |
+|---|:---:|:---:|:---:|:---:|
+| Self-hosted, your data | ✅ | ❌ | ❌ | ❌ |
+| Your own API keys / model | ✅ any | ❌ | ❌ | ❌ |
+| Runs on Telegram | ✅ | ❌ | ❌ | ❌ |
+| AI selfies, consistent face | ✅ | 💰 | ✅ | ❌ |
+| Lives a daily life (city/weather) | ✅ | ❌ | ❌ | ❌ |
+| Open source | ✅ AGPL | ❌ | ❌ | ❌ |
+| Price | **free** | $20/mo | $16/mo | $10/mo |
+
+---
+
+## ⚙️ Configuration
+
+All runtime data lives under `~/.claw_soul/`:
+
+```
+~/.claw_soul/
+├── claw_soul.json           # config
+├── claw_soul.pid            # daemon PID
+├── daemon.log               # daemon log
+└── context/
+    ├── soul/SOUL.md         # core personality
+    ├── persona/             # active persona + appearance.md (selfie look)
+    ├── profile/PROFILE.md   # life background
+    ├── calendar/today_plan.md   # today's 24-hour schedule
+    ├── memory/              # long-term memory (Markdown)
+    ├── knowledge/           # knowledge base (RAG)
+    ├── photos/              # selfie album + reference/ portraits
+    ├── skills/              # user-defined skills
+    └── logs/                # per-day conversation logs
+```
+
+`claw_soul.json` is created by `claw_soul onboard`. See [`claw_soul.example.json`](claw_soul.example.json) for the full schema:
+
+```jsonc
+{
+  "llm": {
+    "provider": "deepseek",
+    "deepseek": { "apiKey": "...", "model": "deepseek-chat" }
+  },
+  "channels": {
+    "telegram": { "token": "your-bot-token", "allowedUsers": [12345678] }
+  },
+  "skills": {
+    "seedream": {                          // AI selfies
+      "apiKey": "<ARK_API_KEY>",
+      "model": "seedream-5-0-lite-260128"
+    }
+  },
+  "selfie": {
+    "enabled": true,
+    "schedule": ["10:00", "16:00", "20:00"],
+    "chatId": 12345678,
+    "maxDaily": 3,
+    "proactiveProbability": 0.15           // chance of attaching a selfie to a proactive msg
+  },
+  "proactive": {
+    "enabled": true,
+    "chatId": 12345678,
+    "maxDaily": 6,
+    "quietStart": 0, "quietEnd": 8
+  },
+  "deepgram": { "apiKey": "" },            // voice input (optional)
+  "tavily":   { "apiKey": "" },            // web search (optional)
+  "web": { "host": "0.0.0.0", "port": 7788 }
+}
+```
+
+---
+
+## 🧠 Supported LLMs
+
+| Provider | Default model |
+|----------|---------------|
+| **DeepSeek** | `deepseek-chat` (V4) |
+| **Grok (xAI)** | `grok-3` |
+| **Claude (Anthropic)** | `claude-sonnet-4-20250514` |
+| **Gemini (Google)** | `gemini-2.0-flash` |
+| **Kimi (Moonshot)** | `moonshot-v1-128k` |
+| **GLM (Zhipu)** | `glm-4-flash` |
+
+---
+
+## 📷 AI selfies (Seedream)
+
+Powered by ByteDance / Volcano Engine's Seedream model. **Three trigger paths:**
+
+- **Scheduled** — fires at the times in `selfie.schedule` (default 10:00 / 16:00 / 20:00)
+- **Proactive** — attached to a proactive message with `proactiveProbability` chance
+- **On demand** — when the user says something like "send me a selfie", the LLM invokes the `selfie` skill
+
+**Scene-driven.** Each selfie's content is derived from the activity scheduled for the
+current time in `today_plan.md`. If the plan says *"10:00 coffee on the balcony"*, the
+10:00 selfie will be exactly that.
+
+**Visual consistency.**
+- Edit `~/.claw_soul/context/persona/appearance.md` to lock the character's look
+- Drop reference portraits into `~/.claw_soul/context/photos/reference/` for face anchoring
+- A stable seed derived from the appearance description keeps the face consistent across shots
+
+Photos are stored under `~/.claw_soul/context/photos/` and pruned automatically after 30 days.
+
+---
+
+## 📁 Project layout
+
+```
+ClawSoul/
+├── claw_soul/
+│   ├── main.py                  # CLI entry point
+│   ├── onboard.py               # setup wizard
+│   ├── daemon.py                # daemon process manager
+│   ├── server.py                # Telegram + scheduler bootstrap
+│   ├── core/
+│   │   ├── agent.py             # core reasoning loop
+│   │   ├── persistent_agent.py  # session persistence
+│   │   ├── tools.py             # tool dispatch
+│   │   ├── skill_loader.py      # three-tier progressive skill loading
+│   │   ├── compaction.py        # context compaction
+│   │   ├── stt.py               # speech-to-text (Deepgram)
+│   │   ├── llm/                 # provider adapters (6)
+│   │   ├── memory/              # Markdown memory + emotional graph + milestones + temporal index
+│   │   ├── retrieval/           # BM25 + dense + RRF + LLM reranker
+│   │   ├── knowledge/           # knowledge-base RAG
+│   │   └── image_gen/           # Seedream selfie pipeline
+│   ├── channels/
+│   │   └── telegram_bot.py      # Telegram bot (streaming / voice / images)
+│   ├── scheduler/
+│   │   ├── cron.py              # generic cron jobs
+│   │   ├── planner.py           # daily 24-hour plan generator
+│   │   ├── proactive.py         # sentiment-aware proactive messages
+│   │   ├── selfie_task.py       # scheduled selfies
+│   │   └── heartbeat.py         # heartbeat monitor
+│   ├── web/                     # FastAPI dashboard + WebSocket chat
+│   └── templates/               # built-in persona / soul / skills
+├── tests/                       # 208 tests
+├── pyproject.toml
+└── LICENSE
+```
+
+---
+
+## 🛠️ Development
+
+```bash
+git clone https://github.com/ericwang915/ClawSoul.git
+cd ClawSoul
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+pytest tests/ -v
+ruff check claw_soul tests
+```
+
+---
+
+## 🛡️ Safety & responsible self-hosting
+
+ClawSoul is a **fictional AI companion for adults (18+)**. Everything the
+companion says is generated fiction — it is not a person and not a substitute
+for professional help.
+
+Two guardrails ship enabled and are deliberately not configuration flags:
+
+- **Crisis safety** (`claw_soul/core/safety.py`) — detects acute distress and
+  responds with care and real helpline resources ahead of persona immersion.
+- **Image content guard** (`claw_soul/core/image_gen/guard.py`) — blocks
+  categorically illegal image generation at the single chokepoint.
+
+If you self-host, you are the operator: local laws on AI chat services, data
+protection, and age restrictions are your responsibility. See
+[SECURITY.md](SECURITY.md) for hardening notes and vulnerability reporting.
+
+---
+
+## 📄 License
+
+[AGPL-3.0](LICENSE) — free to self-host, modify, and share. If you run a
+modified version as a service for others, you must open-source your
+modifications. (This keeps hosted forks honest.)
+
+---
+
+<p align="center">
+  <sub>Made with 💕 by ClawSoul</sub>
+</p>

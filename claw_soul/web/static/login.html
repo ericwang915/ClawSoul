@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meet your love · her &amp; him</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600&display=swap');
+    :root {
+      --bg: #120c10;
+      --surface: rgba(255,255,255,0.035);
+      --border: rgba(255,255,255,0.10);
+      --text: #f4ece9;
+      --text-soft: #b3a3a9;
+      --accent: #f3a0b6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 600px at 28% 42%, rgba(255,150,180,0.14), transparent 60%),
+        radial-gradient(700px 500px at 22% 30%, rgba(201,139,214,0.10), transparent 60%),
+        var(--bg);
+    }
+    .split { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+    @media (max-width: 880px) { .split { grid-template-columns: 1fr; } .left { display: none; } }
+
+    .left { position: relative; overflow: hidden; }
+    .left::after {
+      content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+      background:
+        linear-gradient(to top, rgba(18,12,16,0.92) 0%, rgba(18,12,16,0.25) 38%, transparent 60%),
+        linear-gradient(to right, transparent 70%, rgba(18,12,16,0.65) 100%);
+    }
+    .wordmark { position: absolute; top: 30px; left: 34px; z-index: 3; font-family: 'Fraunces', Georgia, serif; font-size: 1.4rem; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
+    .wordmark .amp { font-style: italic; color: var(--accent); padding: 0 3px; }
+    .carousel { position: absolute; inset: 0; }
+    .lc-img {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+      opacity: 0; transition: opacity 1s ease;
+    }
+    .lc-img.show { opacity: 1; }
+    .lc-overlay { position: absolute; left: 40px; right: 40px; bottom: 40px; z-index: 2; }
+    .lc-dots { display: flex; gap: 6px; margin-top: 16px; }
+    .lc-dots span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.35); transition: background .3s ease; }
+    .lc-dots span.on { background: var(--accent); }
+    .quote {
+      font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 1.55rem;
+      color: #fff; text-align: left; max-width: 460px; line-height: 1.4;
+      min-height: 2.8em; transition: opacity .6s ease; text-shadow: 0 2px 16px rgba(0,0,0,.55);
+    }
+
+    .right { display: flex; align-items: center; justify-content: center; padding: 40px; }
+    .panel { width: min(92vw, 380px); }
+    .m-word { display: none; }
+    @media (max-width: 880px) { .m-word { display: block; font-family: 'Fraunces', Georgia, serif; font-size: 1.3rem; color:#fff; margin-bottom: 22px; } .m-word .amp { font-style: italic; color: var(--accent); padding: 0 3px; } }
+    h1 { font-family: 'Fraunces', Georgia, serif; font-size: 2rem; margin: 0 0 8px; letter-spacing: -.02em; }
+    .sub { color: var(--text-soft); margin: 0 0 24px; font-size: 0.95rem; }
+
+    .providers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+    .provider {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 12px 16px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 14px; color: var(--text);
+      font-size: 0.92rem; font-weight: 500; font-family: inherit; cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .provider:hover { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
+    .provider svg { flex-shrink: 0; }
+    .divider { display: flex; align-items: center; gap: 12px; color: var(--text-soft); font-size: 0.78rem; margin: 8px 0 16px; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    .consent { display: flex; flex-direction: column; gap: 9px; margin: 0 0 20px; }
+    .consent label { display: flex; align-items: flex-start; gap: 9px; font-size: 0.82rem; color: var(--text-soft); margin: 0; cursor: pointer; line-height: 1.45; }
+    .consent input[type="checkbox"] { width: 16px; height: 16px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--accent); cursor: pointer; }
+    .consent a { color: var(--accent); font-weight: 600; }
+    .consent.flash label { color: #fca5a5; }
+    .consent.flash input[type="checkbox"] { outline: 2px solid #fca5a5; outline-offset: 2px; border-radius: 3px; }
+
+    form { display: flex; flex-direction: column; gap: 12px; }
+    label { display: block; font-size: 0.8rem; color: var(--text-soft); margin-bottom: 6px; }
+    input {
+      width: 100%; padding: 13px 16px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 14px; color: var(--text);
+      font-size: 0.95rem; font-family: inherit; outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(243,160,182,.14); }
+    button.submit {
+      margin-top: 8px; padding: 14px 16px;
+      background: linear-gradient(135deg, #ff9bb0 0%, #ffb59a 100%);
+      color: #2b1620; border: none; border-radius: 9999px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer; font-family: inherit;
+      box-shadow: 0 0 34px -6px rgba(255,150,175,.6);
+      transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+    }
+    button.submit:hover { transform: translateY(-1px); box-shadow: 0 0 44px -4px rgba(255,150,175,.8); filter: brightness(1.04); }
+    button.submit:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+    .status { margin-top: 14px; font-size: 0.88rem; min-height: 1.3em; text-align: center; }
+    .status.error { color: #fca5a5; }
+    .status.ok { color: #86efac; }
+    .toggle { margin-top: 20px; text-align: center; font-size: 0.85rem; color: var(--text-soft); }
+    .toggle a { color: var(--accent); cursor: pointer; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="split">
+    <!-- Left: full-bleed 12-image carousel (from the homepage) + rotating quote -->
+    <div class="left">
+      <div class="carousel">
+        <img id="lc-img-a" class="lc-img show" alt="" />
+        <img id="lc-img-b" class="lc-img" alt="" />
+      </div>
+      <div class="wordmark">her<span class="amp">&amp;</span>him</div>
+      <div class="lc-overlay">
+        <div class="quote" id="quote"></div>
+        <div class="lc-dots" id="lc-dots"></div>
+      </div>
+    </div>
+
+    <!-- Right: auth panel -->
+    <div class="right">
+      <div class="panel">
+        <div class="m-word">her<span class="amp">&amp;</span>him</div>
+        <h1>Meet your love</h1>
+        <p class="sub">Sign in, or create your account — it takes about a minute.</p>
+
+        <div class="consent" id="consent">
+          <label>
+            <input type="checkbox" id="consent-age" />
+            <span>I am 18 years of age or older.</span>
+          </label>
+          <label>
+            <input type="checkbox" id="consent-terms" />
+            <span>I agree to the <a href="https://herandhim.ai/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="https://herandhim.ai/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+          </label>
+        </div>
+
+        <div class="providers">
+          <button type="button" class="provider" data-provider="google">
+            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.3 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.6 6.1 29.1 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.6 6.1 29.1 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.1 35 26.7 36 24 36c-5.3 0-9.7-2.6-11.3-7l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.6l6.2 5.2C39.8 36.7 44 31 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
+            Continue with Google
+          </button>
+          <button type="button" class="provider" data-provider="github">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.8c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 5 18 5.3 18 5.3c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+            Continue with GitHub
+          </button>
+        </div>
+        <div class="divider">or with email</div>
+
+        <form id="login-form" autocomplete="on">
+          <div>
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required autocomplete="email" placeholder="you@email.com" />
+          </div>
+          <div>
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Password" />
+          </div>
+          <button type="submit" class="submit" id="submit-btn">Sign in</button>
+        </form>
+
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <p class="toggle">
+          No account yet? <a id="signup-toggle">Create one</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 12-image carousel (the homepage selfies) with crossfade + rotating quote.
+    (function () {
+      const BASE = 'https://herandhim.ai';
+      const imgs = [
+        '/selfies/realistic/asian.jpg', '/selfies/realistic/european.jpg', '/selfies/realistic/black.jpg',
+        '/selfies/realistic-male/gym.jpg', '/selfies/realistic-male/bike.jpg', '/selfies/realistic-male/rooftop.jpg',
+        '/selfies/morning.jpg', '/selfies/lunch.jpg', '/selfies/cozy.jpg',
+        '/selfies/anime-male/rush.jpg', '/selfies/anime-male/ramen.jpg', '/selfies/anime-male/gaming.jpg',
+      ].map(p => BASE + p);
+      const lines = [
+        "“You don't have to start from the beginning every time.”",
+        "“They remember the small things — so you never re-explain your life.”",
+        "“Someone who grows closer the more you talk.”",
+      ];
+      const a = document.getElementById('lc-img-a');
+      const b = document.getElementById('lc-img-b');
+      const dotsEl = document.getElementById('lc-dots');
+      const q = document.getElementById('quote');
+      if (!a || !b) return;
+      // preload
+      imgs.forEach(src => { const im = new Image(); im.src = src; });
+      if (dotsEl) dotsEl.innerHTML = imgs.map((_, k) => `<span${k === 0 ? ' class="on"' : ''}></span>`).join('');
+      let i = 0, front = a, back = b;
+      front.src = imgs[0]; front.classList.add('show');
+      if (q) q.textContent = lines[0];
+      const tick = () => {
+        const next = (i + 1) % imgs.length;
+        back.src = imgs[next];
+        back.classList.add('show');
+        front.classList.remove('show');
+        [front, back] = [back, front];
+        i = next;
+        if (dotsEl) Array.from(dotsEl.children).forEach((d, k) => d.classList.toggle('on', k === i));
+        if (q) { q.style.opacity = '0'; setTimeout(() => { q.textContent = lines[i % lines.length]; q.style.opacity = '1'; }, 280); }
+      };
+      setInterval(tick, 3500);
+    })();
+
+    (async () => {
+      const statusEl = document.getElementById('status');
+      const setStatus = (msg, kind = '') => {
+        statusEl.textContent = msg;
+        statusEl.className = 'status ' + kind;
+      };
+
+      // Consent gate — both 18+ and Terms must be checked before ANY sign-in
+      // path (Google, GitHub, or email). Required for both sign-in and signup.
+      const consentEl = document.getElementById('consent');
+      const ageBox = document.getElementById('consent-age');
+      const termsBox = document.getElementById('consent-terms');
+      const consentOk = () => {
+        const ok = ageBox.checked && termsBox.checked;
+        if (!ok) {
+          setStatus('Please confirm you are 18+ and agree to the Terms to continue.', 'error');
+          if (consentEl) consentEl.classList.add('flash');
+        }
+        return ok;
+      };
+      [ageBox, termsBox].forEach((box) => box.addEventListener('change', () => {
+        if (ageBox.checked && termsBox.checked) {
+          if (consentEl) consentEl.classList.remove('flash');
+          if (statusEl.classList.contains('error')) setStatus('');
+        }
+      }));
+
+      const cfgResp = await fetch('/api/auth/config');
+      if (!cfgResp.ok) { setStatus('Auth is not configured on this server.', 'error'); return; }
+      const { url: SUPABASE_URL, anonKey: SUPABASE_ANON } = await cfgResp.json();
+      if (!SUPABASE_URL || !SUPABASE_ANON) { setStatus('Auth is not configured on this server.', 'error'); return; }
+
+      const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+      // OAuth — reuse the production callback (sets the shared cookie, then
+      // bounces back to the app dashboard).
+      document.querySelectorAll('.provider').forEach((b) => {
+        b.addEventListener('click', async () => {
+          if (!consentOk()) return;
+          const provider = b.getAttribute('data-provider');
+          setStatus('Redirecting to ' + provider + '…', 'ok');
+          const { error } = await sb.auth.signInWithOAuth({
+            provider,
+            options: { redirectTo: 'https://herandhim.ai/auth/callback' },
+          });
+          if (error) setStatus(error.message, 'error');
+        });
+      });
+
+      let mode = 'signin';
+      const toggle = document.getElementById('signup-toggle');
+      const btn = document.getElementById('submit-btn');
+      toggle.addEventListener('click', () => {
+        mode = mode === 'signin' ? 'signup' : 'signin';
+        btn.textContent = mode === 'signin' ? 'Sign in' : 'Create account';
+        toggle.textContent = mode === 'signin' ? 'Create one' : 'Have an account? Sign in';
+        document.querySelector('.toggle').firstChild.textContent =
+          mode === 'signin' ? 'No account yet? ' : '';
+        setStatus('');
+      });
+
+      document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!consentOk()) return;
+        btn.disabled = true;
+        setStatus('');
+
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        const { data, error } = mode === 'signin'
+          ? await sb.auth.signInWithPassword({ email, password })
+          : await sb.auth.signUp({ email, password });
+
+        if (error) { setStatus(error.message, 'error'); btn.disabled = false; return; }
+        if (!data.session) { setStatus('Check your email to confirm your account.', 'ok'); btn.disabled = false; return; }
+
+        const sessResp = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: data.session.access_token }),
+        });
+        if (!sessResp.ok) {
+          const body = await sessResp.json().catch(() => ({}));
+          setStatus(body.error || 'Authentication failed.', 'error');
+          btn.disabled = false; return;
+        }
+        setStatus('Signed in. Redirecting…', 'ok');
+        window.location.href = '/';
+      });
+    })();
+  </script>
+</body>
+</html>
