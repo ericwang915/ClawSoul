@@ -12,7 +12,6 @@ Subcommands
 
 import argparse
 import logging
-import os
 import sys
 
 from . import config
@@ -153,11 +152,11 @@ def _build_primary_provider():
 # ── Ensure config is ready (auto-onboard if needed) ─────────────────────────
 
 def _ensure_configured(config_path: str | None = None) -> None:
-    """If no API key is configured, run the onboard wizard — but ONLY when we
-    have a real terminal. In a container / piped context (no TTY) the wizard's
-    input() would EOFError-crash and the container would crash-loop; instead we
-    let the web dashboard boot in a "needs setup" state so the user can paste
-    their key in the browser (or set it via env / the config API)."""
+    """Run the onboard wizard when no LLM key is configured — but ONLY with a
+    real terminal. In a container / piped context (no TTY) the wizard's input()
+    would EOFError-crash and the container would crash-loop; instead we let the
+    web dashboard boot in a "needs setup" state so the user can add their key in
+    the browser (or via env / the config API)."""
     from .onboard import needs_onboard, run_onboard
 
     if not needs_onboard(config_path):
@@ -167,7 +166,7 @@ def _ensure_configured(config_path: str | None = None) -> None:
         run_onboard(config_path)
     else:
         print("[ClawSoul] No LLM key yet — starting the dashboard in setup mode. "
-              "Open http://localhost:7788 and add your key in the browser.")
+              "Open http://localhost:7788 to finish setup.")
 
 
 # ── Subcommand handlers ─────────────────────────────────────────────────────
@@ -214,15 +213,13 @@ def _run_foreground(args) -> None:
 
     app = create_app(provider, build_provider_fn=_build_provider)
 
-    # Auto-start Telegram. In single-tenant mode, only fires when a token
-    # exists in the local config. In multi-tenant mode (SUPABASE_JWT_SECRET
-    # set), always fires — the dispatcher reads per-user tokens from Supabase.
+    # Auto-start the Telegram bot when a token is configured. Without one, the
+    # web dashboard runs on its own (you can add a token later in the browser).
     tg_token = config.get_str("channels", "telegram", "token", default="")
-    multi_tenant = bool(os.environ.get("SUPABASE_JWT_SECRET"))
-    if tg_token or multi_tenant:
+    if tg_token:
         from .server import start_telegram
         from .web import app as web_app_module
-        print(f"[ClawSoul] Starting Telegram ({'multi-tenant' if multi_tenant else 'single-tenant'})…")
+        print("[ClawSoul] Starting Telegram bot…")
 
         @app.on_event("startup")
         async def _start_telegram():
