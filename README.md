@@ -31,6 +31,10 @@
 </p>
 
 <p align="center">
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
   <sub><a href="#-run-it-one-command">Run it</a> ·
   <a href="#-why-she-feels-real">Why it feels real</a> ·
   <a href="#-vs-the-hosted-apps">vs. Replika/Nomi</a> ·
