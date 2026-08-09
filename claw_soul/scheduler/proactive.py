@@ -32,6 +32,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from .. import config
 from ..core import lang as _lang
+from ..core import proactive_state as _pstate
 
 if TYPE_CHECKING:
     from ..channels.telegram_bot import TelegramBot
@@ -538,6 +539,7 @@ class ProactiveMessenger:
         try:
             await self._telegram_bot.send_message(chat_id, text)
             self._today_count += 1
+            _pstate.record_sent(session_id)
             logger.info(
                 "[Proactive] Delivered message #%d to chat %s.",
                 self._today_count, chat_id,
@@ -589,6 +591,7 @@ class ProactiveMessenger:
         try:
             await self._telegram_bot.send_message(chat_id, text)
             self._today_count += 1
+            _pstate.record_sent(session_id)
             wl.mark_surfaced(wish.id)
             logger.info(
                 "[Proactive] Surfaced wish #%d to chat %s (id=%s)",

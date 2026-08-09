@@ -2810,7 +2810,113 @@ loadCurrentUser();
 switchTab('dashboard');
 connectWebSocket();
 refreshDashboard();
-maybeOpenWizardOnFirstLoad();
+// ── First run: no LLM key yet ────────────────────────────────────────────────
+// Without this the dashboard boots into a "setup mode" the user can't get out
+// of from the browser — the key could only be supplied via env var or the CLI
+// wizard, which defeats the one-command install.
+const LLM_PROVIDERS = [
+  ['openrouter', 'OpenRouter — one key, hundreds of models', 'https://openrouter.ai/keys'],
+  ['openai',     'OpenAI',                                   'https://platform.openai.com/api-keys'],
+  ['deepseek',   'DeepSeek',                                 'https://platform.deepseek.com'],
+  ['claude',     'Claude (Anthropic)',                       'https://console.anthropic.com/settings/keys'],
+  ['gemini',     'Gemini (Google)',                          'https://aistudio.google.com/apikey'],
+  ['grok',       'Grok (xAI)',                               'https://console.x.ai'],
+  ['qwen',       'Qwen (DashScope)',                         'https://dashscope.console.aliyun.com'],
+  ['groq',       'Groq',                                     'https://console.groq.com/keys'],
+  ['mistral',    'Mistral',                                  'https://console.mistral.ai/api-keys'],
+  ['glm',        'GLM (Zhipu)',                              'https://open.bigmodel.cn'],
+  ['kimi',       'Kimi (Moonshot)',                          'https://platform.moonshot.cn'],
+  ['ollama',     'Ollama — local, no key needed',            ''],
+];
+
+async function maybeAskForLlmKey() {
+  let ready = true;
+  try {
+    const r = await fetch('/api/status', { credentials: 'include' });
+    ready = (await r.json()).providerReady !== false;
+  } catch (_) { return false; }
+  if (ready) return false;
+
+  const opts = LLM_PROVIDERS.map(([k, label]) =>
+    `<option value="${k}">${label}</option>`).join('');
+  const el = document.createElement('div');
+  el.id = 'llm-key-modal';
+  el.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4';
+  el.innerHTML = `
+    <div class="w-full max-w-lg rounded-2xl bg-surface-900 border border-surface-700/60 p-6 space-y-4">
+      <div>
+        <h2 class="text-xl font-semibold text-white">Add a model key to begin</h2>
+        <p class="text-sm text-gray-400 mt-1">
+          ClawSoul runs on your own API key — it's stored only on this machine.
+          Pick a provider and paste the key.
+        </p>
+      </div>
+      <select id="llm-key-provider"
+        class="w-full px-3.5 py-2.5 bg-surface-950 border border-surface-700/60 rounded-lg text-sm text-white">
+        ${opts}
+      </select>
+      <input id="llm-key-value" type="password" placeholder="sk-..." autocomplete="off"
+        class="w-full px-3.5 py-2.5 bg-surface-950 border border-surface-700/60 rounded-lg text-sm text-white placeholder:text-gray-600">
+      <a id="llm-key-link" href="#" target="_blank" rel="noopener"
+         class="block text-xs text-brand-400 hover:text-brand-300">Where do I get a key? →</a>
+      <p id="llm-key-status" class="text-sm min-h-[1.2em] text-gray-500"></p>
+      <button id="llm-key-save" class="btn-primary w-full !py-2.5">Save and continue</button>
+    </div>`;
+  document.body.appendChild(el);
+
+  const sel = el.querySelector('#llm-key-provider');
+  const val = el.querySelector('#llm-key-value');
+  const link = el.querySelector('#llm-key-link');
+  const status = el.querySelector('#llm-key-status');
+  const save = el.querySelector('#llm-key-save');
+
+  const syncProvider = () => {
+    const row = LLM_PROVIDERS.find(p => p[0] === sel.value);
+    const local = !row[2];
+    link.style.display = local ? 'none' : 'block';
+    link.href = row[2] || '#';
+    val.placeholder = local ? 'not needed — leave blank' : 'sk-...';
+  };
+  sel.onchange = syncProvider;
+  syncProvider();
+
+  save.onclick = async () => {
+    const provider = sel.value;
+    const key = val.value.trim();
+    const local = provider === 'ollama';
+    if (!key && !local) { status.textContent = 'Paste your key first.'; return; }
+    save.disabled = true; status.textContent = 'Saving…';
+    try {
+      const cur = await (await fetch('/api/config', { credentials: 'include' })).json();
+      const cfg = cur.config || cur || {};
+      cfg.llm = cfg.llm || {};
+      cfg.llm.provider = provider;
+      cfg.llm[provider] = { ...(cfg.llm[provider] || {}), apiKey: key || 'local' };
+      const r = await fetch('/api/config', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: cfg }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.ok === false) {
+        status.textContent = data.error || 'Save failed.'; save.disabled = false; return;
+      }
+      if (data.providerReady === false) {
+        status.textContent = 'Saved, but that key was rejected — double-check it.';
+        save.disabled = false; return;
+      }
+      el.remove();
+      maybeOpenWizardOnFirstLoad();
+    } catch (e) {
+      status.textContent = 'Network error.'; save.disabled = false;
+    }
+  };
+  val.addEventListener('keydown', e => { if (e.key === 'Enter') save.click(); });
+  return true;
+}
+
+// Ask for a key first; only then run the companion wizard.
+maybeAskForLlmKey().then(asked => { if (!asked) maybeOpenWizardOnFirstLoad(); });
 </script>
 
 <!-- ═══ Setup Wizard Modal ═══════════════════════════════════════════════ -->

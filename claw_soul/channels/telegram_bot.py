@@ -368,7 +368,12 @@ class TelegramBot:
                 if mins >= 20:
                     gap_note = humanize_gap(mins)
             agent._gap_note = gap_note
-            agent._ignored_count = 0   # no proactive ledger in local mode
+            # How many of HER messages went unanswered before this reply — lets
+            # her be a little sulky about being ignored, with a real basis.
+            # Read before clearing, since this message ends the streak.
+            from ..core import proactive_state as _pstate
+            agent._ignored_count = _pstate.unanswered(sid)
+            _pstate.clear(sid)
             # Selective reaction — a photo almost always, big feelings
             # sometimes, logistics never. Fired before the reply, like a
             # human seeing the message first.
