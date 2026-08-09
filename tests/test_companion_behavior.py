@@ -199,3 +199,104 @@ def test_telegram_path_wires_up_humanized_delivery():
     for hook in ("send_burst", "maybe_react", "reply_delay",
                  "_remember_their_photo", "_ignored_count"):
         assert hook in src, f"{hook} is not wired into the Telegram path"
+
+
+# ── Image backends ────────────────────────────────────────────────────────
+
+
+def _fake_response(payload):
+    class R:
+        ok, status_code = True, 200
+        headers = {"Content-Type": "image/png"}
+        content = b"\x89PNG\r\n\x1a\nfake"
+
+        def json(self):
+            return payload
+
+        def raise_for_status(self):
+            pass
+    return R()
+
+
+@pytest.mark.parametrize("provider,endpoint,payload", [
+    ("seedream",  "/images/generations", {"data": [{"url": "https://x/i.jpg"}]}),
+    ("openai",    "/images/edits",       {"data": [{"b64_json": "aGk="}]}),
+    ("gemini",    ":generateContent",
+     {"candidates": [{"content": {"parts": [{"inlineData": {"data": "aGk="}}]}}]}),
+    ("fal",       "fal-ai",              {"images": [{"url": "https://x/f.png"}]}),
+    ("replicate", "/predictions",        {"output": ["https://x/r.png"]}),
+    ("sdwebui",   "/sdapi/v1/txt2img",   {"images": ["aGk="]}),
+])
+def test_every_image_backend_hits_its_own_endpoint(monkeypatch, tmp_path,
+                                                   provider, endpoint, payload):
+    """Each backend speaks a different protocol; a shared shape would break them."""
+    from claw_soul.core.image_gen import generator as G
+
+    seen = {}
+
+    def fake_post(url, headers=None, timeout=None, **kw):
+        seen["url"] = url
+        return _fake_response(payload)
+
+    monkeypatch.setattr(G.requests, "post", fake_post)
+    ref = tmp_path / "face.jpg"
+    ref.write_bytes(b"\xff\xd8\xfffake")
+
+    gen = G.SeedreamGenerator(api_key="k", provider=provider,
+                              base_url=G.PROVIDERS[provider][1] or "http://x",
+                              model=G.PROVIDERS[provider][2] or "m")
+    out = gen.generate("a warm selfie", reference_image=str(ref))
+    assert endpoint in seen["url"]
+    assert out and (out[0].get("url") or out[0].get("b64"))
+
+
+def test_openai_uses_the_edit_endpoint_only_when_anchoring_a_face(monkeypatch, tmp_path):
+    """Face consistency depends on the reference reaching /images/edits."""
+    from claw_soul.core.image_gen import generator as G
+
+    seen = {}
+    monkeypatch.setattr(G.requests, "post",
+                        lambda url, **kw: (seen.__setitem__("url", url),
+                                           _fake_response({"data": [{"b64_json": "aGk="}]}))[1])
+    gen = G.SeedreamGenerator(api_key="k", provider="openai",
+                              base_url="https://api.openai.com/v1", model="gpt-image-1")
+
+    gen.generate("selfie")
+    assert seen["url"].endswith("/images/generations")
+
+    ref = tmp_path / "face.jpg"
+    ref.write_bytes(b"\xff\xd8\xfffake")
+    gen.generate("selfie", reference_image=str(ref))
+    assert seen["url"].endswith("/images/edits")
+
+
+def test_backends_without_reference_support_still_generate(monkeypatch, tmp_path):
+    """A backend that can't anchor a face should degrade, not raise."""
+    from claw_soul.core.image_gen import generator as G
+
+    monkeypatch.setattr(G.requests, "post",
+                        lambda *a, **kw: _fake_response({"images": [{"url": "https://x/f.png"}]}))
+    ref = tmp_path / "face.jpg"
+    ref.write_bytes(b"\xff\xd8\xfffake")
+    gen = G.SeedreamGenerator(api_key="k", provider="fal",
+                              base_url="https://fal.run", model="fal-ai/flux/schnell")
+    assert gen.generate("selfie", reference_image=str(ref))
+
+
+def test_image_guard_runs_before_any_backend_is_called(monkeypatch):
+    """The content chokepoint must not be bypassable by switching provider."""
+    from claw_soul.core.image_gen import generator as G
+
+    called = {"n": 0}
+    monkeypatch.setattr(G.requests, "post",
+                        lambda *a, **kw: (called.__setitem__("n", called["n"] + 1),
+                                          _fake_response({"data": []}))[1])
+    monkeypatch.setattr("claw_soul.core.image_gen.guard.assert_allowed",
+                        lambda p: (_ for _ in ()).throw(
+                            __import__("claw_soul.core.image_gen.guard",
+                                       fromlist=["x"]).ImageBlocked("nope")))
+    gen = G.SeedreamGenerator(api_key="k", provider="seedream",
+                              base_url="http://x", model="m")
+    with pytest.raises(G.SeedreamError):
+        gen.generate("blocked prompt")
+    assert called["n"] == 0, "guard must fire before the network call"

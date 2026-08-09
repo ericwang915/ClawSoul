@@ -2592,7 +2592,63 @@ def _optional_keys(cfg: dict) -> None:
             print("  → Deepgram key set")
 
     print()
+    _photo_backend(cfg)
     _channel_keys(cfg)
+
+
+# Backends she can take selfies with.  (key, label, needs a key?)
+_PHOTO_BACKENDS = [
+    ("gemini",    "Gemini (Google) — free tier, same key as vision", True),
+    ("openai",    "OpenAI — gpt-image-1", True),
+    ("seedream",  "Seedream (BytePlus) — ~$0.035 / image", True),
+    ("fal",       "fal.ai — FLUX", True),
+    ("replicate", "Replicate — any model", True),
+    ("sdwebui",   "Local Stable Diffusion WebUI — no key, nothing leaves your machine", False),
+]
+
+
+def _photo_backend(cfg: dict) -> None:
+    """Pick who draws her selfies.  Skipping is fine — everything else works."""
+    skills = cfg.setdefault("skills", {})
+    if skills.get("image", {}).get("provider") or skills.get("seedream", {}).get("apiKey"):
+        return  # already configured
+
+    print(_c("  Photos — she can send selfies (press Enter to skip):", _DIM))
+    for i, (_key, label, _needs) in enumerate(_PHOTO_BACKENDS, 1):
+        print(_c(f"    {i}) {label}", _DIM))
+
+    choice = input("  Choice [1-6, Enter to skip]: ").strip()
+    if not choice.isdigit() or not 1 <= int(choice) <= len(_PHOTO_BACKENDS):
+        print(_c("  → No photos for now (add a key later to turn them on)", _DIM))
+        print()
+        return
+
+    name, label, needs_key = _PHOTO_BACKENDS[int(choice) - 1]
+
+    if not needs_key:
+        base = input("  WebUI URL [http://localhost:7860]: ").strip()
+        skills.setdefault(name, {})["baseUrl"] = base or "http://localhost:7860"
+    else:
+        # She may already have a Gemini key for seeing the photos you send.
+        reuse = cfg.get("llm", {}).get(name, {}).get("apiKey", "")
+        if reuse:
+            ans = input(f"  Reuse your existing {label.split(' —')[0]} key? [Y/n]: ").strip().lower()
+            if ans in ("", "y", "yes"):
+                skills.setdefault(name, {})["apiKey"] = reuse
+                skills.setdefault("image", {})["provider"] = name
+                print(f"  → Photos on, via {name}")
+                print()
+                return
+        key = getpass.getpass("  API Key: ").strip()
+        if not key:
+            print(_c("  → No photos for now", _DIM))
+            print()
+            return
+        skills.setdefault(name, {})["apiKey"] = key
+
+    skills.setdefault("image", {})["provider"] = name
+    print(f"  → Photos on, via {name}")
+    print()
 
 
 def _channel_keys(cfg: dict) -> None:

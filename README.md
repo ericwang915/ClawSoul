@@ -212,8 +212,10 @@ the weather, what she's doing right now. Same face, every time.
 </tr>
 </table>
 
-Photos are generated with [Seedream](https://www.byteplus.com/en/product/modelark)
-(~$0.035 each) and are **optional** — skip the key and everything else still works.
+Photos are **optional** and work with whichever backend you already have a key for —
+Gemini, OpenAI, Seedream, fal.ai, Replicate, or a **local Stable Diffusion WebUI**
+where nothing about her appearance ever leaves your machine.
+Skip them all and everything else still works.
 </details>
 
 ---
@@ -224,7 +226,7 @@ Photos are generated with [Seedream](https://www.byteplus.com/en/product/modelar
 |---|---|---|
 | 💕 **Boyfriend or girlfriend** | 🎭 **Three-layer identity** (soul · persona · profile) | 🧠 **16 model providers** (OpenAI · Claude · Gemini · Grok · DeepSeek · Qwen · Groq · **Ollama**…) |
 | 💬 **Human texting** (bursts, reactions, typing rhythm) | 💖 **Emotional memory** + relationship stages | 📅 **Personal-date engine** (birthdays, plans) |
-| 📷 **AI selfies** with a consistent face | 🌆 **Daily life** grounded in a real city + weather | ⏰ **Proactive messages** that back off when ignored |
+| 📷 **AI selfies** with a consistent face (**7 image backends**, incl. fully local) | 🌆 **Daily life** grounded in a real city + weather | ⏰ **Proactive messages** that back off when ignored |
 | 🎙️ **Understands voice notes** (Deepgram) | 👀 **Sees your photos** (vision) | 🗣️ **8 languages**, native soul/persona |
 | 🌐 **Web dashboard** + 📱 **Telegram** | 🛠️ **Extensible skills** (LLM writes its own) | 💾 **All local** — SQLite + Markdown, zero cloud |
 
@@ -288,10 +290,8 @@ All runtime data lives under `~/.claw_soul/`:
     "telegram": { "token": "your-bot-token", "allowedUsers": [12345678] }
   },
   "skills": {
-    "seedream": {                          // AI selfies
-      "apiKey": "<ARK_API_KEY>",
-      "model": "seedream-5-0-lite-260128"
-    }
+    "image": { "provider": "gemini" },     // AI selfies — see table below
+    "gemini": { "apiKey": "<GEMINI_API_KEY>" }
   },
   "selfie": {
     "enabled": true,
@@ -327,9 +327,30 @@ All runtime data lives under `~/.claw_soul/`:
 
 ---
 
-## 📷 AI selfies (Seedream)
+## 📷 AI selfies
 
-Powered by ByteDance / Volcano Engine's Seedream model. **Three trigger paths:**
+**Seven backends** — set one key and the right one is picked automatically, or
+name it explicitly with `skills.image.provider` / `CLAW_IMAGE_PROVIDER`:
+
+| Backend | Default model | Key | Same face across shots |
+|---------|---------------|-----|------------------------|
+| **`gemini`** | `gemini-2.5-flash-image` | `CLAW_IMAGE_GEMINI_KEY` | ✅ |
+| **`openai`** | `gpt-image-1` | `CLAW_IMAGE_OPENAI_KEY` | ✅ |
+| **`seedream`** | `seedream-5-0-lite-260128` | `CLAW_SEEDREAM_API_KEY` | ✅ |
+| **`fal`** | `fal-ai/flux/schnell` | `CLAW_FAL_KEY` | — |
+| **`replicate`** | `black-forest-labs/flux-schnell` | `CLAW_REPLICATE_API_TOKEN` | — |
+| **`sdwebui`** | your loaded checkpoint | *none* | — |
+| **`custom`** | yours | `CLAW_IMAGE_API_KEY` | ✅ |
+
+`gemini` is the easiest start — the same key also lets her *see* the photos you
+send, so one signup covers both directions. `sdwebui` points at a local
+[Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) /
+Forge server: no key, no upload, **nothing about her appearance leaves your
+machine**. Backends without reference-image support still generate — they just
+lean on the seed and the appearance description for consistency instead of a
+face anchor.
+
+**Three trigger paths:**
 
 - **Scheduled** — fires at the times in `selfie.schedule` (default 10:00 / 16:00 / 20:00)
 - **Proactive** — attached to a proactive message with `proactiveProbability` chance
