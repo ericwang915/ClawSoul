@@ -96,6 +96,35 @@
     "sdwebui": {
       "baseUrl": "http://localhost:7860"
     },
+    "pollinations": {
+      "model": "flux"
+    },
+    "openrouter": {
+      "apiKey": "",
+      "model": "google/gemini-2.5-flash-image"
+    },
+    "bfl": {
+      "apiKey": "",
+      "model": "flux-kontext-pro"
+    },
+    "stability": {
+      "apiKey": "",
+      "model": "core"
+    },
+    "dashscope": {
+      "apiKey": "",
+      "model": "wan2.2-t2i-flash"
+    },
+    "comfyui": {
+      "baseUrl": "http://localhost:8188",
+      "checkpoint": "sd_xl_base_1.0.safetensors",
+      "workflow": ""
+    },
+    "custom": {
+      "apiKey": "",
+      "baseUrl": "",
+      "model": ""
+    },
     "twitter": {
       "consumerKey": "",
       "consumerSecret": "",
@@ -105,7 +134,11 @@
   },
   "selfie": {
     "enabled": true,
-    "schedule": ["10:00", "16:00", "20:00"],
+    "schedule": [
+      "10:00",
+      "16:00",
+      "20:00"
+    ],
     "chatId": null,
     "model": null,
     "maxDaily": 3,

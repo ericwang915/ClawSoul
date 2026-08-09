@@ -300,3 +300,243 @@ def test_image_guard_runs_before_any_backend_is_called(monkeypatch):
     with pytest.raises(G.SeedreamError):
         gen.generate("blocked prompt")
     assert called["n"] == 0, "guard must fire before the network call"
+
+
+# ── Image backends: async + local protocols ───────────────────────────────
+
+
+def _resp(payload=None, *, content=b"", ctype="application/json"):
+    class R:
+        ok, status_code = True, 200
+        headers = {"Content-Type": ctype}
+
+        def __init__(self):
+            self.content = content
+
+        def json(self):
+            if payload is None:
+                raise ValueError("no json")
+            return payload
+
+        def raise_for_status(self):
+            pass
+    return R()
+
+
+def _gen(monkeypatch, provider, **over):
+    from claw_soul.core.image_gen import generator as G
+    monkeypatch.setattr(G.time, "sleep", lambda *a: None)  # don't wait in tests
+    env, base, model, _ref = G.PROVIDERS[provider]
+    return G.SeedreamGenerator(api_key=over.pop("key", "k"), provider=provider,
+                               base_url=over.pop("base", base) or "http://x",
+                               model=over.pop("model", model) or "m")
+
+
+def test_openrouter_unwraps_the_data_url_it_answers_with(monkeypatch):
+    """It returns images inline as data URLs; callers must see plain base64."""
+    from claw_soul.core.image_gen import generator as G
+    seen = {}
+    monkeypatch.setattr(G.requests, "post", lambda url, **kw: (
+        seen.update(url=url, body=kw.get("json")),
+        _resp({"choices": [{"message": {"images": [
+            {"image_url": {"url": "data:image/png;base64,aGk="}}]}}]}))[1])
+    out = _gen(monkeypatch, "openrouter").generate("selfie")
+    assert seen["url"].endswith("/chat/completions")
+    assert seen["body"]["modalities"] == ["image", "text"]
+    assert out == [{"b64": "aGk="}]
+
+
+def test_bfl_submits_then_polls_until_the_image_is_ready(monkeypatch):
+    """A job that isn't Ready yet must not be read as a finished image."""
+    from claw_soul.core.image_gen import generator as G
+    monkeypatch.setattr(G.requests, "post",
+                        lambda *a, **kw: _resp({"id": "j1", "polling_url": "https://bfl/p"}))
+    states = iter([{"status": "Pending"}, {"status": "Pending"},
+                   {"status": "Ready", "result": {"sample": "https://bfl/i.jpg"}}])
+    polls = {"n": 0}
+    monkeypatch.setattr(G.requests, "get", lambda *a, **kw: (
+        polls.__setitem__("n", polls["n"] + 1), _resp(next(states)))[1])
+    assert _gen(monkeypatch, "bfl").generate("selfie") == [{"url": "https://bfl/i.jpg"}]
+    assert polls["n"] == 3, "must keep polling while the job is pending"
+
+
+def test_bfl_surfaces_a_failed_job_instead_of_hanging(monkeypatch):
+    from claw_soul.core.image_gen import generator as G
+    monkeypatch.setattr(G.requests, "post",
+                        lambda *a, **kw: _resp({"id": "j", "polling_url": "https://bfl/p"}))
+    monkeypatch.setattr(G.requests, "get",
+                        lambda *a, **kw: _resp({"status": "Content Moderated"}))
+    with pytest.raises(G.SeedreamError, match="Content Moderated"):
+        _gen(monkeypatch, "bfl").generate("selfie")
+
+
+def test_bfl_sends_the_reference_image_that_keeps_her_face(monkeypatch, tmp_path):
+    from claw_soul.core.image_gen import generator as G
+    seen = {}
+    monkeypatch.setattr(G.requests, "post", lambda url, **kw: (
+        seen.update(body=kw.get("json")),
+        _resp({"id": "j", "polling_url": "https://bfl/p"}))[1])
+    monkeypatch.setattr(G.requests, "get", lambda *a, **kw: _resp(
+        {"status": "Ready", "result": {"sample": "https://bfl/i.jpg"}}))
+    ref = tmp_path / "face.jpg"; ref.write_bytes(b"\xff\xd8\xffface")
+    _gen(monkeypatch, "bfl").generate("selfie", reference_image=str(ref))
+    assert seen["body"]["input_image"], "Kontext needs the reference to preserve the subject"
+
+
+def test_dashscope_polls_its_async_task(monkeypatch):
+    from claw_soul.core.image_gen import generator as G
+    seen = {}
+    monkeypatch.setattr(G.requests, "post", lambda url, **kw: (
+        seen.update(url=url, headers=kw.get("headers")),
+        _resp({"output": {"task_id": "t1"}}))[1])
+    states = iter([{"output": {"task_status": "RUNNING"}},
+                   {"output": {"task_status": "SUCCEEDED",
+                               "results": [{"url": "https://ds/i.png"}]}}])
+    monkeypatch.setattr(G.requests, "get", lambda url, **kw: (
+        seen.update(poll=url), _resp(next(states)))[1])
+    out = _gen(monkeypatch, "dashscope").generate("selfie")
+    assert seen["headers"]["X-DashScope-Async"] == "enable"
+    assert seen["poll"].endswith("/tasks/t1")
+    assert out == [{"url": "https://ds/i.png"}]
+
+
+def test_dashscope_raises_on_a_failed_task(monkeypatch):
+    from claw_soul.core.image_gen import generator as G
+    monkeypatch.setattr(G.requests, "post",
+                        lambda *a, **kw: _resp({"output": {"task_id": "t"}}))
+    monkeypatch.setattr(G.requests, "get", lambda *a, **kw: _resp(
+        {"output": {"task_status": "FAILED", "message": "bad prompt"}}))
+    with pytest.raises(G.SeedreamError, match="FAILED"):
+        _gen(monkeypatch, "dashscope").generate("selfie")
+
+
+def test_stability_asks_for_json_so_it_stays_on_the_base64_path(monkeypatch):
+    from claw_soul.core.image_gen import generator as G
+    seen = {}
+    monkeypatch.setattr(G.requests, "post", lambda url, **kw: (
+        seen.update(url=url, headers=kw.get("headers")),
+        _resp({"image": "aGk="}))[1])
+    assert _gen(monkeypatch, "stability").generate("selfie") == [{"b64": "aGk="}]
+    assert seen["url"].endswith("/v2beta/stable-image/generate/core")
+    assert seen["headers"]["Accept"] == "application/json"
+
+
+def test_pollinations_needs_no_key_at_all(monkeypatch):
+    """The point of this backend is working before you sign up anywhere."""
+    from claw_soul.core.image_gen import generator as G
+    seen = {}
+    monkeypatch.setattr(G.requests, "get", lambda url, **kw: (
+        seen.update(url=url, params=kw.get("params")),
+        _resp(content=b"\x89PNG\r\n\x1a\nx", ctype="image/png"))[1])
+    gen = G.SeedreamGenerator(api_key="", provider="pollinations",
+                              base_url="https://image.pollinations.ai", model="flux")
+    out = gen.generate("a warm selfie on a balcony")
+    assert "/prompt/" in seen["url"] and "%20" in seen["url"], "prompt must be URL-encoded"
+    assert out and out[0]["b64"]
+
+
+def test_keyless_backends_do_not_demand_an_api_key(monkeypatch):
+    from claw_soul.core.image_gen import generator as G
+    for name in ("sdwebui", "comfyui", "pollinations"):
+        assert G._read_api_key(name) == "", f"{name} should need no key"
+    with pytest.raises(G.SeedreamError, match="No API key"):
+        G._read_api_key("bfl")
+
+
+def test_comfyui_submits_a_graph_then_fetches_the_rendered_file(monkeypatch):
+    """ComfyUI is submit → poll history → download by filename, not one call."""
+    from claw_soul.core.image_gen import generator as G
+    seen = {}
+    monkeypatch.setattr(G.requests, "post", lambda url, **kw: (
+        seen.update(post=url, graph=kw.get("json", {}).get("prompt")),
+        _resp({"prompt_id": "p1"}))[1])
+
+    hist = iter([
+        {},  # not finished yet
+        {"p1": {"outputs": {"9": {"images": [
+            {"filename": "ClawSoul_001.png", "subfolder": "", "type": "output"}]}}}},
+    ])
+
+    def fake_get(url, **kw):
+        if "/history/" in url:
+            return _resp(next(hist))
+        seen["view"] = kw.get("params")
+        return _resp(content=b"\x89PNG\r\n\x1a\nx", ctype="image/png")
+
+    monkeypatch.setattr(G.requests, "get", fake_get)
+    out = _gen(monkeypatch, "comfyui", base="http://localhost:8188").generate(
+        "a warm selfie", size="832x1216", seed=42)
+
+    assert seen["post"].endswith("/prompt")
+    assert seen["view"]["filename"] == "ClawSoul_001.png"
+    assert out and out[0]["b64"]
+
+    latent = seen["graph"]["5"]["inputs"]
+    assert (latent["width"], latent["height"]) == (832, 1216), "size must reach the graph"
+    assert seen["graph"]["3"]["inputs"]["seed"] == 42, "seed must reach the sampler"
+    assert seen["graph"]["6"]["inputs"]["text"] == "a warm selfie", "prompt placeholder unfilled"
+    assert "%negative%" not in str(seen["graph"]), "placeholders must all be substituted"
+
+
+def test_comfyui_runs_your_own_workflow_when_you_point_at_one(monkeypatch, tmp_path):
+    """Anyone already using ComfyUI has a tuned graph; ours shouldn't override it."""
+    import json
+    from claw_soul.core.image_gen import generator as G
+
+    wf = tmp_path / "mine.json"
+    wf.write_text(json.dumps({
+        "1": {"class_type": "CLIPTextEncode", "inputs": {"text": "%prompt%"}},
+        "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0]}},
+    }))
+    monkeypatch.setattr(G, "_cfg", lambda p, f, env="", default="":
+                        str(wf) if f == "workflow" else default)
+
+    seen = {}
+    monkeypatch.setattr(G.requests, "post", lambda url, **kw: (
+        seen.update(graph=kw.get("json", {}).get("prompt")), _resp({"prompt_id": "p"}))[1])
+    monkeypatch.setattr(G.requests, "get", lambda url, **kw: (
+        _resp({"p": {"outputs": {"2": {"images": [
+            {"filename": "a.png", "subfolder": "", "type": "output"}]}}}})
+        if "/history/" in url
+        else _resp(content=b"\x89PNG\r\n\x1a\nx", ctype="image/png")))
+
+    _gen(monkeypatch, "comfyui").generate("her on the balcony")
+    assert set(seen["graph"]) == {"1", "2"}, "must run the user's graph, not the built-in"
+    assert seen["graph"]["1"]["inputs"]["text"] == "her on the balcony"
+
+
+def test_openai_size_follows_the_aspect_ratio(monkeypatch):
+    """Portrait selfies shouldn't be squared off by the size mapping."""
+    from claw_soul.core.image_gen.generator import _openai_size
+    assert _openai_size("2048x2048") == "1024x1024"
+    assert _openai_size("832x1216") == "1024x1536"
+    assert _openai_size("1216x832") == "1536x1024"
+    assert _openai_size("garbage") == "1024x1024"
+
+
+def test_every_declared_backend_is_actually_implemented():
+    """A name in PROVIDERS with no handler would fall through to the OpenAI
+    shape and fail confusingly at runtime."""
+    from claw_soul.core.image_gen.generator import PROVIDERS, SeedreamGenerator
+    generic = {"seedream", "custom"}  # deliberately share _gen_openai_like
+    missing = [p for p in PROVIDERS
+               if p not in generic and not hasattr(SeedreamGenerator, f"_gen_{p}")]
+    assert not missing, f"backends declared but not implemented: {missing}"
+
+
+def test_new_backends_cannot_ship_undocumented():
+    """A backend nobody can find is a backend nobody uses."""
+    import json
+    import pathlib
+    from claw_soul.core.image_gen.generator import PROVIDERS
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    env = (root / "deploy/local/.env.example").read_text()
+    readme = (root / "README.md").read_text()
+    skills = json.loads((root / "claw_soul.example.json").read_text())["skills"]
+
+    for name in PROVIDERS:
+        assert name in skills, f"{name} missing from claw_soul.example.json"
+        assert f"`{name}`" in readme, f"{name} missing from README.md"
+        assert name in env or f"CLAW_{name.upper()}" in env, \
+            f"{name} missing from .env.example"

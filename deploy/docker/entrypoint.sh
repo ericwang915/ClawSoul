@@ -85,14 +85,20 @@ llm["gemini"] = {
 # Any of these backends can draw her selfies.  Setting one key is enough:
 # the provider is inferred, same as for the LLM.
 IMAGE_BACKENDS = {
-    "seedream":  ("CLAW_SEEDREAM_API_KEY",  "seedream-5-0-lite-260128",
-                  "https://ark.ap-southeast.bytepluses.com/api/v3"),
-    "openai":    ("CLAW_IMAGE_OPENAI_KEY",  "gpt-image-1", ""),
-    "gemini":    ("CLAW_IMAGE_GEMINI_KEY",  "gemini-2.5-flash-image", ""),
-    "fal":       ("CLAW_FAL_KEY",           "fal-ai/flux/schnell", ""),
-    "replicate": ("CLAW_REPLICATE_API_TOKEN", "black-forest-labs/flux-schnell", ""),
-    "sdwebui":   ("",                       "", "http://localhost:7860"),
-    "custom":    ("CLAW_IMAGE_API_KEY",     "", ""),
+    "seedream":     ("CLAW_SEEDREAM_API_KEY",  "seedream-5-0-lite-260128",
+                     "https://ark.ap-southeast.bytepluses.com/api/v3"),
+    "openai":       ("CLAW_IMAGE_OPENAI_KEY",  "gpt-image-1", ""),
+    "gemini":       ("CLAW_IMAGE_GEMINI_KEY",  "gemini-2.5-flash-image", ""),
+    "openrouter":   ("CLAW_IMAGE_OPENROUTER_KEY", "google/gemini-2.5-flash-image", ""),
+    "bfl":          ("CLAW_BFL_API_KEY",       "flux-kontext-pro", ""),
+    "fal":          ("CLAW_FAL_KEY",           "fal-ai/flux/schnell", ""),
+    "replicate":    ("CLAW_REPLICATE_API_TOKEN", "black-forest-labs/flux-schnell", ""),
+    "stability":    ("CLAW_STABILITY_API_KEY", "core", ""),
+    "dashscope":    ("CLAW_DASHSCOPE_API_KEY", "wan2.2-t2i-flash", ""),
+    "sdwebui":      ("",                       "", "http://localhost:7860"),
+    "comfyui":      ("",                       "", "http://localhost:8188"),
+    "pollinations": ("",                       "flux", ""),
+    "custom":       ("CLAW_IMAGE_API_KEY",     "", ""),
 }
 
 image_provider = env("CLAW_IMAGE_PROVIDER").lower()
@@ -102,19 +108,25 @@ if not image_provider:
             image_provider = name
             break
     else:
-        # Vision and image-gen can share one Gemini key, so fall back to it
-        # last — an explicitly-set image key always wins.
-        if env("CLAW_SDWEBUI_BASE_URL"):
+        # Local servers, then keys already set for chat/vision. An explicitly
+        # set image key always wins over these.
+        if env("CLAW_COMFYUI_BASE_URL"):
+            image_provider = "comfyui"
+        elif env("CLAW_SDWEBUI_BASE_URL"):
             image_provider = "sdwebui"
         elif env("CLAW_GEMINI_API_KEY"):
             image_provider = "gemini"
+        elif env("CLAW_OPENROUTER_API_KEY"):
+            image_provider = "openrouter"
 
 skills = {}
 for name, (key_env, model, base) in IMAGE_BACKENDS.items():
     entry = {}
     key = env(key_env) if key_env else ""
-    if not key and name == "gemini" and image_provider == "gemini":
-        key = env("CLAW_GEMINI_API_KEY")
+    # Gemini and OpenRouter keys already set for chat/vision work for images
+    # too — don't make people paste the same key under a second name.
+    if not key and name == image_provider:
+        key = env(f"CLAW_{name.upper()}_API_KEY")
     if key:
         entry["apiKey"] = key
     override = env("CLAW_IMAGE_MODEL") if name == image_provider else ""

@@ -212,10 +212,10 @@ the weather, what she's doing right now. Same face, every time.
 </tr>
 </table>
 
-Photos are **optional** and work with whichever backend you already have a key for —
-Gemini, OpenAI, Seedream, fal.ai, Replicate, or a **local Stable Diffusion WebUI**
-where nothing about her appearance ever leaves your machine.
-Skip them all and everything else still works.
+Photos are **optional** and run on any of **13 backends** — including one that
+needs no account at all, two that reuse the key you already pasted, and
+**local ComfyUI / Stable Diffusion WebUI** where nothing about her appearance
+ever leaves your machine. Skip them entirely and everything else still works.
 </details>
 
 ---
@@ -226,7 +226,7 @@ Skip them all and everything else still works.
 |---|---|---|
 | 💕 **Boyfriend or girlfriend** | 🎭 **Three-layer identity** (soul · persona · profile) | 🧠 **16 model providers** (OpenAI · Claude · Gemini · Grok · DeepSeek · Qwen · Groq · **Ollama**…) |
 | 💬 **Human texting** (bursts, reactions, typing rhythm) | 💖 **Emotional memory** + relationship stages | 📅 **Personal-date engine** (birthdays, plans) |
-| 📷 **AI selfies** with a consistent face (**7 image backends**, incl. fully local) | 🌆 **Daily life** grounded in a real city + weather | ⏰ **Proactive messages** that back off when ignored |
+| 📷 **AI selfies** with a consistent face (**13 image backends**, incl. keyless + fully local) | 🌆 **Daily life** grounded in a real city + weather | ⏰ **Proactive messages** that back off when ignored |
 | 🎙️ **Understands voice notes** (Deepgram) | 👀 **Sees your photos** (vision) | 🗣️ **8 languages**, native soul/persona |
 | 🌐 **Web dashboard** + 📱 **Telegram** | 🛠️ **Extensible skills** (LLM writes its own) | 💾 **All local** — SQLite + Markdown, zero cloud |
 
@@ -329,26 +329,48 @@ All runtime data lives under `~/.claw_soul/`:
 
 ## 📷 AI selfies
 
-**Seven backends** — set one key and the right one is picked automatically, or
-name it explicitly with `skills.image.provider` / `CLAW_IMAGE_PROVIDER`:
+**Thirteen backends** — set one key and the right one is picked
+automatically, or name it explicitly with `skills.image.provider` /
+`CLAW_IMAGE_PROVIDER`:
 
 | Backend | Default model | Key | Same face across shots |
 |---------|---------------|-----|------------------------|
+| **`pollinations`** | `flux` | *none* | — |
 | **`gemini`** | `gemini-2.5-flash-image` | `CLAW_IMAGE_GEMINI_KEY` | ✅ |
+| **`openrouter`** | `google/gemini-2.5-flash-image` | `CLAW_IMAGE_OPENROUTER_KEY` | ✅ |
 | **`openai`** | `gpt-image-1` | `CLAW_IMAGE_OPENAI_KEY` | ✅ |
+| **`bfl`** | `flux-kontext-pro` | `CLAW_BFL_API_KEY` | ✅ |
 | **`seedream`** | `seedream-5-0-lite-260128` | `CLAW_SEEDREAM_API_KEY` | ✅ |
 | **`fal`** | `fal-ai/flux/schnell` | `CLAW_FAL_KEY` | — |
 | **`replicate`** | `black-forest-labs/flux-schnell` | `CLAW_REPLICATE_API_TOKEN` | — |
-| **`sdwebui`** | your loaded checkpoint | *none* | — |
+| **`stability`** | `core` | `CLAW_STABILITY_API_KEY` | — |
+| **`dashscope`** | `wan2.2-t2i-flash` | `CLAW_DASHSCOPE_API_KEY` | — |
+| **`comfyui`** | your workflow | *none* | — |
+| **`sdwebui`** | your checkpoint | *none* | — |
 | **`custom`** | yours | `CLAW_IMAGE_API_KEY` | ✅ |
 
-`gemini` is the easiest start — the same key also lets her *see* the photos you
-send, so one signup covers both directions. `sdwebui` points at a local
-[Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) /
-Forge server: no key, no upload, **nothing about her appearance leaves your
-machine**. Backends without reference-image support still generate — they just
-lean on the seed and the appearance description for consistency instead of a
-face anchor.
+Three of these need **no new signup at all**. `pollinations` needs no account
+whatsoever — photos work before you've registered anywhere. `gemini` and
+`openrouter` reuse the key you already pasted for vision or chat, so the
+one-line quickstart at the top of this README gives you a companion who can
+already send selfies.
+
+For the **local** options — [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
+or [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) —
+there's no key and no upload: **nothing about her appearance ever leaves your
+machine**. ComfyUI runs the built-in workflow by default, or point
+`skills.comfyui.workflow` at your own exported API-format graph and it will run
+that instead (`%prompt%`, `%negative%`, `%seed%`, `%width%`, `%height%`,
+`%model%` get substituted).
+
+If you care most about **her looking like the same person every time**, use a
+backend with reference-image support — `bfl` (FLUX.1 Kontext is built for
+exactly this), `seedream`, `openai`, `gemini`, or `openrouter`. The rest still
+generate; they just lean on the stable seed and the appearance description
+instead of a face anchor.
+
+Aggregators that speak the OpenAI image API (Together, DeepInfra, Novita,
+SiliconFlow, Fireworks…) need no dedicated backend — point `custom` at them.
 
 **Three trigger paths:**
 
@@ -389,7 +411,7 @@ ClawSoul/
 │   │   ├── memory/              # Markdown memory + emotional graph + milestones + temporal index
 │   │   ├── retrieval/           # BM25 + dense + RRF + LLM reranker
 │   │   ├── knowledge/           # knowledge-base RAG
-│   │   └── image_gen/           # selfie pipeline (7 backends)
+│   │   └── image_gen/           # selfie pipeline (13 backends)
 │   ├── channels/
 │   │   └── telegram_bot.py      # Telegram bot (streaming / voice / images)
 │   ├── scheduler/

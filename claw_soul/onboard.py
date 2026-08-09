@@ -2596,15 +2596,26 @@ def _optional_keys(cfg: dict) -> None:
     _channel_keys(cfg)
 
 
-# Backends she can take selfies with.  (key, label, needs a key?)
+# Backends she can take selfies with, cheapest-to-start first.  The full list
+# (fal, replicate, stability, dashscope, custom) lives in claw_soul.json —
+# a wizard that reads out thirteen options helps nobody.
+# (key, label, needs a key?)
 _PHOTO_BACKENDS = [
-    ("gemini",    "Gemini (Google) — free tier, same key as vision", True),
-    ("openai",    "OpenAI — gpt-image-1", True),
-    ("seedream",  "Seedream (BytePlus) — ~$0.035 / image", True),
-    ("fal",       "fal.ai — FLUX", True),
-    ("replicate", "Replicate — any model", True),
-    ("sdwebui",   "Local Stable Diffusion WebUI — no key, nothing leaves your machine", False),
+    ("pollinations", "Free, no signup — try it now (prompts go to a public service)", False),
+    ("gemini",       "Gemini (Google) — same key that lets her see your photos", True),
+    ("openrouter",   "OpenRouter — the same key you may already use for chat", True),
+    ("openai",       "OpenAI — gpt-image-1", True),
+    ("bfl",          "Black Forest Labs — FLUX Kontext, best at keeping one face", True),
+    ("seedream",     "Seedream (BytePlus) — ~$0.035 / image", True),
+    ("comfyui",      "Local ComfyUI — no key, nothing leaves your machine", False),
+    ("sdwebui",      "Local Stable Diffusion WebUI — no key, nothing leaves your machine", False),
 ]
+
+# Where a keyless backend lives, if it isn't a hosted service.
+_PHOTO_LOCAL_DEFAULTS = {
+    "comfyui": "http://localhost:8188",
+    "sdwebui": "http://localhost:7860",
+}
 
 
 def _photo_backend(cfg: dict) -> None:
@@ -2617,7 +2628,7 @@ def _photo_backend(cfg: dict) -> None:
     for i, (_key, label, _needs) in enumerate(_PHOTO_BACKENDS, 1):
         print(_c(f"    {i}) {label}", _DIM))
 
-    choice = input("  Choice [1-6, Enter to skip]: ").strip()
+    choice = input(f"  Choice [1-{len(_PHOTO_BACKENDS)}, Enter to skip]: ").strip()
     if not choice.isdigit() or not 1 <= int(choice) <= len(_PHOTO_BACKENDS):
         print(_c("  → No photos for now (add a key later to turn them on)", _DIM))
         print()
@@ -2626,8 +2637,12 @@ def _photo_backend(cfg: dict) -> None:
     name, label, needs_key = _PHOTO_BACKENDS[int(choice) - 1]
 
     if not needs_key:
-        base = input("  WebUI URL [http://localhost:7860]: ").strip()
-        skills.setdefault(name, {})["baseUrl"] = base or "http://localhost:7860"
+        default = _PHOTO_LOCAL_DEFAULTS.get(name)
+        if default:
+            base = input(f"  Server URL [{default}]: ").strip()
+            skills.setdefault(name, {})["baseUrl"] = base or default
+        else:
+            skills.setdefault(name, {})
     else:
         # She may already have a Gemini key for seeing the photos you send.
         reuse = cfg.get("llm", {}).get(name, {}).get("apiKey", "")
