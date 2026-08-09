@@ -12,9 +12,11 @@ Soul Mate Phase 1 upgrades:
   - Unfinished topic follow-up
   - Long-silence detection
 
-The single session "proactive:main" gives the agent continuity across all
-proactive messages, while shared Memory lets it reference past user
-conversations.
+Proactive messages are generated in the SAME session the user chats in, via
+``chat_proactive`` — the synthetic instruction ("it's morning, say something")
+is dropped from the transcript but her reply is kept, so when the user answers,
+the conversation actually contains what she just sent. A separate session would
+leave her with no memory of her own message.
 """
 
 from __future__ import annotations
@@ -234,9 +236,19 @@ def _build_wish_prompt(wish_text: str, now: datetime) -> str:
     )
 
 
+def _todays_personal_dates() -> list:
+    """Personal dates (their birthday, an interview…) landing today."""
+    try:
+        from ..core.personal_dates import PersonalDates
+        return PersonalDates().today_hits()
+    except Exception:
+        return []
+
+
 def _build_prompt(
     now: datetime,
     sentiment_context: dict[str, Any] | None = None,
+    agent: Any = None,
 ) -> str:
     time_str = now.strftime("%H:%M")
     slot = _time_slot(now.hour)
@@ -274,6 +286,42 @@ def _build_prompt(
                     "were chatting about last time."
                 )
 
+    # ── Follow up on something SPECIFIC ────────────────────────────────────
+    # A topic label alone ("work stress") can't produce "did the thing with
+    # your boss blow over?" — pull the actual event summary from the affect
+    # graph so she can reference the real thing.
+    thread = ""
+    if agent is not None:
+        try:
+            from ..core.humanize import open_thread
+            thread = open_thread(agent)
+        except Exception:
+            thread = ""
+    if thread:
+        sentiment_instruction += (
+            f"\n你还记着最近这件事 —— {thread}。如果自然的话，就具体问问它"
+            "（提到那件事本身，而不只是话题），要是对方当时不开心，先关心一句。"
+            if is_cn else
+            f"\nA recent thread you remember — {thread}. If it fits naturally, "
+            "follow up on THIS specifically (reference the actual thing, not "
+            "just the topic); if they seemed upset about it, lead with care."
+        )
+
+    # ── Their day comes first ──────────────────────────────────────────────
+    date_hits = _todays_personal_dates()
+    if date_hits:
+        labels = "；".join(h.label for h in date_hits[:2])
+        sentiment_instruction = (
+            f"最重要的一件事：今天是 {labels}。这条消息就该是关于这件事的，"
+            "用你自己的口吻（生日要真心实意地庆祝一下；面试/考试就好好加油）。"
+            "别写成普通的问候。\n" + sentiment_instruction
+            if is_cn else
+            f"IMPORTANT — today is: {labels}. Your message should be about THIS, "
+            "in your own voice (a birthday gets a real, personal celebration "
+            "from a partner; an interview or exam gets a warm good-luck). Skip "
+            "generic check-in content.\n" + sentiment_instruction
+        )
+
     if is_cn:
         weekday = _WEEKDAYS_ZH[now.weekday()]
         hint = _TIME_HINTS[slot]
@@ -310,6 +358,19 @@ def _build_prompt(
     return "\n".join(parts)
 
 
+def _proactive_chat(agent, prompt: str) -> str:
+    """Generate an unprompted message on the SHARED conversation.
+
+    Uses ``chat_proactive`` when available: it drops the synthetic instruction
+    ("it's morning — say something") from the transcript but keeps her reply,
+    so the next thing the user says lands in a conversation that actually
+    contains what she just sent. Plain ``chat`` would persist the instruction
+    as if the user had typed it.
+    """
+    fn = getattr(agent, "chat_proactive", None)
+    return fn(prompt) if callable(fn) else agent.chat(prompt)
+
+
 class ProactiveMessenger:
     """Probabilistic proactive messaging via Telegram, with Soul Mate emotional gating."""
 
@@ -323,6 +384,14 @@ class ProactiveMessenger:
         self._today: date | None = None
         self._today_count: int = 0
         self._running_tick: bool = False
+
+    def _chat_session_id(self, chat_id: int) -> str:
+        """The session the USER is talking in — proactive messages belong in
+        the same conversation, not a parallel one."""
+        try:
+            return self._telegram_bot._session_id(chat_id)  # noqa: SLF001
+        except Exception:
+            return f"telegram:{chat_id}"
 
     # ── Configuration helpers ────────────────────────────────────────────────
 
@@ -384,9 +453,18 @@ class ProactiveMessenger:
 
             # ── Soul Mate: emotional gating ──────────────────────────────────
             # Get sentiment context to adjust probability
-            session_id = "proactive:main"
+            session_id = self._chat_session_id(chat_id)
             agent = self._sm.get(session_id)
             sentiment_ctx = _get_sentiment_context(agent) if agent else {}
+
+            # ── Personal dates preempt ──────────────────────────────────────
+            # Their birthday / an interview today is the one thing that must
+            # never be lost to a dice roll. Quiet hours and the daily cap above
+            # still apply, so it lands on the first eligible morning tick.
+            if _todays_personal_dates():
+                logger.info("[Proactive] Personal date today — bypassing the roll.")
+                await self._generate_and_send(chat_id, now, sentiment_ctx)
+                return
 
             # Boost probability if user seems down
             if sentiment_ctx.get("sentiment") == "negative":
@@ -425,9 +503,11 @@ class ProactiveMessenger:
         now: datetime,
         sentiment_ctx: dict[str, Any] | None = None,
     ) -> None:
-        prompt = _build_prompt(now, sentiment_ctx)
-        session_id = "proactive:main"
+        session_id = self._chat_session_id(chat_id)
         agent = self._sm.get_or_create(session_id)
+        # Built after the agent exists so it can read the affect graph for a
+        # specific follow-up.
+        prompt = _build_prompt(now, sentiment_ctx, agent=agent)
         loop = asyncio.get_event_loop()
 
         # ── Soul Mate: update proactive count for milestones ────────────────
@@ -444,7 +524,7 @@ class ProactiveMessenger:
         try:
             async with self._sm.acquire(session_id):
                 response = await asyncio.wait_for(
-                    loop.run_in_executor(None, agent.chat, prompt),
+                    loop.run_in_executor(None, _proactive_chat, agent, prompt),
                     timeout=300.0,
                 )
         except Exception as exc:
@@ -489,13 +569,13 @@ class ProactiveMessenger:
         logger.info("[Proactive] Wish '%s' due (score=%.3f)", wish.text[:40], score)
 
         prompt = _build_wish_prompt(wish.text, now)
-        session_id = "proactive:main"
+        session_id = self._chat_session_id(chat_id)
         agent = self._sm.get_or_create(session_id)
         loop = asyncio.get_event_loop()
         try:
             async with self._sm.acquire(session_id):
                 response = await asyncio.wait_for(
-                    loop.run_in_executor(None, agent.chat, prompt),
+                    loop.run_in_executor(None, _proactive_chat, agent, prompt),
                     timeout=300.0,
                 )
         except Exception as exc:

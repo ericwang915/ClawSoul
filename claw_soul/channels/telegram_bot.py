@@ -146,6 +146,44 @@ class TelegramBot:
             return True
         return user_id in self._allowed_users
 
+    async def _remember_their_photo(self, agent, image_part: dict) -> None:
+        """Describe a photo the user sent in one line and file it in long-term
+        memory, keyed by date, so she can reference it days later.
+
+        One cheap vision call, off the reply path. Silent on any failure —
+        losing a memory is never worth delaying or breaking a reply.
+        """
+        try:
+            from datetime import datetime as _dt
+            provider = getattr(agent, "provider", None)
+            if provider is None or not getattr(provider, "supports_images", False):
+                return
+            loop = asyncio.get_event_loop()
+
+            def _describe() -> str:
+                r = provider.chat(
+                    messages=[{"role": "user", "content": [
+                        {"type": "text", "text":
+                         "Describe this photo in ONE short line (max 15 words) — "
+                         "what/where/mood. Output only the line."},
+                        image_part,
+                    ]}],
+                    tools=[], temperature=0.2, max_tokens=60,
+                )
+                return (r.choices[0].message.content or "").strip()
+
+            desc = await loop.run_in_executor(None, _describe)
+            if not desc:
+                return
+            stamp = _dt.now().strftime("%Y-%m-%d_%H%M%S")
+            agent.memory.remember(
+                f"Photo they sent me on {stamp[:10]}: {desc}",
+                key=f"their_photo_{stamp}",
+            )
+            logger.info("[Telegram] remembered their photo: %s", desc[:60])
+        except Exception as exc:
+            logger.debug("[Telegram] photo memory skipped: %s", exc)
+
     async def _maybe_save_chat_id(self, chat_id: int) -> None:
         """Learn and persist the user's Telegram chat_id to the local config
         the first time they message the bot — it's what the proactive
@@ -369,6 +407,12 @@ class TelegramBot:
             new_parts = [p for p in built if isinstance(p, dict) and p.get("type") == "image_url"]
 
         all_attachments = queued + new_parts
+
+        # Remember the photos THEY send, so she can bring one up later
+        # ("that beach pic you sent last week") instead of seeing it once and
+        # forgetting it. Background + best-effort: never blocks the reply.
+        if is_companion and new_parts:
+            asyncio.create_task(self._remember_their_photo(agent, new_parts[0]))
         if all_attachments:
             photo_placeholder = ("（我发了一张照片给你，看看然后自然地回应～）"
                                  if is_companion else "What's in this image?")
