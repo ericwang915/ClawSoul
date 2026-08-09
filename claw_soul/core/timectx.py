@@ -39,9 +39,6 @@ def set_current_timezone(tz_name: str | None) -> contextvars.Token:
     return _current_timezone.set(tz_name)
 
 
-def get_current_timezone() -> str | None:
-    return _current_timezone.get()
-
 
 def user_timezone() -> str | None:
     """Resolved IANA timezone for the HUMAN user.

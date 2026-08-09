@@ -3,12 +3,11 @@ Sanctum-landing API endpoints.
 
 Powers the redesigned dashboard landing page:
 
-  GET /api/sanctum/hero          → latest selfie/candid metadata
   GET /api/sanctum/photo/{name}  → stream a photo file
   GET /api/sanctum/status        → companion status + tagline
   GET /api/sanctum/milestones    → timeline + bonding level
 
-Hero + photo come from the on-disk ``PhotoAlbum``; status + milestones are
+Photos come from the on-disk ``PhotoAlbum``; status + milestones are
 computed from the local SQLite ``events`` / ``turns`` tables.
 """
 
@@ -29,11 +28,11 @@ from ..core.image_gen.photo_album import PhotoAlbum
 logger = logging.getLogger(__name__)
 
 
-# ── Hero ────────────────────────────────────────────────────────────────
+# ── Photos ──────────────────────────────────────────────────────────────
 
 
 def _build_hero_caption(entry: dict) -> str:
-    """Best-effort caption for the hero card.
+    """Best-effort caption for a photo card.
 
     Selfies have an explicit ``activity`` in their stored prompt; candid
     shots have a category emoji.  Either way we fall back to a generic
@@ -53,29 +52,6 @@ def _build_hero_caption(entry: dict) -> str:
         }
         return cap.get(category, "snapshot from earlier")
     return "snapshot from earlier"
-
-
-async def hero(request: Request) -> JSONResponse:
-    """The most recent photo (selfie or candid) for the Sanctum hero card.
-
-    Returns ``{photo: null}`` when the album is empty, so the frontend can
-    show its "no photo yet" placeholder.
-    """
-    album = PhotoAlbum()
-    latest = album.latest()  # any kind, just the newest
-    if not latest:
-        return JSONResponse({"photo": None})
-
-    filename = latest.get("filename") or os.path.basename(latest.get("path", ""))
-    return JSONResponse({
-        "photo": {
-            "filename":  filename,
-            "url":       f"/api/sanctum/photo/{filename}",
-            "caption":   _build_hero_caption(latest),
-            "kind":      latest.get("kind"),
-            "timestamp": latest.get("timestamp"),
-        },
-    })
 
 
 async def photos(request: Request) -> JSONResponse:
@@ -293,7 +269,6 @@ def compute_bonding_level(score: float) -> int:
 
 
 __all__ = [
-    "hero",
     "photo",
     "photos",
     "status",

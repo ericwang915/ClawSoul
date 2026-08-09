@@ -198,17 +198,6 @@ def _get_sentiment_context(agent: Any) -> dict[str, Any]:
     return result
 
 
-def _get_unfinished_topics(agent: Any) -> list[str]:
-    """Get topics that may need follow-up."""
-    try:
-        if not hasattr(agent.memory, "timeline"):
-            return []
-        topics = agent.memory.timeline.get_topics()
-        # Prefer topics with recent negative sentiment
-        return topics[:3] if topics else []
-    except Exception:
-        return []
-
 
 def _build_wish_prompt(wish_text: str, now: datetime) -> str:
     """Prompt the agent to surface a previously recorded wish to the user.

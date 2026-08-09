@@ -60,17 +60,6 @@ def _get_chat_lock() -> asyncio.Lock:
     return _chat_lock
 
 
-def _current_provider():
-    """The active LLM provider — the one bound to this app, or the one
-    server.py brought up at boot."""
-    if _provider is not None:
-        return _provider
-    try:
-        from .. import server as _srv
-        return _srv.get_active_provider()
-    except Exception:
-        return None
-
 
 def _global_scheduler():
     """The daemon's APScheduler instance, when server.py started one."""
@@ -135,22 +124,14 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app.add_api_route("/api/memory/index", _api_get_index, methods=["GET"])
     app.add_api_route("/api/memory/index", _api_save_index, methods=["POST"])
     app.add_api_route("/api/transcribe", _api_transcribe, methods=["POST"])
-    app.add_api_route("/api/marketplace/search", _api_marketplace_search, methods=["POST"])
-    app.add_api_route("/api/marketplace/browse", _api_marketplace_browse, methods=["GET"])
-    app.add_api_route("/api/marketplace/install", _api_marketplace_install, methods=["POST"])
 
     # Sanctum landing-page APIs
     from . import sanctum_api
-    app.add_api_route("/api/sanctum/hero", sanctum_api.hero, methods=["GET"])
     app.add_api_route("/api/sanctum/photos", sanctum_api.photos, methods=["GET"])
     app.add_api_route("/api/sanctum/photo/{filename}", sanctum_api.photo, methods=["GET"])
     app.add_api_route("/api/sanctum/status", sanctum_api.status, methods=["GET"])
     app.add_api_route("/api/sanctum/milestones", sanctum_api.milestones, methods=["GET"])
-    app.add_api_route("/api/marketplace/stats", _api_marketplace_stats, methods=["GET"])
     # Legacy aliases
-    app.add_api_route("/api/skillhub/search", _api_marketplace_search, methods=["POST"])
-    app.add_api_route("/api/skillhub/browse", _api_marketplace_browse, methods=["GET"])
-    app.add_api_route("/api/skillhub/install", _api_marketplace_install, methods=["POST"])
     app.add_api_route("/api/channels", _api_channels_status, methods=["GET"])
     app.add_api_route("/api/channels/restart", _api_channels_restart, methods=["POST"])
     app.add_api_route("/api/files/clear", _api_clear_files, methods=["POST"])
@@ -839,94 +820,8 @@ async def _api_transcribe(request: Request):
     return {"ok": True, "transcript": transcript}
 
 
-async def _api_marketplace_search(request: Request):
-    """Search ClawHub marketplace."""
-    from ..core import skillhub
-
-    try:
-        body = await request.json()
-        query = body.get("query", "").strip()
-        if not query:
-            return JSONResponse({"ok": False, "error": "Query is required."}, status_code=400)
-        limit = int(body.get("limit", 10))
-        results = await skillhub.search_async(query, limit=limit)
-        return {"ok": True, "results": results}
-    except RuntimeError as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
 
-async def _api_marketplace_browse(request: Request):
-    """Browse ClawHub catalog."""
-    from ..core import skillhub
-
-    try:
-        limit = int(request.query_params.get("limit", 20))
-        sort = request.query_params.get("sort", "score")
-        results = await skillhub.browse_async(limit=limit, sort=sort)
-        return {"ok": True, "results": results}
-    except RuntimeError as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
-
-
-async def _api_marketplace_install(request: Request):
-    """Install a skill from ClawHub and hot-reload into the running agent."""
-    from ..core import skillhub
-
-    try:
-        body = await request.json()
-        skill_id = body.get("skill_id", "").strip()
-        if not skill_id:
-            return JSONResponse({"ok": False, "error": "skill_id is required."}, status_code=400)
-
-        path = await skillhub.install_skill_async(skill_id)
-
-        agent = _get_agent()
-        skill_count = 0
-        installed_name = ""
-        if agent is not None:
-            agent._refresh_skill_registry()
-            skill_count = len(agent._registry.discover())
-            for sm in agent._registry.discover():
-                if sm.path == path:
-                    installed_name = sm.name
-                    break
-
-        if not installed_name:
-            import re as _re
-            md_path = os.path.join(path, "SKILL.md")
-            try:
-                md_text = open(md_path, encoding="utf-8").read()
-                m = _re.search(r"^name:\s*(.+)$", md_text, _re.MULTILINE)
-                installed_name = m.group(1).strip() if m else skill_id
-            except OSError:
-                installed_name = skill_id
-
-        return {
-            "ok": True,
-            "path": path,
-            "skill_name": installed_name,
-            "skill_count": skill_count,
-            "message": f"Skill '{installed_name}' installed and ready to use.",
-        }
-    except RuntimeError as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
-
-
-async def _api_marketplace_stats(request: Request):
-    """Get ClawHub marketplace statistics."""
-    from ..core import skillhub
-
-    try:
-        result = await skillhub.verify_api_async()
-        return result
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
 
 async def _maybe_start_channels() -> list[str]:
@@ -1038,23 +933,27 @@ async def _api_channels_restart(request: Request):
 
 
 def _reload_agent_identity() -> None:
-    """Reload the agent's soul/persona/tools from disk without full reset."""
-    global _agent
-    if _agent is None:
-        return
+    """Re-read soul/persona/tools from disk without dropping the conversation.
+
+    Editing her identity shouldn't cost you the thread you're in the middle
+    of, so this rebuilds the system prompt in place rather than resetting.
+    """
+    agent = _agents.get(_tenant_cache_key())
+    if agent is None:
+        return          # nothing built yet; it'll read the new files on boot
     from ..core.agent import _load_text_dir_or_file
     home = config.CLAWSOUL_HOME
-    _agent.soul_instruction = _load_text_dir_or_file(
+    agent.soul_instruction = _load_text_dir_or_file(
         str(home / "context" / "soul"), label="Soul"
     )
-    _agent.persona_instruction = _load_text_dir_or_file(
+    agent.persona_instruction = _load_text_dir_or_file(
         str(home / "context" / "persona"), label="Persona"
     )
-    _agent.tools_notes = _load_text_dir_or_file(
+    agent.tools_notes = _load_text_dir_or_file(
         str(home / "context" / "tools"), label="Tools"
     )
-    _agent._needs_onboarding = False
-    _agent._init_system_prompt()
+    agent._needs_onboarding = False
+    agent._init_system_prompt()
 
 
 # ── Files management ──────────────────────────────────────────────────────────

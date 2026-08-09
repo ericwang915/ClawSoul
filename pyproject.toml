@@ -39,17 +39,21 @@ dependencies = [
     "tavily-python",
     "rank-bm25>=0.2",
     "numpy>=1.24",
-    "scikit-learn>=1.3",
     "beautifulsoup4",
     "requests",
 ]
 
-# Optional feature sets — the base install needs none of these.
+# Optional feature sets.
+#   pip install -e ".[search]"   # TF-IDF recall — better memory search, but
+#                                #   pulls in scipy (~130 MB). Without it
+#                                #   retrieval falls back to character-bigram
+#                                #   similarity, which still works.
 #   pip install -e ".[twitter]"  # the Twitter/X skill
-#   pip install -e ".[all]"      # everything
+#   pip install -e ".[all]"      # everything (what the Docker image installs)
 [project.optional-dependencies]
+search = ["scikit-learn>=1.3"]
 twitter = ["tweepy>=4.14"]
-all = ["tweepy>=4.14"]
+all = ["scikit-learn>=1.3", "tweepy>=4.14"]
 
 [project.scripts]
 claw_soul = "claw_soul.main:main"

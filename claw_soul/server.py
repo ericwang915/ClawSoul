@@ -69,8 +69,6 @@ def get_global_scheduler():
     return _global_scheduler
 
 
-def get_active_provider():
-    return _active_provider
 
 
 async def start_telegram(

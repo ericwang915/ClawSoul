@@ -189,3 +189,78 @@ def test_example_config_has_no_dead_keys():
     cfg = json.loads((ROOT / "claw_soul.example.json").read_text())
     assert "plans" not in cfg
     assert "supabase" not in json.dumps(cfg).lower()
+
+
+# ── Nothing ships that can't run ──────────────────────────────────────────
+
+
+def test_every_registered_endpoint_actually_imports():
+    """/api/marketplace/* and /api/skillhub/* 500'd on every call for months:
+    they imported core.skillhub, a module deleted long ago. A route that
+    can't execute is worse than a missing one."""
+    import re
+    app_src = (ROOT / "claw_soul/web/app.py").read_text()
+    for mod in re.findall(r"from \.\.core import (\w+)", app_src):
+        assert (ROOT / f"claw_soul/core/{mod}.py").exists() or \
+               (ROOT / f"claw_soul/core/{mod}").is_dir(), \
+            f"web/app.py imports core.{mod}, which does not exist"
+
+
+def test_dashboard_has_no_javascript_that_can_never_run():
+    """Superseded panel code accumulated here — refreshSanctum* was replaced
+    by refreshToday* and left behind, referencing DOM that never existed."""
+    import re
+    html = (ROOT / "claw_soul/web/static/index.html").read_text()
+    funcs = set(re.findall(r"function\s+([\w$]+)\s*\(", html))
+    uncalled = sorted(f for f in funcs
+                      if len(re.findall(r"\b" + re.escape(f) + r"\b", html)) <= 1)
+    assert not uncalled, f"defined but never called: {uncalled}"
+
+
+def test_editing_her_identity_by_hand_is_reachable_and_works():
+    """The modal was fully built but nothing opened it, and the save path
+    500'd on a global that no longer existed — while still writing the file,
+    so it reported failure after succeeding."""
+    import re
+    html = (ROOT / "claw_soul/web/static/index.html").read_text()
+    for doc in ("soul", "persona", "tools", "index"):
+        assert f"openIdentityEditor('{doc}')" in html, f"no way to open the {doc} editor"
+
+    app_src = (ROOT / "claw_soul/web/app.py").read_text()
+    reload_fn = re.search(r"def _reload_agent_identity.*?(?=\n\n\n)", app_src, re.S).group(0)
+    assert "global _agent\n" not in reload_fn, "still references the removed _agent global"
+
+
+def test_retrieval_still_works_without_the_optional_search_extra():
+    """scikit-learn pulls in scipy (~130 MB). It's a middle-tier fallback, so
+    the base install must not need it."""
+    import builtins
+    import importlib
+    real = builtins.__import__
+
+    def blocked(name, *a, **k):
+        if name.split(".")[0] in ("sklearn", "scipy", "sentence_transformers"):
+            raise ImportError("simulated: not installed")
+        return real(name, *a, **k)
+
+    builtins.__import__ = blocked
+    try:
+        from claw_soul.core.retrieval import dense
+        importlib.reload(dense)
+        r = dense.EmbeddingRetriever()
+        assert r.backend_name == "bigram-jaccard"
+        r.fit([{"content": "she loves rainy mornings"},
+               {"content": "his boss moved the deadline again"}])
+        hits = r.retrieve("the deadline moved", 1)
+        assert hits and "deadline" in hits[0][1]["content"]
+    finally:
+        builtins.__import__ = real
+        from claw_soul.core.retrieval import dense as d2
+        importlib.reload(d2)
+
+
+def test_heavy_extras_are_not_required_dependencies():
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    required = pyproject.split("[project.optional-dependencies]")[0]
+    assert "scikit-learn" not in required, "scikit-learn must stay optional"
+    assert "scikit-learn" in pyproject, "...but still offered as an extra"
