@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claw_soul"
-version = "1.0.0"
+version = "0.1.0"
 description = "ClawSoul — your virtual AI partner (boyfriend or girlfriend) on Telegram, powered by LLM with memory, RAG, and skills."
 readme = "README.md"
 license = {text = "AGPL-3.0-only"}

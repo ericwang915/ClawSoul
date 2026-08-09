@@ -1,5 +1,8 @@
-include LICENSE README.md
-recursive-include claw_soul *.py *.html *.css *.js *.png *.ico
+include LICENSE README.md README.zh-CN.md SAFETY.md SECURITY.md
+# *.md and *.jpg matter at runtime: the bundled personas, souls and skills are
+# Markdown, and the dashboard ships a default hero image. Omitting them built
+# an sdist that installed a companion with no personality.
+recursive-include claw_soul *.py *.md *.html *.css *.js *.png *.jpg *.ico *.yaml *.yml *.sh
 recursive-include tests *.py
 
 exclude claw_soul.json

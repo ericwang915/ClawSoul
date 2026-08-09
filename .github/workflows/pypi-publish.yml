@@ -1,0 +1,56 @@
+name: Publish to PyPI
+
+# Publishes on every version tag (v*), so `pip install claw-soul` and
+# `pipx install claw-soul` work without cloning.
+#
+# Uses PyPI Trusted Publishing (OIDC) — no API token to store or rotate.
+# One-time setup: on pypi.org → your project → Publishing → add a GitHub
+# publisher with owner=ericwang915, repo=ClawSoul, workflow=pypi-publish.yml.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Check metadata
+        run: |
+          python -m pip install --upgrade twine
+          twine check dist/*
+
+      - name: Verify the wheel installs and the CLI runs
+        run: |
+          python -m venv /tmp/verify
+          /tmp/verify/bin/pip install dist/*.whl
+          /tmp/verify/bin/claw_soul --help
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # required for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -59,19 +59,36 @@ talking. **One text-LLM key is all you need** — it's auto-detected, so any of
 way. Prefer nothing leaving your machine? Point it at [Ollama](https://ollama.com)
 and use no key at all. Want her on your phone? Add a Telegram bot token.
 
-<details>
-<summary>Other ways to run (compose · pip · Fly)</summary>
+### Prefer Python? Install it directly
 
 ```bash
-# docker compose (edit deploy/local/.env first)
-cp deploy/local/.env.example deploy/local/.env
+pipx install claw-soul          # or: pip install claw-soul
+claw_soul onboard               # pick a provider, paste your key, design your companion
+claw_soul start                 # dashboard at http://localhost:7788
+```
+
+<details>
+<summary>More ways to install and run</summary>
+
+```bash
+# Latest from GitHub, no clone needed
+pip install "git+https://github.com/ericwang915/ClawSoul.git"
+
+# From a local clone (contributors — editable install)
+git clone https://github.com/ericwang915/ClawSoul.git && cd ClawSoul
+pip install -e ".[all]"         # extras: cloud (S3), twitter, all
+pytest tests/                   # 208 tests
+
+# docker compose
+cp deploy/local/.env.example deploy/local/.env   # add your key
 docker compose -f deploy/local/docker-compose.yml up --build
 
-# pip (Python 3.10+)
-pip install -e .
-claw_soul onboard    # pick a provider, paste your key, design your companion
-claw_soul start      # dashboard at http://localhost:7788   (or: claw_soul chat)
+# Terminal-only, no web UI
+claw_soul chat
 ```
+
+CLI: `onboard` · `start` (`-f` foreground) · `stop` · `status` · `chat`.
+Everything lives in `~/.claw_soul/` — delete that folder and it's gone.
 
 Deploy your own instance to the cloud: see [deploy/docker/README.md](deploy/docker/README.md).
 </details>

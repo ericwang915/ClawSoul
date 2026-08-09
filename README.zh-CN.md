@@ -43,19 +43,36 @@ docker run -e CLAW_OPENROUTER_API_KEY=sk-or-... -p 7788:7788 -v clawsoul:/data g
 
 打开 **http://localhost:7788**，在向导里捏好你的伴侣，就可以聊了。**只需要一个文本大模型的 key** —— 而且会自动识别，`CLAW_OPENAI_API_KEY`、`CLAW_DEEPSEEK_API_KEY`、`CLAW_CLAUDE_API_KEY`、`CLAW_QWEN_API_KEY`、`CLAW_GLM_API_KEY`…… 任意一个都行。希望数据完全不出本机？指向 [Ollama](https://ollama.com)，连 key 都不用。想让她住进你手机？再加一个 Telegram bot token。
 
-<details>
-<summary>其他运行方式（compose · pip · Fly）</summary>
+### 更喜欢 Python？直接装
 
 ```bash
-# docker compose（先编辑 deploy/local/.env）
-cp deploy/local/.env.example deploy/local/.env
+pipx install claw-soul          # 或者：pip install claw-soul
+claw_soul onboard               # 选模型、填 key、设计你的伴侣
+claw_soul start                 # 面板在 http://localhost:7788
+```
+
+<details>
+<summary>更多安装与运行方式</summary>
+
+```bash
+# 直接装 GitHub 上的最新版，不用 clone
+pip install "git+https://github.com/ericwang915/ClawSoul.git"
+
+# 从本地 clone 装（贡献者用，可编辑模式）
+git clone https://github.com/ericwang915/ClawSoul.git && cd ClawSoul
+pip install -e ".[all]"         # 可选 extras：cloud（S3）、twitter、all
+pytest tests/                   # 208 个测试
+
+# docker compose
+cp deploy/local/.env.example deploy/local/.env   # 填上你的 key
 docker compose -f deploy/local/docker-compose.yml up --build
 
-# pip（Python 3.10+）
-pip install -e .
-claw_soul onboard    # 选模型、填 key、设计你的伴侣
-claw_soul start      # 面板在 http://localhost:7788   （或者：claw_soul chat）
+# 只用终端，不开网页
+claw_soul chat
 ```
+
+命令：`onboard` · `start`（`-f` 前台）· `stop` · `status` · `chat`。
+所有数据都在 `~/.claw_soul/`，删掉这个文件夹就干干净净。
 
 部署到云上跑你自己的一份：见 [deploy/docker/README.md](deploy/docker/README.md)。
 </details>
