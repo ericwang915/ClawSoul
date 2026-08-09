@@ -121,12 +121,11 @@ def ensure_reference(
     model: str | None = None,
 ) -> str | None:
     """Return a local path to the companion's canonical face reference,
-    creating or restoring it if it doesn't exist locally yet.
+    creating it the first time if it doesn't exist yet.
 
-    Order: local file → restore from Tigris (survives machine destroy) →
-    bootstrap a fresh face-card and persist it both places.  Best-effort:
-    any failure returns None and the caller just generates without a
-    reference (degrades to the old seed-only behaviour).
+    This is the anchor that makes every selfie the same person, so it's
+    generated once and reused. Best-effort: any failure returns None and
+    the caller generates without a reference (seed-only consistency).
     """
     local = album.primary_reference()
     if local:
@@ -211,7 +210,7 @@ def take_selfie(
     # Pre-flight disk quota check — refuse BEFORE spending an API call when
     # there's no room to save the result anyway. ~700 KB is a conservative
     # over-estimate of a 2048x2048 JPEG selfie.
-    from ..quota import check_disk, check_photos
+    from ..quota import check_disk, check_photos, record_photo
     over = check_photos()
     if over:
         raise SeedreamError(over)
@@ -230,7 +229,7 @@ def take_selfie(
 
     # Canonical face reference — built once and reused, so the face stays the
     # same person across changing scenes/outfits (seed + text alone drift when
-    # the prompt varies). Restores from Tigris on a fresh machine.
+    # the prompt varies).
     reference_path = ensure_reference(album, generator, model=model) if use_reference else None
 
     with tempfile.TemporaryDirectory(prefix="selfie_") as tmp:
@@ -246,6 +245,7 @@ def take_selfie(
         )
         if not paths:
             raise SeedreamError("Generator returned no images.")
+        record_photo()
         src = paths[0]
         saved = album.add(
             src,

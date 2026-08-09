@@ -285,7 +285,7 @@ class Agent:
 
         # Detect if the user has set up their own soul/persona (not template defaults)
         self._needs_onboarding = not self._has_user_identity(soul_path, persona_path)
-        # In SaaS mode the web wizard is the only valid onboarding path —
+        # The web wizard is the only valid onboarding path —
         # the worker refuses to chat until user_companion exists in Pg.
         # The legacy chat-driven onboarding flow would only confuse the
         # user; force it off so even a hydration glitch can't trigger it.
@@ -1275,15 +1275,15 @@ Don't repeat this if `bot_name` already exists in memory.
         one memory query); guarded by VOLATILE_PREFIX so the Anthropic provider
         keeps it out of the prefix cache.
         """
-        from . import tenancy
+        from . import timectx
 
         # The AI persona has its own home timezone — that's the clock she lives
         # by ("morning", "late night", today_plan.md activities, etc.). The user
         # may be in a different timezone; we surface both so she can say
         # "morning here, but it's evening for you".
-        bot_now = tenancy.now_in_bot_tz()
-        bot_tz = tenancy.bot_timezone()
-        user_tz = tenancy.user_timezone()
+        bot_now = timectx.now_in_bot_tz()
+        bot_tz = timectx.bot_timezone()
+        user_tz = timectx.user_timezone()
 
         def _format(dt) -> str:
             hour24 = dt.hour
@@ -1389,7 +1389,7 @@ Don't repeat this if `bot_name` already exists in memory.
         except Exception:
             pass  # safety scan must never break the turn
         if user_tz and user_tz != bot_tz:
-            user_now = tenancy.now_in_user_tz()
+            user_now = timectx.now_in_user_tz()
             parts.append(
                 f"The USER's local time ({user_tz}): {_format(user_now)}"
             )
@@ -1560,7 +1560,7 @@ Don't repeat this if `bot_name` already exists in memory.
             pass
 
         # Upcoming cultural holidays for the persona's country — pulled
-        # from the seeded ``culture_calendars`` store (Pg/Tigris).  Helps
+        # from the local holiday dataset.  Helps
         # the agent ground proactive messages ("happy Thanksgiving!", "have
         # a chill long weekend") without having to remember the calendar
         # internally.  Skipped silently if no calendar is seeded for the
@@ -2144,7 +2144,7 @@ Don't repeat this if `bot_name` already exists in memory.
         """
         user_input = self._normalize_input(user_input)
 
-        # Daily-message quota gate (same logic as chat()).
+        # Optional self-imposed daily cap, same as chat().
         from .quota import check_messages, record_message
         refusal = check_messages()
         if refusal:

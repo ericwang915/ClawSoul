@@ -455,18 +455,16 @@ def _occupation_label(ch: dict, zh: bool) -> str:
 
 
 # The per-country city list (and the "vibe" blurbs, coordinates, timezone,
-# and signature events) all live in the seeded city store now — Tigris
-# `culture/cities/<CC>.json` + Pg `city_profiles`, see
-# scripts/seed_city_profiles.py + claw_soul.core.city.  Nothing about
-# specific places is hardcoded here anymore.
+# and signature events) all live in the local city dataset — see
+# claw_soul.core.city.  Nothing about specific places is hardcoded here.
 
 
 def random_region(country: str) -> str:
     """Pick a default city for the agent if ``companionRegion`` was left blank.
 
-    Reads the city store (authored order = pick order; first is the primary
-    city).  Empty string if the country isn't seeded — the wizard's city
-    field is free-text, so the user can still type their own."""
+    Reads the local city dataset (authored order = pick order; first is the
+    primary city).  Empty string if there's no dataset for that country —
+    the wizard's city field is free-text, so the user can still type one."""
     from .core import city as _city
     cities = _city.get_country_cities(country) or {}
     names = list(cities)
@@ -474,11 +472,12 @@ def random_region(country: str) -> str:
 
 
 def city_background(country: str, region: str) -> str:
-    """Look up the city's "vibe" blurb for (country, region).
+    """The city's "vibe" blurb for (country, region), or "" if we have none.
 
-    Reads the seeded city store (Tigris/Pg via ``core.city``); falls back
-    to a 1-line generic stub if the city isn't seeded — the LLM can still
-    ad-lib from the country alone.
+    Empty is the right answer when there's no local dataset for the city:
+    both callers already write their own "Lives in <city>, <country>." line
+    in the persona's language, so a generic stub here would only repeat it —
+    and the old stub repeated it *in Chinese*, into English personas too.
     """
     if not region:
         return ""
@@ -489,11 +488,7 @@ def city_background(country: str, region: str) -> str:
             return prof["vibe"]
     except Exception:
         pass
-    country_label = next(
-        (lbl for k, lbl, _ in _COUNTRIES if k.upper() == (country or "").upper()),
-        country,
-    )
-    return f"住在 {region}（{country_label}）。具体细节由对话中自然展开。"
+    return ""
 
 
 def country_to_culture(country: str) -> str:

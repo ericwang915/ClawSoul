@@ -14,7 +14,6 @@ regenerate SOUL.md / PERSONA.md / PROFILE.md under the active tenant's
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -196,49 +195,29 @@ def validate(choices: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
-# ── Read / write current user's companion config ────────────────────────────
+# ── Read / write the companion config ───────────────────────────────────────
 #
-# Source of truth: Postgres (`public.user_companion`, migration 007), so
-# the web dashboard and the per-user worker — which live in different
-# Fly containers with different filesystems — share state.  We still
-# materialize the choices to local files (claw_soul.json + the three
-# identity .md files) because the Agent / persona pipeline reads from
-# disk; Postgres is the canonical store, local files are a cache.
+# claw_soul.json is the store; the three identity .md files are generated
+# from it because the Agent / persona pipeline reads from disk.
 
 
 def load_choices() -> dict | None:
-    """Return the current tenant's saved companion choices, or None.
-
-    Priority: Postgres → local config JSON.  Local cache is kept so
-    single-tenant / dev installs without Supabase configured still work.
-    """
-    pg = _load_choices_pg()
-    if pg is not None:
-        return pg
+    """Return the saved companion choices, or None if setup hasn't run."""
     cfg = config.load()
     return cfg.get("companion") if cfg else None
 
 
 def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
-    """Validate, persist (Pg + local), and regenerate identity files.
+    """Validate, persist, and regenerate the identity files.
 
     Order:
       1. Validate.
-      2. Write to Postgres (the canonical store the worker reads).
-      3. Materialize claw_soul.json + SOUL.md / PERSONA.md / PROFILE.md
-         on the local filesystem — the Agent's persona loader reads
-         from there, and we want web-side preview features to stay
-         instant.
-      4. Flip user_machines.onboarded=true so the router scheduler
-         starts firing proactive/selfie/planner ticks (best-effort).
+      2. Write claw_soul.json.
+      3. Materialize SOUL.md / PERSONA.md / PROFILE.md — the Agent's
+         persona loader reads those from disk.
     """
     cleaned = validate(choices)
 
-    # 1. Postgres (the canonical store)
-    _save_choices_pg(cleaned)
-
-    # 2. Local cache (claw_soul.json) — keeps the Agent's existing
-    #    config-file reads working on whichever container saved this.
     cfg = config.load()
     cfg["companion"] = cleaned
     _update_proactive_config(cfg, cleaned["proactivity"])
@@ -269,190 +248,31 @@ def apply_choices(choices: dict[str, Any]) -> dict[str, Any]:
 
     _persist_config(cfg)
 
-    # 3. Identity files.  In SaaS mode the dashboard host (legacy
-    # `clawsoul` app) doesn't actually serve Telegram traffic anymore —
-    # workers do, and they materialize their own copy from Pg via
-    # _hydrate_persona_from_pg on boot.  Writing identity files on the
-    # dashboard host just leaves dead state on the legacy volume.
-    # Single-tenant / dev installs still need the local copy.
-    if not _in_saas_dashboard_mode():
-        context_dir = str(config.CLAWSOUL_HOME / "context")
-        Path(context_dir).mkdir(parents=True, exist_ok=True)
-        # Non-CN/EN personas get their identity docs LLM-localized once per
-        # (identity, language). When that's already done, skip regenerating
-        # the English templates — they'd overwrite the localized files.
-        from .core import localize as _localize
-        _sig = _localize.identity_signature(cleaned)
-        _lang = cleaned.get("userLanguage") or "en"
-        if not _localize.is_current(context_dir, _lang, _sig):
-            _generate_soul_file(cleaned, context_dir)
-            _generate_persona_file(cleaned, context_dir)
-            _generate_profile_file(cleaned, context_dir)
-            _localize.localize_identity_files_async(context_dir, _lang, _sig)
-        _generate_appearance_file(cleaned, context_dir)
-
-    # 4. Best-effort: flip onboarded on the user's user_machines row so
-    #    the scheduler picks them up at the next reconcile.  Failure
-    #    here doesn't roll back — the data is already saved.
-    _flip_onboarded_pg()
+    # Identity files — the Agent's persona loader reads these from disk.
+    context_dir = str(config.CLAWSOUL_HOME / "context")
+    Path(context_dir).mkdir(parents=True, exist_ok=True)
+    # Non-CN/EN personas get their identity docs LLM-localized once per
+    # (identity, language). When that's already done, skip regenerating
+    # the English templates — they'd overwrite the localized files.
+    from .core import localize as _localize
+    _sig = _localize.identity_signature(cleaned)
+    _lang = cleaned.get("userLanguage") or "en"
+    if not _localize.is_current(context_dir, _lang, _sig):
+        _generate_soul_file(cleaned, context_dir)
+        _generate_persona_file(cleaned, context_dir)
+        _generate_profile_file(cleaned, context_dir)
+        _localize.localize_identity_files_async(context_dir, _lang, _sig)
+    _generate_appearance_file(cleaned, context_dir)
 
     return cleaned
 
 
-# ── Postgres-backed companion store ────────────────────────────────────────
-
-def _pg_url() -> str:
-    return os.environ.get("SUPABASE_URL", "").rstrip("/")
-
-
-def _pg_key() -> str:
-    return os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-
-
-def _pg_configured() -> bool:
-    return bool(_pg_url() and _pg_key())
-
-
-def _pg_headers(prefer: str = "return=representation") -> dict[str, str]:
-    return {
-        "apikey": _pg_key(),
-        "Authorization": f"Bearer {_pg_key()}",
-        "Content-Type": "application/json",
-        "Prefer": prefer,
-    }
-
-
-def _current_user_id() -> str | None:
-    from .core import tenancy
-    return tenancy.get_current_user()
-
-
-def _load_choices_pg() -> dict | None:
-    if not _pg_configured():
-        return None
-    uid = _current_user_id()
-    if not uid:
-        return None
-    try:
-        import httpx
-        r = httpx.get(
-            f"{_pg_url()}/rest/v1/user_companion",
-            params={"user_id": f"eq.{uid}", "select": "choices"},
-            headers=_pg_headers(), timeout=10,
-        )
-        if not r.is_success:
-            return None
-        rows = r.json() or []
-        return rows[0]["choices"] if rows else None
-    except Exception:
-        return None
-
-
-def _save_choices_pg(cleaned: dict[str, Any]) -> bool:
-    if not _pg_configured():
-        return False
-    uid = _current_user_id()
-    if not uid:
-        return False
-    try:
-        import httpx
-        r = httpx.post(
-            f"{_pg_url()}/rest/v1/user_companion",
-            params={"on_conflict": "user_id"},
-            headers=_pg_headers("resolution=merge-duplicates,return=minimal"),
-            json={"user_id": uid, "choices": cleaned},
-            timeout=10,
-        )
-        return r.is_success
-    except Exception:
-        return False
-
-
-def save_applied_sig(user_id: str, sig: str) -> bool:
-    """Persist the last-applied identity signature to Pg (the ``events`` table,
-    kind ``identity_applied``) as a durable fallback for the local
-    ``context/.identity_sig`` file — which is lost if the worker machine is
-    destroyed.  Keeps a single row: drops any prior one, inserts the new.
-
-    Used by the re-customization reset so a machine that lost its local /data
-    can still tell whether the identity actually changed.  Best-effort.
-    """
-    if not _pg_configured() or not user_id:
-        return False
-    try:
-        import httpx
-        httpx.request(
-            "DELETE", f"{_pg_url()}/rest/v1/events",
-            params={"user_id": f"eq.{user_id}", "kind": "eq.identity_applied"},
-            headers=_pg_headers("return=minimal"), timeout=10,
-        )
-        r = httpx.post(
-            f"{_pg_url()}/rest/v1/events",
-            headers=_pg_headers("return=minimal"),
-            json={"user_id": user_id, "kind": "identity_applied",
-                  "payload": {"sig": sig}},
-            timeout=10,
-        )
-        return r.is_success
-    except Exception:
-        return False
-
-
-def load_applied_sig(user_id: str) -> str | None:
-    """Read the last-applied identity signature from Pg, or None."""
-    if not _pg_configured() or not user_id:
-        return None
-    try:
-        import httpx
-        r = httpx.get(
-            f"{_pg_url()}/rest/v1/events",
-            params={"user_id": f"eq.{user_id}", "kind": "eq.identity_applied",
-                    "select": "payload", "order": "ts.desc", "limit": "1"},
-            headers=_pg_headers(), timeout=10,
-        )
-        if not r.is_success:
-            return None
-        rows = r.json() or []
-        return (rows[0].get("payload") or {}).get("sig") if rows else None
-    except Exception:
-        return None
-
-
-def _in_saas_dashboard_mode() -> bool:
-    """True when we're running on the legacy dashboard host inside SaaS
-    Phase 2 — i.e. Telegram traffic goes through the per-user worker
-    machines, not this process.  Detected by ROUTER_PUBLIC_URL being
-    set (dashboard's env points at the router for provisioning)."""
-    return bool(os.environ.get("ROUTER_PUBLIC_URL", "").strip() and
-                not os.environ.get("CLAW_USER_ID", "").strip())
-
-
-def _flip_onboarded_pg() -> None:
-    """Best-effort PATCH user_machines.onboarded=true once the wizard saves."""
-    if not _pg_configured():
-        return
-    uid = _current_user_id()
-    if not uid:
-        return
-    try:
-        import httpx
-        httpx.patch(
-            f"{_pg_url()}/rest/v1/user_machines",
-            params={"user_id": f"eq.{uid}"},
-            headers=_pg_headers("return=minimal"),
-            json={"onboarded": True},
-            timeout=5,
-        )
-    except Exception:
-        pass
-
-
 def _persist_config(cfg: dict) -> None:
-    """Write the config dict back to disk under the current tenant."""
+    """Write the config dict back to claw_soul.json."""
     path = config.config_path() or (config.CLAWSOUL_HOME / "claw_soul.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-    # Bust the per-tenant cache so subsequent reads see the new value
+    # Bust the config cache so subsequent reads see the new value.
     key = config._tenant_key()
     config._configs[key] = cfg
     config._config_paths[key] = path

@@ -2,8 +2,8 @@
 Humanize — the shared "texts like a real person" toolkit.
 
 Every delivery-side behaviour that makes the companion feel human lives here,
-channel-agnostic, so the SaaS worker (webhook-driven) and the single-tenant
-Telegram bot (long-polling) share ONE implementation:
+channel-agnostic, so the Telegram bot and the proactive scheduler share ONE
+implementation:
 
   - reply_delay()   — a length-scaled, jittered pause before sending (slower
                       during her local sleep hours), so replies aren't instant.
@@ -19,9 +19,9 @@ Telegram bot (long-polling) share ONE implementation:
   - open_thread()   — the most emotionally-significant recent event with its
                       actual content, for specific follow-ups.
 
-History note: these originally lived only in the SaaS worker, while the
-single-tenant bot (the open-source main path) kept an older, flatter delivery.
-That drift — production-only realism — is exactly what this module ends.
+These once lived in one delivery path while another kept an older, flatter
+version. Keeping them here is what stops that drift from coming back: a
+realism fix landed once shows up everywhere she speaks.
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ def reply_delay(text: str) -> float:
     base = 0.7 + min(n, 360) * 0.011          # ~0.7s + up to ~4s for long replies
     delay = base * random.uniform(0.6, 1.5)
     try:
-        from . import tenancy
-        if 1 <= tenancy.now_in_bot_tz().hour < 7:
+        from . import timectx
+        if 1 <= timectx.now_in_bot_tz().hour < 7:
             delay += random.uniform(2.0, 6.0)  # groggy / slow at her night
     except Exception:
         pass

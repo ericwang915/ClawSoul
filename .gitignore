@@ -173,6 +173,4 @@ context/
 ~/.claw_soul/
 Gemini_Generated_Image_*
 
-# Supabase CLI local cache (project link metadata, version files)
-supabase/.temp/
 frontend/

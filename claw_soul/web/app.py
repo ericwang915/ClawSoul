@@ -25,19 +25,18 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import config
 from .. import init as claw_init
-from ..core import tenancy
+from ..core import timectx
 from ..core.agent import Agent
 from ..core.llm.base import LLMProvider
 from ..core.persistent_agent import PersistentAgent
 from ..core.session_store import SessionStore
 from ..core.skill_loader import SkillRegistry
-from . import auth as auth_mod
 
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-# Per-user agent cache. Key = user_id (or "_single" in non-multi-tenant mode).
+# Agent cache (one entry — kept as a dict so _reset_agent() is a pop).
 _agents: dict[str, Agent] = {}
 _provider: LLMProvider | None = None
 _start_time: float = 0.0
@@ -62,8 +61,8 @@ def _get_chat_lock() -> asyncio.Lock:
 
 
 def _current_provider():
-    """Return the active LLM provider — either the one bound to this app or
-    the one server.py is using in multi-tenant mode (set when it boots)."""
+    """The active LLM provider — the one bound to this app, or the one
+    server.py brought up at boot."""
     if _provider is not None:
         return _provider
     try:
@@ -74,7 +73,7 @@ def _current_provider():
 
 
 def _global_scheduler():
-    """Return the multi-tenant APScheduler instance, when in that mode."""
+    """The daemon's APScheduler instance, when server.py started one."""
     try:
         from .. import server as _srv
         return _srv.get_global_scheduler()
@@ -99,8 +98,9 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app = FastAPI(title="her & him", docs_url=None, redoc_url=None)
     _fastapi_app = app
 
-    # CORS must come BEFORE AuthMiddleware so preflight OPTIONS aren't gated.
-    origins = auth_mod.allowed_origins()
+    # Only needed if you front the dashboard from a different origin.
+    origins = [o.strip() for o in
+               os.environ.get("CLAW_ALLOWED_ORIGINS", "").split(",") if o.strip()]
     if origins:
         app.add_middleware(
             CORSMiddleware,
@@ -110,20 +110,9 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
             allow_headers=["Authorization", "Content-Type"],
         )
 
-    # Fail fast if auth is required but unconfigured — never silently
-    # fall open to a shared single-tenant namespace in a deploy.
-    auth_mod.verify_auth_config()
-
-    app.add_middleware(auth_mod.AuthMiddleware)
-
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     app.add_api_route("/", _serve_index, methods=["GET"], response_class=HTMLResponse)
-    app.add_api_route("/login", _serve_login, methods=["GET"], response_class=HTMLResponse)
-    app.add_api_route("/api/auth/config", _api_auth_config, methods=["GET"])
-    app.add_api_route("/api/auth/session", _api_auth_session, methods=["POST"])
-    app.add_api_route("/api/auth/logout", _api_auth_logout, methods=["POST"])
-    app.add_api_route("/api/auth/me", _api_auth_me, methods=["GET"])
     app.add_api_route("/api/user/telegram", _api_user_telegram_get, methods=["GET"])
     app.add_api_route("/api/user/telegram", _api_user_telegram_save, methods=["POST"])
     app.add_api_route("/api/setup/options", _api_setup_options, methods=["GET"])
@@ -138,7 +127,6 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     app.add_api_route("/api/skills", _api_skills, methods=["GET"])
     app.add_api_route("/api/status", _api_status, methods=["GET"])
     app.add_api_route("/api/memories", _api_memories, methods=["GET"])
-    app.add_api_route("/api/plans", _api_plans, methods=["GET"])
     app.add_api_route("/api/identity", _api_identity, methods=["GET"])
     app.add_api_route("/api/identity/soul", _api_save_soul, methods=["POST"])
     app.add_api_route("/api/identity/persona", _api_save_persona, methods=["POST"])
@@ -172,31 +160,27 @@ def create_app(provider: LLMProvider | None, *, build_provider_fn=None) -> FastA
     return app
 
 
+# One agent per install; the dict is kept so _reset_agent() stays cheap.
+_CACHE_KEY = "_single"
+
+
 def _tenant_cache_key() -> str:
-    """Cache key for the agent dict — user_id, or "_single" in legacy mode."""
-    return tenancy.get_current_user() or "_single"
+    return _CACHE_KEY
 
 
 def _session_id_for_current_user() -> str:
-    """Session id shared by web + Telegram for the same Supabase user."""
-    key = _tenant_cache_key()
-    return f"user:{key}" if key != "_single" else WEB_SESSION_ID
+    return WEB_SESSION_ID
 
 
 def _ensure_user_initialized() -> None:
-    """First time we see a user, populate their /data/users/<uid>/ with
-    default soul / persona / profile templates."""
-    key = _tenant_cache_key()
-    if key in _initialized_users:
+    """On first request, lay down the default soul / persona / profile."""
+    if _CACHE_KEY in _initialized_users:
         return
     try:
-        # claw_init is the init() function (re-exported from claw_soul.init).
-        # It uses config.CLAWSOUL_HOME which is per-tenant — so this writes
-        # to /data/users/<uid>/context/ automatically.
         claw_init()
     except Exception as exc:
-        logger.warning("[Web] init() for tenant %s failed: %s", key, exc)
-    _initialized_users.add(key)
+        logger.warning("[Web] init() failed: %s", exc)
+    _initialized_users.add(_CACHE_KEY)
 
 
 def _get_agent() -> Agent | None:
@@ -239,92 +223,8 @@ async def _serve_index():
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
 
 
-async def _serve_login():
-    login_path = STATIC_DIR / "login.html"
-    return HTMLResponse(login_path.read_text(encoding="utf-8"))
 
-
-# ── Auth ──────────────────────────────────────────────────────────────────────
-
-async def _api_auth_config():
-    """Tell the login page how to talk to Supabase."""
-    return JSONResponse({
-        "url":     auth_mod.supabase_url(),
-        "anonKey": auth_mod.supabase_anon_key(),
-        "enabled": auth_mod.auth_enabled(),
-    })
-
-
-async def _api_auth_session(request: Request):
-    """Set the HttpOnly session cookie from a client-side Supabase JWT."""
-    if not auth_mod.auth_enabled():
-        return JSONResponse({"error": "auth disabled"}, status_code=400)
-
-    body = await request.json()
-    token = (body or {}).get("access_token", "").strip()
-    payload = auth_mod.decode_jwt(token)
-    if not payload:
-        reason = getattr(auth_mod.decode_jwt, "last_error", None) or "invalid token"
-        logger.warning("[/api/auth/session] rejected: %s", reason)
-        return JSONResponse({"error": reason}, status_code=401)
-
-    resp = JSONResponse({"ok": True, "email": payload.get("email")})
-    is_https = request.url.scheme == "https"
-    cookie_kwargs = dict(
-        key=auth_mod.COOKIE_NAME,
-        value=token,
-        max_age=auth_mod.COOKIE_MAX_AGE,
-        httponly=True,
-        # If COOKIE_DOMAIN is set (e.g. .herandhim.ai), the login page and
-        # dashboard share the cookie via the parent domain — SameSite=Lax is
-        # enough and avoids Safari/ITP blocking third-party cookies. Otherwise
-        # we're cross-site and have to use SameSite=None+Secure (some browsers
-        # will still drop these).
-        path="/",
-        secure=is_https,
-    )
-    domain = auth_mod.cookie_domain()
-    if domain:
-        cookie_kwargs["domain"] = domain
-        cookie_kwargs["samesite"] = "lax"
-    else:
-        cookie_kwargs["samesite"] = "none" if is_https else "lax"
-
-    resp.set_cookie(**cookie_kwargs)
-    return resp
-
-
-async def _api_auth_me(request: Request):
-    """Return the current user's email + initial for the sidebar footer.
-
-    Returns 401 if no valid session — the auth middleware would normally
-    have already redirected, but the sidebar may render before the cookie
-    settles on a brand-new login, so we keep this best-effort.
-    """
-    from . import auth as auth_mod
-    token = request.cookies.get(auth_mod.COOKIE_NAME) or ""
-    payload = auth_mod.decode_jwt(token) if token else None
-    if not payload:
-        return JSONResponse({"error": "not authenticated"}, status_code=401)
-    email = (payload.get("email") or "").strip()
-    return JSONResponse({
-        "user_id": payload.get("sub"),
-        "email":   email,
-        "initial": (email[:1].upper() if email else "·"),
-    })
-
-
-async def _api_auth_logout(request: Request):
-    resp = JSONResponse({"ok": True})
-    domain = auth_mod.cookie_domain()
-    if domain:
-        resp.delete_cookie(auth_mod.COOKIE_NAME, path="/", domain=domain)
-    else:
-        resp.delete_cookie(auth_mod.COOKIE_NAME, path="/")
-    return resp
-
-
-# ── User settings (proxy Supabase via service_role) ───────────────────────────
+# ── User settings ─────────────────────────────────────────────────────────────
 
 async def _api_user_telegram_get(request: Request):
     """Return whether a Telegram bot token is saved (never echoes the token)."""
@@ -389,24 +289,6 @@ async def _api_user_telegram_save(request: Request):
         "hotStatus": hot_status, "note": note,
     })
 
-
-async def _router_call(path: str, body: dict | None = None) -> tuple[int, str]:
-    """Internal helper — POST to the router service with the admin key."""
-    import httpx
-    base = os.environ.get("ROUTER_PUBLIC_URL", "").rstrip("/")
-    admin_key = os.environ.get("ROUTER_ADMIN_KEY", "")
-    if not base or not admin_key:
-        return 503, "router not configured"
-    try:
-        async with httpx.AsyncClient(timeout=20) as c:
-            r = await c.post(
-                base + path,
-                json=body or {},
-                headers={"X-Admin-Key": admin_key},
-            )
-        return r.status_code, r.text[:200]
-    except Exception as exc:
-        return 503, f"network error: {exc}"
 
 
 # ── Companion setup wizard ────────────────────────────────────────────────────
@@ -529,17 +411,6 @@ async def _api_setup_companion_save(request: Request):
 
     # Drop the cached agent so subsequent chats see the new persona/soul
     _reset_agent()
-
-    # SaaS mode: tell the user's worker (if any) to re-hydrate persona
-    # from Pg right now so edits take effect immediately instead of
-    # waiting for the next idle-restart.
-    if os.environ.get("ROUTER_PUBLIC_URL", "").strip():
-        user_id = tenancy.get_current_user()
-        if user_id:
-            try:
-                await _router_call(f"/admin/users/{user_id}/reload", {})
-            except Exception as exc:
-                logger.warning("[setup/companion] worker reload failed: %s", exc)
 
     return JSONResponse({"ok": True, "choices": cleaned})
 
@@ -728,7 +599,7 @@ async def _api_status():
         }
 
     # Per-tenant session store: SessionStore() reads CLAWSOUL_HOME, which is
-    # already scoped to the current user via the tenancy contextvar.
+    # already scoped to this install.
     session_file = SessionStore()._path(_session_id_for_current_user())
     return {
         "provider": type(agent.provider).__name__,
@@ -745,22 +616,6 @@ async def _api_status():
         "sessionPersistent": True,
     }
 
-
-async def _api_plans():
-    """Pricing-page data: the public Free/Pro/Ultra plans + the current
-    tenant's tier and this period's usage (for the dashboard upgrade view)."""
-    from ..core import plans as _plans
-    from ..core import quota as _quota
-    current = {"tier": "free"}
-    try:
-        current = {
-            "tier": _quota._current_tier(),          # noqa: SLF001
-            "messages": _quota.message_status(),
-            "photos": _quota.photo_status(),
-        }
-    except Exception:
-        pass
-    return {"plans": _plans.public_plans(), "current": current}
 
 
 async def _api_memories(limit: int = 200):
@@ -1259,24 +1114,6 @@ def _register_web_file_sender(loop: asyncio.AbstractEventLoop, ws: WebSocket) ->
 # ── WebSocket Chat ────────────────────────────────────────────────────────────
 
 async def _ws_chat(websocket: WebSocket):
-    # Auth: cookies are sent on same-origin WS upgrade; fall back to ?token=
-    if auth_mod.auth_enabled():
-        token = websocket.cookies.get(auth_mod.COOKIE_NAME) or \
-                websocket.query_params.get("token")
-        payload = auth_mod.authorize_websocket(token)
-        if not payload:
-            await websocket.close(code=4401, reason="unauthorized")
-            return
-        # Bind tenancy from the validated token onto THIS connection's task.
-        # The ASGI middleware binds it too, but the agent work runs in
-        # executor threads that don't inherit contextvars — so we bind here
-        # explicitly and copy_context() into the executor below.  Without
-        # this, _get_agent()/storage could resolve to the wrong (or single)
-        # tenant and leak one user's chat into another's.
-        uid = payload.get("sub")
-        if uid and uid != "dev":
-            tenancy.set_current_user(uid)
-
     await websocket.accept()
     logger.info("[Web] WebSocket client connected")
 
@@ -1299,7 +1136,7 @@ async def _ws_chat(websocket: WebSocket):
             # Bind the user's timezone for this turn so the agent's volatile
             # context shows their local time, not the server's UTC clock.
             if client_tz:
-                tenancy.set_current_timezone(client_tz)
+                timectx.set_current_timezone(client_tz)
 
             # Photo with no text: queue it and don't call the LLM yet. The
             # next text turn will pop the queue and send everything together,
@@ -1391,7 +1228,7 @@ async def _ws_chat(websocket: WebSocket):
                 async with lock:
                     stream_task = asyncio.create_task(_stream_tokens())
                     try:
-                        # contextvars (tenancy user_id + timezone) don't
+                        # contextvars (the timezone binding) don't
                         # propagate into executor threads — copy the current
                         # context so the agent's storage writes and volatile
                         # clock resolve to the right tenant, not _single.

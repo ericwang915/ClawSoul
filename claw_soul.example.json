@@ -154,5 +154,10 @@
   "agent": {
     "autoCompactThreshold": 0,
     "verbose": false
+  },
+  "quota": {
+    "diskMb": 0,
+    "dailyMessages": 0,
+    "dailyPhotos": 0
   }
 }

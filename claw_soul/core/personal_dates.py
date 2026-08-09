@@ -18,7 +18,7 @@ dates did not. This module gives personal dates the same treatment:
 Storage: one JSON file under the tenant's context dir (same durability class
 as milestones/relationship state; included in the groups/compaction backup
 path only if placed there, so we keep it under context/memory which ships
-with the Tigris memory backup when present).
+alongside the rest of her memory).
 """
 
 from __future__ import annotations

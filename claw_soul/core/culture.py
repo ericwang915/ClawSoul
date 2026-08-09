@@ -1,15 +1,12 @@
 """
 Cultural calendar lookup — per-country holidays, observances, shopping events.
 
-Three-tier lookup, fastest first:
+An in-process memo over a local JSON dataset. Curated, never generated on
+the fly: a miss returns ``None`` and the caller simply goes without calendar
+context, which keeps runtime predictable and free of LLM spend.
 
-  1. Pg cache (``public.culture_calendars`` row keyed by country_code)
-  2. Tigris object  (``culture/calendars/<CC>.json`` in the photos bucket)
-  3. *Not* generated on the fly — the data is curated and seeded by
-     ``scripts/seed_culture_calendars.py``; if the lookup misses both
-     Pg and Tigris we return ``None`` and let the caller fall back to
-     "no calendar context".  That keeps runtime predictable and free
-     of LLM-spend at request time.
+Drop your own ``<CC>.json`` in ``<CLAWSOUL_HOME>/data/holidays/`` to add a
+country; it takes precedence over anything bundled.
 
 Payload schema (v1):
 
@@ -41,19 +38,16 @@ Public API:
 
 from __future__ import annotations
 
+import json
 import logging
-import os
 from datetime import date as _date
 from datetime import datetime as _datetime
 from datetime import timedelta
-
-import httpx
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
-_TIGRIS_PREFIX = "culture/calendars"
-_PG_TABLE = "/rest/v1/culture_calendars"
 
 # In-process cache — calendars never change inside a process lifetime,
 # so we don't need to re-hit Pg on every chat turn.  Keyed by upper-cased
@@ -66,25 +60,13 @@ _memo: dict[str, dict | None] = {}
 
 def get_calendar(country_code: str) -> dict | None:
     """Return the full calendar payload for ``country_code``, or ``None``
-    if we haven't seeded one.
-
-    Only positive hits are memoized.  Caching ``None`` would poison the
-    cache on a transient Pg/Tigris error and require a worker restart to
-    recover; one extra round-trip per miss is the cheaper tradeoff.
-    """
+    if no dataset exists for it."""
     cc = (country_code or "").upper()
     if not cc:
         return None
-    if cc in _memo:
-        return _memo[cc]
-    payload = _fetch_from_pg(cc)
-    if payload is None:
-        payload = _fetch_from_tigris(cc)
-        if payload is not None:
-            _save_to_pg(cc, payload, source="tigris-restored")
-    if payload is not None:
-        _memo[cc] = payload
-    return payload
+    if cc not in _memo:
+        _memo[cc] = _load_local(cc)
+    return _memo[cc]
 
 
 def get_holiday_for_date(country_code: str, when: _date | _datetime) -> dict | None:
@@ -163,74 +145,32 @@ def get_upcoming(country_code: str, *, within_days: int = 14,
     return out
 
 
-# ── Storage helpers ───────────────────────────────────────────────────
+# ── Local dataset ─────────────────────────────────────────────────────
+#
+# Holiday calendars are plain JSON on disk, looked up in two places so you
+# can add your own country without touching the package:
+#
+#   1. <CLAWSOUL_HOME>/data/holidays/<CC>.json   — yours, wins
+#   2. claw_soul/data/holidays/<CC>.json         — bundled with the package
+#
+# Missing file = she just doesn't bring up that country's holidays.
 
 
-def _pg_url() -> str:
-    return os.environ.get("SUPABASE_URL", "").rstrip("/")
-
-
-def _pg_key() -> str:
-    return os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-
-
-def _pg_configured() -> bool:
-    return bool(_pg_url() and _pg_key())
-
-
-def _pg_headers(prefer: str = "return=representation") -> dict[str, str]:
-    return {
-        "apikey":        _pg_key(),
-        "Authorization": f"Bearer {_pg_key()}",
-        "Content-Type":  "application/json",
-        "Prefer":        prefer,
-    }
-
-
-def _fetch_from_pg(cc: str) -> dict | None:
-    if not _pg_configured():
-        return None
-    try:
-        r = httpx.get(
-            _pg_url() + _PG_TABLE,
-            params={"country_code": f"eq.{cc}", "select": "payload"},
-            headers=_pg_headers(),
-            timeout=8,
-        )
-        if not r.is_success:
-            logger.debug("[culture] Pg fetch %s -> %s", cc, r.status_code)
-            return None
-        rows = r.json() or []
-        if not rows:
-            return None
-        return rows[0].get("payload")
-    except Exception as exc:
-        logger.debug("[culture] Pg fetch %s errored: %s", cc, exc)
-        return None
-
-
-def _save_to_pg(cc: str, payload: dict, *, source: str) -> None:
-    if not _pg_configured():
-        return
-    try:
-        httpx.post(
-            _pg_url() + _PG_TABLE,
-            params={"on_conflict": "country_code"},
-            json={
-                "country_code": cc,
-                "payload":      payload,
-                "source":       source,
-            },
-            headers=_pg_headers("resolution=merge-duplicates,return=minimal"),
-            timeout=8,
-        )
-    except Exception as exc:
-        logger.debug("[culture] Pg save %s errored: %s", cc, exc)
-
-
-def _fetch_from_tigris(cc: str) -> dict | None:
-    # Single-user build has no cloud object store — no-op (see city.py).
+def _load_local(cc: str) -> dict | None:
+    from .. import config as _config
+    candidates = [
+        Path(_config.CLAWSOUL_HOME) / "data" / "holidays" / f"{cc}.json",
+        Path(__file__).resolve().parent.parent / "data" / "holidays" / f"{cc}.json",
+    ]
+    for path in candidates:
+        try:
+            if path.is_file():
+                with open(path, encoding="utf-8") as f:
+                    return json.load(f)
+        except (OSError, ValueError) as exc:
+            logger.warning("[culture] could not read %s: %s", path, exc)
     return None
+
 
 
 __all__ = [

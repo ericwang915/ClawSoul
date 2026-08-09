@@ -59,11 +59,6 @@ def _detect_local_timezone() -> str:
     return f"Etc/GMT{'-' if offset_hours > 0 else '+'}{abs(offset_hours)}"
 
 
-def _multi_tenant_mode() -> bool:
-    """Multi-tenant mode is on whenever the dashboard auth gate is on."""
-    return bool(os.environ.get("SUPABASE_JWT_SECRET"))
-
-
 # Module-level handles so the dashboard can reach the global APScheduler when
 # hot-adding a freshly-onboarded user without restarting the daemon.
 _global_scheduler = None
@@ -82,21 +77,13 @@ async def start_telegram(
     provider: LLMProvider,
     fastapi_app=None,
 ) -> list:
-    """Start the Telegram bot(s) as background tasks.
+    """Start the Telegram bot as a background task.
 
-    Kill switch: when ``CLAW_BOTS_DISABLED=1`` we skip Telegram entirely.
-    Used by the legacy ``clawsoul`` Fly app once SaaS Phase 2 routes
-    Telegram traffic through ``clawsoul-router`` — the legacy still
-    serves the dashboard / Google OAuth, but starting bots here would
-    have PTB call deleteWebhook and steal traffic from the router.
+    Also brings up everything that makes her act on her own: the cron
+    scheduler, proactive messages, the daily planner and scheduled selfies.
 
-    In **multi-tenant mode** (``SUPABASE_JWT_SECRET`` set): launches one bot
-    per Supabase user that has a saved ``telegram_bot_token``. The cron
-    scheduler / proactive / selfie features are skipped — they're not yet
-    per-tenant-aware. Multi-tenant scheduling lands in a later phase.
-
-    In **single-tenant mode** (laptop / Eric's existing deploy): unchanged —
-    one bot, full scheduler / proactive / heartbeat / selfies.
+    Kill switch: ``CLAW_BOTS_DISABLED=1`` skips Telegram entirely, for when
+    you want the dashboard without the bot.
     """
     if os.environ.get("CLAW_BOTS_DISABLED", "").strip() in ("1", "true", "yes"):
         logger.info("[ClawSoul] CLAW_BOTS_DISABLED — skipping Telegram bot startup")

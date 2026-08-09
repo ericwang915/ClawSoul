@@ -2,7 +2,6 @@
 .git
 .github
 frontend
-supabase
 deploy/fly-router
 tests
 assets

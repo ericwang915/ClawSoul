@@ -70,7 +70,7 @@ class TurnHit:
 class StorageManager:
     """Unified SQLite store.  Thread-safe (one connection per thread).
 
-    Multi-tenant: ``instance()`` resolves the *current tenant's* DB path each
+    ``instance()`` resolves the DB path each
     call and returns a per-path manager.  Two tenants get two separate
     managers backed by two separate DB files; within a tenant, all callers
     share one manager (with thread-local sqlite connections).

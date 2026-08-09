@@ -28,7 +28,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from .. import config
-from ..core import tenancy
+from ..core import timectx
 from ..core.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -133,7 +133,7 @@ def _get_holiday_info(now: datetime) -> str:
     """Return a description of today's holiday status and upcoming events.
 
     Looks the persona's home country up in the cultural-calendar store
-    (Pg/Tigris-backed; see ``claw_soul.core.culture``).  Falls back to
+    (see ``claw_soul.core.culture``).  Falls back to
     the legacy CN ``_FIXED_HOLIDAYS`` / ``_LUNAR_HOLIDAYS`` tables when
     no country is configured or no calendar exists for it — preserves
     behaviour for original CN single-tenant installs.
@@ -344,7 +344,7 @@ def _seasonal_fallback_weather() -> str:
     leaving the LLM to invent August snow.
     """
     import random as _r
-    m = tenancy.now_in_bot_tz().month
+    m = timectx.now_in_bot_tz().month
     bands = {
         1:  [("阴冷干燥", 3, 8), ("小雨偏冷", 4, 9)],
         2:  [("阴天偏冷", 5, 11), ("小雨初春", 7, 13)],
@@ -400,7 +400,7 @@ def _gather_realtime_signals(city: str = "Shanghai", weekday_zh: str = "") -> st
     except Exception:
         return ""
 
-    today_str = tenancy.now_in_bot_tz().strftime("%Y-%m-%d")
+    today_str = timectx.now_in_bot_tz().strftime("%Y-%m-%d")
     queries = [
         f"{city} 今日活动 演出 展览 {today_str}",
         f"{city} 本周 活动 演唱会 市集 美食节",
@@ -442,7 +442,7 @@ def plan_is_stale() -> bool:
     path = _plan_path()
     if not os.path.exists(path):
         return True
-    bot_now = tenancy.now_in_bot_tz()
+    bot_now = timectx.now_in_bot_tz()
     mtime = datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc)
     return mtime.astimezone(bot_now.tzinfo).date() != bot_now.date()
 
@@ -670,7 +670,7 @@ async def generate_daily_plan(provider: LLMProvider) -> None:
 
     # Date context in the persona's home timezone (not the container's UTC),
     # plus language-specific mood / labels / live-search framing.
-    now = tenancy.now_in_bot_tz()
+    now = timectx.now_in_bot_tz()
     holiday_info = _get_holiday_info(now)
     season = _season(now.month) if is_zh else _season_en(now.month)
     # Mood inertia: yesterday's real emotional residue colors today's random

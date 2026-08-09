@@ -224,11 +224,11 @@ def compact(
     # the LLM another number to anchor on and frequently desync from the
     # real now (e.g. "Compaction Summary — 11:46 UTC" sitting next to the
     # volatile "20:11 Shanghai" line makes the model split the difference).
-    from . import tenancy
+    from . import timectx
     summary_system_msg = {
         "role": "system",
         "content": (
-            f"[Compaction Summary — {tenancy.now_in_bot_tz().strftime('%Y-%m-%d')}]\n"
+            f"[Compaction Summary — {timectx.now_in_bot_tz().strftime('%Y-%m-%d')}]\n"
             f"{summary}"
         ),
     }

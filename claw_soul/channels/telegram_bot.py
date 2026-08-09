@@ -54,7 +54,6 @@ from telegram.ext import (
 )
 
 from .. import config
-from ..core import tenancy
 from ..core.humanize import humanize_gap, maybe_react, reply_delay, send_burst
 
 if TYPE_CHECKING:
@@ -77,45 +76,31 @@ class TelegramBot:
         token: str,
         allowed_users: list[int] | None = None,
         require_mention: bool = False,
-        tenant_user_id: str | None = None,
     ) -> None:
         self._sm = session_manager
         self._token = token
         self._allowed_users: set[int] = set(allowed_users) if allowed_users else set()
         self._require_mention = require_mention
-        # When set, every handler runs inside `tenancy.user_context(tenant_user_id)`
-        # so memory/config/agent lookups scope to this user's namespace.
-        self._tenant_user_id = tenant_user_id
         self._app: Application | None = None
         self._bot_username: str | None = None
-        # Once we've successfully recorded this tenant's chat_id to Supabase
-        # we don't try again, even across reconnects within this process.
+        # Once the chat_id is saved to local settings we don't try again,
+        # even across reconnects within this process.
         self._chat_id_saved: bool = False
-        # Optional callback invoked the first time we capture this tenant's
-        # chat_id. The multi-tenant boot uses it to register a proactive
-        # scheduler job on the fly, so unprompted messages start flowing
-        # without needing a daemon restart.
+        # Invoked the first time we capture the chat_id, so the proactive
+        # scheduler can register its job without a daemon restart.
         self._on_chat_id_learned = None
         # Per-chat timestamp of the previous inbound message — feeds the
-        # companion's absence awareness (agent._gap_note) in local mode,
-        # where there's no Postgres last_message_at to read.
+        # companion's absence awareness (agent._gap_note).
         self._last_seen: dict[int, float] = {}
 
     # ── Session ID convention ─────────────────────────────────────────────────
 
     def _session_id(self, chat_id: int) -> str:
-        """Return the session id for this chat.
+        """Session id for this chat.
 
-        In **multi-tenant mode** (each bot is pinned to one Supabase user via
-        ``tenant_user_id``), all channels for the same owner share a single
-        session — ``user:<uuid>`` — so what you say on the dashboard and what
-        you say to the bot become one conversation with one memory.
-
-        In single-tenant mode (legacy), we still partition by chat_id so the
-        bot can serve multiple Telegram chats independently.
+        Partitioned by chat_id so one bot can serve several Telegram chats
+        independently — each keeps its own history.
         """
-        if self._tenant_user_id:
-            return f"user:{self._tenant_user_id}"
         return f"telegram:{chat_id}"
 
     # ── Push message (called by cron / heartbeat) ─────────────────────────────
@@ -326,7 +311,7 @@ class TelegramBot:
             if not self._is_mentioned(update):
                 return
 
-        # Multi-tenant: capture this user's Telegram chat_id once so the
+        # Capture the Telegram chat_id once so the
         # proactive scheduler knows where to message them. Best-effort —
         # any failure just means we'll retry on the next inbound message.
         await self._maybe_save_chat_id(update.effective_chat.id)
@@ -691,31 +676,19 @@ class TelegramBot:
         BotCommand("clear_files", "Delete all downloaded files"),
     ]
 
-    def _with_tenant(self, handler):
-        """Wrap a PTB callback so it runs inside this bot's tenant context."""
-        tenant = self._tenant_user_id
-        if not tenant:
-            return handler
-
-        async def _wrapped(update, context):
-            with tenancy.user_context(tenant):
-                return await handler(update, context)
-        # PTB calls the function by reference; preserve identity-ish naming for logs
-        _wrapped.__name__ = f"tenant({tenant})/{getattr(handler, '__name__', 'handler')}"
-        return _wrapped
 
     def build_application(self) -> Application:
         app = Application.builder().token(self._token).build()
-        app.add_handler(CommandHandler("start", self._with_tenant(self._cmd_start)))
-        app.add_handler(CommandHandler("reset", self._with_tenant(self._cmd_reset)))
-        app.add_handler(CommandHandler("clear", self._with_tenant(self._cmd_reset)))  # alias
-        app.add_handler(CommandHandler("status", self._with_tenant(self._cmd_status)))
-        app.add_handler(CommandHandler("compact", self._with_tenant(self._cmd_compact)))
-        app.add_handler(CommandHandler("clear_files", self._with_tenant(self._cmd_clear_files)))
+        app.add_handler(CommandHandler("start", self._cmd_start))
+        app.add_handler(CommandHandler("reset", self._cmd_reset))
+        app.add_handler(CommandHandler("clear", self._cmd_reset))  # alias
+        app.add_handler(CommandHandler("status", self._cmd_status))
+        app.add_handler(CommandHandler("compact", self._cmd_compact))
+        app.add_handler(CommandHandler("clear_files", self._cmd_clear_files))
         app.add_handler(MessageHandler(
             (filters.TEXT | filters.PHOTO | filters.VOICE | filters.AUDIO)
             & ~filters.COMMAND,
-            self._with_tenant(self._handle_message),
+            self._handle_message,
         ))
         self._app = app
         return app

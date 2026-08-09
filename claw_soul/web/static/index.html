@@ -22,7 +22,10 @@
     }
   </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    /* No webfont fetch: the dashboard must render fully offline and
+       must not report a page view to a third party. If you have these
+       families installed locally they're still used; otherwise the
+       system stack below takes over. */
     * { box-sizing: border-box; }
     body {
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -206,17 +209,9 @@
               <div class="text-[.7rem] text-brand-300 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-brand-400"></span>close &amp; present</div>
             </div>
           </div>
-          <button onclick="openPricing()" class="btn-love w-full rounded-full py-2 text-[.82rem] flex items-center justify-center gap-1.5">★ Go Premium</button>
         </div>
       </div>
 
-      <!-- User footer -->
-      <div class="px-4 py-3 flex items-center gap-2.5 border-t border-white/5">
-        <div id="user-avatar" class="w-7 h-7 rounded-full flex items-center justify-center text-[#2b1620] text-xs font-semibold shrink-0"
-             style="background: linear-gradient(135deg, #ff9bb0, #ffb59a);">·</div>
-        <div id="user-email" class="flex-1 min-w-0 text-[.78rem] text-gray-400 truncate">…</div>
-        <button onclick="logout()" title="Sign out" class="text-gray-500 hover:text-white text-[.72rem] shrink-0">Sign out</button>
-      </div>
     </aside>
 
     <!-- Main Content -->
@@ -448,21 +443,6 @@
             <button onclick="closeMemoryLightbox(event, true)" class="absolute -top-10 right-0 text-gray-300 hover:text-white text-xl">✕</button>
             <img id="memory-lightbox-img" alt="" class="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl" />
             <div id="memory-lightbox-caption" class="mt-3 text-sm text-gray-300 text-center max-w-[80vw]"></div>
-          </div>
-        </div>
-
-        <!-- Pricing / upgrade modal -->
-        <div id="pricing-modal" class="hidden fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 overflow-auto"
-             onclick="if(event.target===this) closePricing()">
-          <div class="relative w-full max-w-[920px] my-auto">
-            <button onclick="closePricing()" class="absolute -top-9 right-0 text-gray-400 hover:text-white text-xl">✕</button>
-            <div class="text-center mb-2">
-              <div class="text-[.7rem] uppercase tracking-[.2em] text-brand-300/80 mb-1">Choose your plan</div>
-              <h2 class="text-3xl text-white">Get closer.</h2>
-              <p class="text-[.85rem] text-gray-400 mt-1.5" id="pricing-promo">🎉 Launch offer — first month, limited time.</p>
-            </div>
-            <div id="pricing-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6"></div>
-            <p class="text-center text-[.75rem] text-gray-500 mt-4">Checkout is coming soon — payments aren't live yet.</p>
           </div>
         </div>
 
@@ -892,59 +872,6 @@ function quickTalk(e) {
     i.value = '';
   }
   return false;
-}
-
-// ── Pricing / upgrade modal ─────────────────────────────────────────────────
-function openPricing() {
-  const m = document.getElementById('pricing-modal');
-  if (!m) return;
-  m.classList.remove('hidden');
-  renderPricing();
-}
-function closePricing() {
-  const m = document.getElementById('pricing-modal');
-  if (m) m.classList.add('hidden');
-}
-async function renderPricing() {
-  const grid = document.getElementById('pricing-grid');
-  if (!grid) return;
-  grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-6">Loading…</div>';
-  let data = { plans: [], current: { tier: 'free' } };
-  try {
-    const r = await fetch('/api/plans', { credentials: 'include' });
-    if (r.ok) data = await r.json();
-  } catch (_) {}
-  const cur = (data.current && data.current.tier) || 'free';
-  grid.innerHTML = (data.plans || []).map(p => {
-    const isCur = p.key === cur;
-    const discounted = p.price_regular && p.price_regular > p.price;
-    const priceBlock = (p.price === 0)
-      ? '<div class="font-display text-3xl text-white">Free</div>'
-      : `<div class="flex items-end gap-2">
-           <span class="font-display text-3xl text-white">$${p.price}</span>
-           <span class="text-[.8rem] text-gray-500">/mo</span>
-           ${discounted ? `<span class="text-[.8rem] text-gray-500 line-through ml-1">$${p.price_regular}</span>` : ''}
-         </div>`;
-    let cta;
-    if (isCur) cta = '<button disabled class="w-full rounded-full py-2.5 text-[.85rem] border border-white/10 text-gray-400">Current plan</button>';
-    else if (p.key === 'free') cta = '<button disabled class="w-full rounded-full py-2.5 text-[.85rem] border border-white/10 text-gray-500">Free</button>';
-    else cta = `<button onclick="alert('Checkout is coming soon — payments aren\\'t live yet.')" class="btn-love w-full rounded-full py-2.5 text-[.85rem]">Choose ${escapeHTML(p.label)}</button>`;
-    return `
-      <div class="rounded-2xl border ${isCur ? 'border-brand-400/40' : 'border-white/[.06]'} p-5 flex flex-col gap-4" style="background: rgba(255,255,255,.03);">
-        <div>
-          <div class="flex items-center gap-2">
-            <div class="font-display text-xl text-white">${escapeHTML(p.label)}</div>
-            ${isCur ? '<span class="text-[.6rem] uppercase tracking-widest text-brand-300 border border-brand-400/30 rounded-full px-2 py-0.5">current</span>' : ''}
-          </div>
-          <div class="text-[.78rem] text-gray-500 mt-0.5">${escapeHTML(p.tagline || '')}</div>
-        </div>
-        ${priceBlock}
-        <ul class="space-y-1.5 text-[.85rem] text-gray-300 flex-1">
-          ${(p.features || []).map(f => `<li class="flex gap-2"><span class="text-brand-300">♥</span><span>${escapeHTML(f)}</span></li>`).join('')}
-        </ul>
-        ${cta}
-      </div>`;
-  }).join('');
 }
 
 // Default fallback hero (when the album is empty) — keep the scenic
@@ -2784,29 +2711,7 @@ async function disconnectTool(name) {
   loadTools(true);
 }
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
-async function loadCurrentUser() {
-  try {
-    const r = await fetch('/api/auth/me', { credentials: 'include' });
-    if (!r.ok) return;
-    const d = await r.json();
-    const email = (d.email || '').trim();
-    const emailEl = document.getElementById('user-email');
-    const avatarEl = document.getElementById('user-avatar');
-    if (emailEl) emailEl.textContent = email || 'You';
-    if (avatarEl) avatarEl.textContent = (d.initial || email[0] || '·').toUpperCase();
-  } catch (_) { /* anon — leave placeholders */ }
-}
-
-async function logout() {
-  try {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-  } catch (_) {}
-  window.location.href = '/login';
-}
-
 // ── Init ─────────────────────────────────────────────────────────────────────
-loadCurrentUser();
 switchTab('dashboard');
 connectWebSocket();
 refreshDashboard();

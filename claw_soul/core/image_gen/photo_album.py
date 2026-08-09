@@ -81,7 +81,7 @@ class PhotoAlbum:
         return refs[0] if refs else None
 
     # Canonical face reference filename — one per companion, deterministic so
-    # the Tigris key (users/<uid>/companion_reference.jpg) is stable too.
+    # the filename is stable across regenerations.
     REFERENCE_NAME = "companion_reference.jpg"
 
     def set_reference(self, src_path: str) -> str:
@@ -100,8 +100,8 @@ class PhotoAlbum:
         return dst
 
     def save_reference_bytes(self, data: bytes) -> str:
-        """Write raw image bytes as the canonical reference (used when
-        restoring it from Tigris on a fresh machine)."""
+        """Write raw image bytes as the canonical reference, so the same
+        face anchors every future shot."""
         d = _reference_dir()
         os.makedirs(d, exist_ok=True)
         dst = os.path.join(d, self.REFERENCE_NAME)

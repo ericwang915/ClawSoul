@@ -6,8 +6,7 @@ dashboard "Tools" tab. Each entry maps a presentable name to:
   * an internal skill (already in ``claw_soul/templates/skills/``), OR
   * a third-party integration that needs API key / OAuth setup.
 
-Per-user status is computed from the Supabase ``user_settings.integrations``
-JSONB blob — see ``supabase/migrations/002_integrations.sql``.
+Connection status is stored locally (see ``core.local_settings``).
 """
 
 from __future__ import annotations
@@ -19,9 +18,9 @@ from typing import Literal
 # Auth model
 AuthType = Literal[
     "none",          # always-on, no credentials needed (weather, summarize, …)
-    "shared",        # uses the server's shared key (selfie via Seedream)
+    "shared",        # uses a key from claw_soul.json (e.g. photos)
     "api_key",       # user pastes their own API key in a modal
-    "oauth",         # OAuth provider via Supabase
+    "oauth",         # OAuth provider
     "caldav",        # username + app-password (Apple Calendar)
 ]
 
@@ -71,7 +70,7 @@ CATALOG: list[Tool] = [
     Tool(
         name="selfie",
         display_name="AI Selfies",
-        description="Auto-generated selfies via Seedream — matches their mood + plan.",
+        description="Auto-generated selfies — matched to their mood + plan.",
         icon="📷", icon_key="selfie",
         auth_type="shared",
         category="Premium",

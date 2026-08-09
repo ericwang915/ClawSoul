@@ -1,4 +1,4 @@
-"""Verify the web-facing companion wizard helpers work per-tenant."""
+"""Verify the web-facing companion wizard helpers."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import json
 import pytest
 
 from claw_soul import companion, config
-from claw_soul.core import tenancy
 
 
 @pytest.fixture(autouse=True)
@@ -68,47 +67,38 @@ def test_validate_applies_defaults_for_blank_names():
     assert cleaned["companionName"] == "Claw"
 
 
-def test_apply_choices_writes_files_to_active_tenant(tmp_path):
-    with tenancy.user_context("alice"):
-        companion.apply_choices(_CHOICES)
+def test_apply_choices_writes_the_identity_files(tmp_path):
+    """The persona pipeline reads these off disk — setup must materialize them."""
+    companion.apply_choices(_CHOICES)
 
-    alice_ctx = tmp_path / "users" / "alice" / "context"
-    assert (alice_ctx / "soul" / "SOUL.md").exists()
-    assert (alice_ctx / "persona").exists()
-    assert (alice_ctx / "profile").exists()
+    ctx = tmp_path / "context"
+    assert (ctx / "soul" / "SOUL.md").exists()
+    assert (ctx / "persona").exists()
+    assert (ctx / "profile").exists()
 
-    # Choices persisted to alice's config
-    cfg_path = tmp_path / "users" / "alice" / "claw_soul.json"
-    assert cfg_path.exists()
-    saved = json.loads(cfg_path.read_text())
+    saved = json.loads((tmp_path / "claw_soul.json").read_text())
     assert saved["companion"]["archetype"] == "healer"
 
 
-def test_apply_choices_is_tenant_isolated(tmp_path):
-    with tenancy.user_context("alice"):
-        companion.apply_choices({**_CHOICES, "archetype": "healer"})
-    with tenancy.user_context("bob"):
-        companion.apply_choices({**_CHOICES, "archetype": "witty"})
+def test_reapplying_choices_rewrites_the_identity(tmp_path):
+    """Changing the archetype must actually change who she is on disk."""
+    companion.apply_choices({**_CHOICES, "archetype": "healer"})
+    healer = (tmp_path / "context/soul/SOUL.md").read_text()
 
-    alice_cfg = json.loads((tmp_path / "users/alice/claw_soul.json").read_text())
-    bob_cfg = json.loads((tmp_path / "users/bob/claw_soul.json").read_text())
-    assert alice_cfg["companion"]["archetype"] == "healer"
-    assert bob_cfg["companion"]["archetype"] == "witty"
+    companion.apply_choices({**_CHOICES, "archetype": "witty"})
+    witty = (tmp_path / "context/soul/SOUL.md").read_text()
 
-    # Files are separate too
-    alice_soul = (tmp_path / "users/alice/context/soul/SOUL.md").read_text()
-    bob_soul = (tmp_path / "users/bob/context/soul/SOUL.md").read_text()
-    assert alice_soul != bob_soul  # different archetypes produce different files
+    assert healer != witty
+    cfg = json.loads((tmp_path / "claw_soul.json").read_text())
+    assert cfg["companion"]["archetype"] == "witty"
 
 
 def test_load_choices_returns_none_before_setup(tmp_path):
-    with tenancy.user_context("nobody"):
-        assert companion.load_choices() in (None, {})
+    assert companion.load_choices() in (None, {})
 
 
 def test_load_choices_round_trip(tmp_path):
-    with tenancy.user_context("alice"):
-        companion.apply_choices(_CHOICES)
-        loaded = companion.load_choices()
-        assert loaded is not None
-        assert loaded["companionName"] == "Aria"
+    companion.apply_choices(_CHOICES)
+    loaded = companion.load_choices()
+    assert loaded is not None
+    assert loaded["companionName"] == "Aria"

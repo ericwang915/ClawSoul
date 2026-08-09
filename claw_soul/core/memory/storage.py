@@ -141,8 +141,8 @@ class MemoryStorage:
         "03:21" for a memory set at noon Shanghai, then leak into the agent's
         boot context and convince it that everything happens at night.
         """
-        from ...core import tenancy
-        dt = tenancy.now_in_bot_tz()
+        from ...core import timectx
+        dt = timectx.now_in_bot_tz()
         today = dt.strftime("%Y-%m-%d")
         daily_file = os.path.join(self.memory_dir, f"{today}.md")
         now = dt.strftime("%H:%M:%S")
@@ -163,8 +163,8 @@ class MemoryStorage:
         return entry["value"] if entry else None
 
     def set(self, key: str, value: Any) -> None:
-        from ...core import tenancy
-        now = tenancy.now_in_bot_tz().strftime("%Y-%m-%d %H:%M:%S")
+        from ...core import timectx
+        now = timectx.now_in_bot_tz().strftime("%Y-%m-%d %H:%M:%S")
         self.data[key] = {"value": str(value), "updated": now}
         self._save_memory_md()
         self._append_daily_log(key, str(value))

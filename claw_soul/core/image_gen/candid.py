@@ -243,7 +243,7 @@ def take_candid(
     rendering, smaller prompt assembly path.
     """
     # Pre-flight disk check — same budget as selfies (~700 KB).
-    from ..quota import check_disk, check_photos
+    from ..quota import check_disk, check_photos, record_photo
     over = check_photos()
     if over:
         raise SeedreamError(over)
@@ -268,6 +268,7 @@ def take_candid(
         )
         if not paths:
             raise SeedreamError("Seedream returned no image")
+        record_photo()
 
         # Move out of the temp dir into the photo album so the file
         # survives this call's cleanup and shows up in look_back queries.
