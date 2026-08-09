@@ -49,5 +49,5 @@ model call.
 
 See [`deploy/local/.env.example`](../local/.env.example) — every key is
 documented there. The only required one is a text-LLM key
-(`CLAW_DEEPSEEK_API_KEY`). Everything else (Telegram, Gemini vision, Seedream
+(`CLAW_DEEPSEEK_API_KEY`). Everything else (Telegram, Gemini vision, photo
 selfies, Deepgram voice) is optional and degrades gracefully when unset.

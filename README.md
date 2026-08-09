@@ -389,7 +389,7 @@ ClawSoul/
 │   │   ├── memory/              # Markdown memory + emotional graph + milestones + temporal index
 │   │   ├── retrieval/           # BM25 + dense + RRF + LLM reranker
 │   │   ├── knowledge/           # knowledge-base RAG
-│   │   └── image_gen/           # Seedream selfie pipeline
+│   │   └── image_gen/           # selfie pipeline (7 backends)
 │   ├── channels/
 │   │   └── telegram_bot.py      # Telegram bot (streaming / voice / images)
 │   ├── scheduler/

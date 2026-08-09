@@ -7,7 +7,7 @@
 # App name is global on fly.dev — change if "clawsoul" is taken.
 
 app             = "clawsoul"
-primary_region  = "sin"        # Singapore (same AZ as your Seedream API)
+primary_region  = "sin"        # pick the region closest to you
 swap_size_mb    = 512
 
 [build]
