@@ -234,20 +234,12 @@ class TestTelegramBot:
         assert bot._is_allowed(111)
         assert not bot._is_allowed(333)
 
-    def test_session_id_format(self):
+    def test_each_chat_keeps_its_own_history(self):
+        """One bot can serve several chats; they must not share a session."""
         from claw_soul.channels.telegram_bot import TelegramBot
         bot = TelegramBot.__new__(TelegramBot)
-        bot._tenant_user_id = None  # single-tenant path
         assert bot._session_id(42) == "telegram:42"
-
-    def test_session_id_multi_tenant_unifies_with_web(self):
-        """In multi-tenant mode, Telegram + web share one session per user."""
-        from claw_soul.channels.telegram_bot import TelegramBot
-        bot = TelegramBot.__new__(TelegramBot)
-        bot._tenant_user_id = "alice-uuid"
-        # chat_id is ignored — same session regardless of which Telegram chat
-        assert bot._session_id(42) == "user:alice-uuid"
-        assert bot._session_id(999) == "user:alice-uuid"
+        assert bot._session_id(42) != bot._session_id(999)
 
     def test_messages_use_session_manager(self):
         from claw_soul.session_manager import SessionManager

@@ -4,21 +4,16 @@
 # Materializes /data/claw_soul.json from environment variables on first boot,
 # then launches the daemon in the foreground.
 #
-# Required CLAW_* env vars (written to claw_soul.json):
-#   CLAW_LLM_PROVIDER         e.g. "deepseek"
-#   CLAW_<PROVIDER>_API_KEY   e.g. CLAW_DEEPSEEK_API_KEY
+# Env vars (written to claw_soul.json):
+#   CLAW_<PROVIDER>_API_KEY   the only one that's required, e.g.
+#                             CLAW_DEEPSEEK_API_KEY — the provider is inferred
+#   CLAW_LLM_PROVIDER         optional override, e.g. "deepseek"
 #   CLAW_TELEGRAM_TOKEN       your bot token (optional if web-only)
+#   CLAW_IMAGE_PROVIDER       optional: gemini|openai|seedream|fal|replicate|
+#                             sdwebui|custom — also inferred from whichever
+#                             image key is set
 #
-# Required SUPABASE_* env vars for the dashboard auth gate (read at runtime,
-# NOT written to JSON — secrets stay in the env where they belong):
-#   SUPABASE_URL              https://<project>.supabase.co
-#   SUPABASE_ANON_KEY         public anon key
-#   SUPABASE_JWT_SECRET       JWT signing secret (Supabase project settings)
-#   ALLOWED_EMAILS            comma-separated allowlist (e.g. you@example.com)
-#
-# If SUPABASE_JWT_SECRET is empty, the dashboard runs in OPEN mode (dev only).
-#
-# Set all of these as Fly secrets:  `fly secrets set KEY=value`
+# See deploy/local/.env.example for the full list.
 
 set -eu
 
@@ -86,6 +81,67 @@ llm["gemini"] = {
     "model":  env("CLAW_GEMINI_MODEL", "gemini-2.0-flash"),
 }
 
+# ── Photos ──────────────────────────────────────────────────────────────
+# Any of these backends can draw her selfies.  Setting one key is enough:
+# the provider is inferred, same as for the LLM.
+IMAGE_BACKENDS = {
+    "seedream":     ("CLAW_SEEDREAM_API_KEY",  "seedream-5-0-lite-260128",
+                     "https://ark.ap-southeast.bytepluses.com/api/v3"),
+    "openai":       ("CLAW_IMAGE_OPENAI_KEY",  "gpt-image-1", ""),
+    "gemini":       ("CLAW_IMAGE_GEMINI_KEY",  "gemini-2.5-flash-image", ""),
+    "openrouter":   ("CLAW_IMAGE_OPENROUTER_KEY", "google/gemini-2.5-flash-image", ""),
+    "bfl":          ("CLAW_BFL_API_KEY",       "flux-kontext-pro", ""),
+    "fal":          ("CLAW_FAL_KEY",           "fal-ai/flux/schnell", ""),
+    "replicate":    ("CLAW_REPLICATE_API_TOKEN", "black-forest-labs/flux-schnell", ""),
+    "stability":    ("CLAW_STABILITY_API_KEY", "core", ""),
+    "dashscope":    ("CLAW_DASHSCOPE_API_KEY", "wan2.2-t2i-flash", ""),
+    "sdwebui":      ("",                       "", "http://localhost:7860"),
+    "comfyui":      ("",                       "", "http://localhost:8188"),
+    "pollinations": ("",                       "flux", ""),
+    "custom":       ("CLAW_IMAGE_API_KEY",     "", ""),
+}
+
+image_provider = env("CLAW_IMAGE_PROVIDER").lower()
+if not image_provider:
+    for name, (key_env, *_r) in IMAGE_BACKENDS.items():
+        if key_env and env(key_env):
+            image_provider = name
+            break
+    else:
+        # Local servers, then keys already set for chat/vision. An explicitly
+        # set image key always wins over these.
+        if env("CLAW_COMFYUI_BASE_URL"):
+            image_provider = "comfyui"
+        elif env("CLAW_SDWEBUI_BASE_URL"):
+            image_provider = "sdwebui"
+        elif env("CLAW_GEMINI_API_KEY"):
+            image_provider = "gemini"
+        elif env("CLAW_OPENROUTER_API_KEY"):
+            image_provider = "openrouter"
+
+skills = {}
+for name, (key_env, model, base) in IMAGE_BACKENDS.items():
+    entry = {}
+    key = env(key_env) if key_env else ""
+    # Gemini and OpenRouter keys already set for chat/vision work for images
+    # too — don't make people paste the same key under a second name.
+    if not key and name == image_provider:
+        key = env(f"CLAW_{name.upper()}_API_KEY")
+    if key:
+        entry["apiKey"] = key
+    override = env("CLAW_IMAGE_MODEL") if name == image_provider else ""
+    if name == "seedream":
+        override = override or env("CLAW_SEEDREAM_MODEL")
+    if override or model:
+        entry["model"] = override or model
+    base_val = env(f"CLAW_{name.upper()}_BASE_URL", base)
+    if base_val:
+        entry["baseUrl"] = base_val
+    skills[name] = entry
+
+if image_provider:
+    skills["image"] = {"provider": image_provider}
+
 config = {
     "llm": llm,
     "channels": {
@@ -96,13 +152,7 @@ config = {
             ],
         },
     },
-    "skills": {
-        "seedream": {
-            "apiKey": env("CLAW_SEEDREAM_API_KEY"),
-            "model":  env("CLAW_SEEDREAM_MODEL", "seedream-5-0-lite-260128"),
-            "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/v3",
-        },
-    },
+    "skills": skills,
     "deepgram": {"apiKey": env("CLAW_DEEPGRAM_API_KEY")},
     "tavily":   {"apiKey": env("CLAW_TAVILY_API_KEY")},
     "web": {

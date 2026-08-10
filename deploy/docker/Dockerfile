@@ -21,9 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml MANIFEST.in README.md ./
 COPY claw_soul ./claw_soul
 
-# Install with all optional extras (boto3 for Tigris, tweepy) so the one
-# image serves both the standalone self-host and the multi-machine SaaS.
-# A plain `pip install claw_soul` still gets the lean cloud-free core.
+# Install with the optional extras (tweepy) so the image is batteries-
+# included. A plain `pip install claw_soul` still gets the lean core.
 RUN pip install --prefix=/install --no-warn-script-location ".[all]"
 
 # ---------- Stage 2: runtime ----------

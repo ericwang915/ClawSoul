@@ -1,13 +1,10 @@
-# Fly.io config for single-tenant ClawSoul deploy.
-#
-# This runs ONE instance of the daemon (your own personal ClawSoul) in the
-# cloud. Multi-tenant SaaS is a future refactor — see "Future: multi-tenant"
-# in README.md.
+# Fly.io config — run your own ClawSoul in the cloud instead of on a machine
+# at home. One instance, one companion, your keys.
 #
 # App name is global on fly.dev — change if "clawsoul" is taken.
 
 app             = "clawsoul"
-primary_region  = "sin"        # Singapore (same AZ as your Seedream API)
+primary_region  = "sin"        # pick the region closest to you
 swap_size_mb    = 512
 
 [build]
@@ -31,10 +28,8 @@ swap_size_mb    = 512
     method       = "GET"
     path         = "/api/status"
 
-# Sized for the multi-tenant in-process model: every active user costs
-# ~30-50 MB in cached agent state + a per-user PTB long-poll Application.
-# 1 GB / 2 vCPU comfortably handles ~25-35 active users; bump again before
-# we cross ~50 users, or move to horizontal Fly Machines sharding.
+# One companion needs far less than this; 1 GB leaves headroom for the
+# embedding model and photo generation. shared-cpu-1x / 512mb also works.
 [[vm]]
   size   = "shared-cpu-2x"
   memory = "1gb"

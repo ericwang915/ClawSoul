@@ -19,6 +19,12 @@ All three expose the same interface:
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+_WARNED_FALLBACK = False
+
+
 # ── Availability probes ──────────────────────────────────────────────────────
 
 try:
@@ -142,8 +148,18 @@ class EmbeddingRetriever:
             self._backend = _TfidfBackend()
             self.backend_name = "sklearn-tfidf"
         else:
+            # Works fine, just coarser. Say so once so anyone who cares about
+            # recall quality knows there's a one-command upgrade — rather than
+            # silently shipping the weakest backend forever.
             self._backend = _BigramBackend()
             self.backend_name = "bigram-jaccard"
+            global _WARNED_FALLBACK
+            if not _WARNED_FALLBACK:
+                _WARNED_FALLBACK = True
+                logger.info(
+                    "[retrieval] using character-bigram similarity. For sharper "
+                    "recall: pip install 'claw-soul[search]'"
+                )
 
     def fit(self, corpus: list[dict]) -> None:
         self._backend.fit(corpus)

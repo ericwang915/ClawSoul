@@ -1,18 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl -sL --max-time 15 \"https://clawsoul.fly.dev/\")",
       "Bash(python3 -c ' *)",
-      "WebFetch(domain:policies.character.ai)",
-      "Bash(curl -sL --max-time 15 \"https://herandhim.ai/terms\")",
-      "Bash(python3 -m py_compile claw_soul/core/image_gen/wardrobe.py claw_soul/core/image_gen/scene_builder.py)",
-      "Bash(python3 -m py_compile claw_soul/scheduler/planner.py claw_soul/worker.py)",
-      "Bash(grep -vE \"Connecting|Warning|Metrics|hallpass|fly version|Update|^$\")",
-      "Bash(python3 -m py_compile scripts/enrich_city_profiles.py)",
-      "Bash(gh pr *)",
-      "Bash(python3 -m py_compile claw_soul/core/memory_backup.py claw_soul/core/image_gen/tigris.py claw_soul/worker.py)",
-      "Bash(python3 -m py_compile claw_soul/worker.py)",
-      "Bash(python3 -m py_compile claw_soul/scheduler/proactive.py claw_soul/core/agent.py claw_soul/worker.py)"
+      "Bash(python3 -m py_compile *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(python3 -m ruff *)",
+      "Bash(gh pr *)"
     ]
   }
 }

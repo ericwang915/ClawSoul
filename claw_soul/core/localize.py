@@ -80,7 +80,7 @@ def is_current(context_dir: str, lang_code: str, identity_sig: str) -> bool:
 
 def localize_identity_files_async(context_dir: str, lang_code: str,
                                   identity_sig: str) -> None:
-    """Fire-and-forget localization; marker-cached, tenancy captured."""
+    """Fire-and-forget localization; marker-cached."""
     if not needs_localization(lang_code):
         return
     want = f"{identity_sig}:{(lang_code or '').lower()}"
@@ -91,13 +91,8 @@ def localize_identity_files_async(context_dir: str, lang_code: str,
     except OSError:
         pass
 
-    from . import tenancy
-    uid = tenancy.get_current_user()
-
     def _run() -> None:
         try:
-            if uid:
-                tenancy.set_current_user(uid)
             _localize(context_dir, lang_code, want)
         except Exception as exc:  # noqa: BLE001
             logger.warning("[localize] identity localization failed: %s", exc)

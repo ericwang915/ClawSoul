@@ -59,14 +59,12 @@ def _venv_python() -> str:
     return sys.executable
 
 
-# Sensitive env vars that should NEVER leak into a skill subprocess.  These
-# are the operator's shared secrets (LLM keys, Supabase service-role key,
-# image-gen tokens, etc.) — a skill script never needs them at the OS level;
-# it should look up what it needs via the claw_soul.json config under the
-# tenant home.  Substring match is intentional so future ``CLAW_*_API_KEY``
-# variants are caught without us having to update the list.
+# Sensitive env vars that should NEVER leak into a skill subprocess. These
+# are your keys (LLM, image-gen, etc.) — a skill never needs them at the OS
+# level; it should read what it needs from claw_soul.json. Substring match
+# is intentional so future ``CLAW_*_API_KEY`` variants are caught without
+# anyone having to update this list.
 _SENSITIVE_ENV_PREFIXES = (
-    "SUPABASE_",
     "CLAW_",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
@@ -92,7 +90,7 @@ def _venv_env() -> dict[str, str]:
     Also:
       - Injects the per-tenant ``CLAWSOUL_HOME`` so skill scripts read/write
         the right tenant's directory.
-      - **Scrubs operator secrets** (LLM keys, Supabase service-role, image
+      - **Scrubs your secrets** (LLM keys, image
         tokens, JWT secret) — a skill script should never see these at the
         OS level. They live in the per-tenant config JSON instead.
     """
@@ -196,7 +194,7 @@ def _check_command_safety(command: str) -> str | None:
 
     Returns ``None`` if the command looks safe, else an error string.
 
-    In multi-tenant mode every tenant has a UUID under ``/data/users/<uid>/``.
+    Skill subprocesses run against this install's home directory.
     A command that references ``/data/users/`` MUST scope to the current
     tenant's UUID — otherwise it's a cross-tenant read/write attempt.
     """
@@ -432,25 +430,6 @@ def send_file(path: str, caption: str = "", session_id: str = "") -> str:
         return f"Error sending file: {exc}"
 
 
-def _bind_tenancy_from_session(session_id: str) -> None:
-    """Belt-and-braces tenancy binding for tool entry points.
-
-    ContextVars don't always survive the thread boundary when the agent
-    runs inside loop.run_in_executor — the parent thread sets tenancy
-    but the executor's worker thread might miss it.  Tools that hit
-    per-tenant filesystem paths (selfie, candid, anything reading
-    config.CLAWSOUL_HOME) need tenancy bound to land in
-    /data/users/<uid>/ instead of falling back to the single-tenant
-    /data/ root and reading the wrong (or no) state.
-
-    The agent dispatcher already passes session_id="user:<uid>" for all
-    photo tools, so we recover the uid from there with no extra
-    plumbing.
-    """
-    if session_id and session_id.startswith("user:"):
-        from . import tenancy
-        tenancy.set_current_user(session_id[len("user:"):])
-
 
 def _tool_take_selfie(scene_hint: str = "", caption: str = "",
                       session_id: str = "") -> str:
@@ -463,7 +442,6 @@ def _tool_take_selfie(scene_hint: str = "", caption: str = "",
     so the user sees a single photo+caption message instead of three
     bubbles (pre-text + photo + post-text).
     """
-    _bind_tenancy_from_session(session_id)
     try:
         from .image_gen import take_selfie as _gen_selfie
     except Exception as exc:
@@ -482,7 +460,6 @@ def _tool_candid_shot(category: str = "random", hint: str = "",
     ``category`` is one of animal | scenery | food | fun | random.
     ``caption`` ships with the photo (see :func:`_tool_take_selfie`).
     """
-    _bind_tenancy_from_session(session_id)
     try:
         from .image_gen import take_candid as _gen_candid
     except Exception as exc:

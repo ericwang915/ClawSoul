@@ -69,10 +69,61 @@
     "autoVacuumOnPrune": true
   },
   "skills": {
+    "image": {
+      "provider": ""
+    },
+    "gemini": {
+      "apiKey": "",
+      "model": "gemini-2.5-flash-image"
+    },
+    "openai": {
+      "apiKey": "",
+      "model": "gpt-image-1"
+    },
     "seedream": {
       "apiKey": "",
       "model": "seedream-5-0-lite-260128",
       "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/v3"
+    },
+    "fal": {
+      "apiKey": "",
+      "model": "fal-ai/flux/schnell"
+    },
+    "replicate": {
+      "apiKey": "",
+      "model": "black-forest-labs/flux-schnell"
+    },
+    "sdwebui": {
+      "baseUrl": "http://localhost:7860"
+    },
+    "pollinations": {
+      "model": "flux"
+    },
+    "openrouter": {
+      "apiKey": "",
+      "model": "google/gemini-2.5-flash-image"
+    },
+    "bfl": {
+      "apiKey": "",
+      "model": "flux-kontext-pro"
+    },
+    "stability": {
+      "apiKey": "",
+      "model": "core"
+    },
+    "dashscope": {
+      "apiKey": "",
+      "model": "wan2.2-t2i-flash"
+    },
+    "comfyui": {
+      "baseUrl": "http://localhost:8188",
+      "checkpoint": "sd_xl_base_1.0.safetensors",
+      "workflow": ""
+    },
+    "custom": {
+      "apiKey": "",
+      "baseUrl": "",
+      "model": ""
     },
     "twitter": {
       "consumerKey": "",
@@ -83,7 +134,11 @@
   },
   "selfie": {
     "enabled": true,
-    "schedule": ["10:00", "16:00", "20:00"],
+    "schedule": [
+      "10:00",
+      "16:00",
+      "20:00"
+    ],
     "chatId": null,
     "model": null,
     "maxDaily": 3,
@@ -99,5 +154,10 @@
   "agent": {
     "autoCompactThreshold": 0,
     "verbose": false
+  },
+  "quota": {
+    "diskMb": 0,
+    "dailyMessages": 0,
+    "dailyPhotos": 0
   }
 }

@@ -22,32 +22,28 @@ import re
 from pathlib import Path
 from typing import Any
 
-# The base directory (single root for all tenants). The *per-user* dir is
-# computed dynamically by ``home()`` / ``CLAWSOUL_HOME`` based on the current
-# tenancy contextvar. In single-tenant mode (no user bound) both return BASE.
+# Where everything lives: config, memory, photos, the SQLite store.
 _CLAWSOUL_BASE = Path(os.environ.get("CLAWSOUL_HOME", Path.home() / ".claw_soul"))
 
 _TRAILING_COMMA_RE = re.compile(r",\s*([}\]])")
 
-# Per-user config caches. Key = user_id (or "" for single-tenant).
+# Parsed-config cache.
 _configs: dict[str, dict] = {}
 _config_paths: dict[str, Path | None] = {}
 
 
+# One install, one config — but the cache stays keyed so tests can swap
+# CLAWSOUL_HOME without leaking a previous parse into the next one.
+_CACHE_KEY = ""
+
+
 def _tenant_key() -> str:
-    """Return the cache key for the current tenant (empty string = legacy)."""
-    from .core.tenancy import get_current_user  # lazy import: tenancy → config dep
-    return get_current_user() or ""
+    return _CACHE_KEY
 
 
 def home() -> Path:
-    """Return the ClawSoul home directory for the current tenant.
-
-    - Multi-tenant request (user bound): ``<base>/users/<user_id>``
-    - Single-tenant fallback (laptop): ``<base>`` (e.g. ``~/.claw_soul``)
-    """
-    from .core.tenancy import resolve_home
-    return resolve_home(_CLAWSOUL_BASE)
+    """The ClawSoul home directory (``~/.claw_soul`` unless overridden)."""
+    return _CLAWSOUL_BASE
 
 
 def __getattr__(name: str):
@@ -122,8 +118,7 @@ def _deep_get(data: dict, *keys: str, default: Any = None) -> Any:
 def load(path: str | Path | None = None, *, force: bool = False) -> dict:
     """Load and cache configuration for the current tenant.
 
-    Each tenant (user) has its own cached config. Switching tenants via the
-    ``tenancy`` contextvar transparently reads/loads a different file.
+    Parsed once and cached; pass ``force=True`` after writing the file.
     """
     key = _tenant_key()
 

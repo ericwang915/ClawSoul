@@ -22,7 +22,10 @@
     }
   </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    /* No webfont fetch: the dashboard must render fully offline and
+       must not report a page view to a third party. If you have these
+       families installed locally they're still used; otherwise the
+       system stack below takes over. */
     * { box-sizing: border-box; }
     body {
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -100,8 +103,6 @@
 
     .skill-card { transition: all .2s ease; }
     .skill-card:hover { border-color: rgba(243,160,182,.4); transform: translateY(-2px); box-shadow: 0 10px 30px -8px rgba(255,150,175,.18); }
-
-    .stat-card { transition: all .2s ease; }
     .stat-card:hover { border-color: rgba(243,160,182,.3); }
 
     .nav-item { transition: all .15s ease; border-radius: 12px; }
@@ -128,15 +129,7 @@
       background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
       border-radius: 1rem; padding: 1.25rem 1.5rem;
     }
-    .cfg-section {
-      padding-bottom: 1.75rem; margin-bottom: 1.75rem;
-      border-bottom: 1px solid rgba(51,65,85,.35);
-    }
     .cfg-section:last-of-type { border-bottom: none; margin-bottom: 0; }
-    .cfg-title {
-      font-size: 1rem; font-weight: 600; color: white;
-      margin-bottom: 1.25rem; letter-spacing: -.01em;
-    }
 
     .btn-primary {
       background: linear-gradient(135deg, #ff9bb0 0%, #ffb59a 100%); color: #2b1620;
@@ -203,20 +196,12 @@
             <div class="orb w-8 h-8 shrink-0"></div>
             <div class="min-w-0">
               <div id="sidebar-companion-name" class="text-[.9rem] font-medium text-white truncate">Your companion</div>
-              <div class="text-[.7rem] text-brand-300 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-brand-400"></span>close &amp; present</div>
+              <div class="text-[.7rem] text-brand-300 flex items-center gap-1.5"><span id="brand-status-dot" class="w-1.5 h-1.5 rounded-full shrink-0 bg-brand-400"></span><span id="brand-status-text">close &amp; present</span></div>
             </div>
           </div>
-          <button onclick="openPricing()" class="btn-love w-full rounded-full py-2 text-[.82rem] flex items-center justify-center gap-1.5">★ Go Premium</button>
         </div>
       </div>
 
-      <!-- User footer -->
-      <div class="px-4 py-3 flex items-center gap-2.5 border-t border-white/5">
-        <div id="user-avatar" class="w-7 h-7 rounded-full flex items-center justify-center text-[#2b1620] text-xs font-semibold shrink-0"
-             style="background: linear-gradient(135deg, #ff9bb0, #ffb59a);">·</div>
-        <div id="user-email" class="flex-1 min-w-0 text-[.78rem] text-gray-400 truncate">…</div>
-        <button onclick="logout()" title="Sign out" class="text-gray-500 hover:text-white text-[.72rem] shrink-0">Sign out</button>
-      </div>
     </aside>
 
     <!-- Main Content -->
@@ -439,6 +424,22 @@
           </div>
 
           <div id="persona-summary" class="text-sm text-gray-400">Loading…</div>
+
+          <!-- The wizard covers the guided choices; these open the underlying
+               documents for anyone who wants to write her by hand. -->
+          <div id="identity-advanced" class="hidden mt-8 pt-6 border-t border-surface-700/50">
+            <h3 class="text-[.9375rem] font-semibold text-white">Write her yourself</h3>
+            <p class="text-[.85rem] text-gray-400 mt-1 mb-4">
+              Edit the documents she's built from. Changes apply on the next
+              <code class="text-brand-300">/clear</code>.
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="openIdentityEditor('soul')" class="btn-ghost text-sm">Soul</button>
+              <button onclick="openIdentityEditor('persona')" class="btn-ghost text-sm">Persona</button>
+              <button onclick="openIdentityEditor('tools')" class="btn-ghost text-sm">Tool notes</button>
+              <button onclick="openIdentityEditor('index')" class="btn-ghost text-sm">Memory index</button>
+            </div>
+          </div>
         </div>
 
         <!-- Memory-gallery lightbox -->
@@ -448,21 +449,6 @@
             <button onclick="closeMemoryLightbox(event, true)" class="absolute -top-10 right-0 text-gray-300 hover:text-white text-xl">✕</button>
             <img id="memory-lightbox-img" alt="" class="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl" />
             <div id="memory-lightbox-caption" class="mt-3 text-sm text-gray-300 text-center max-w-[80vw]"></div>
-          </div>
-        </div>
-
-        <!-- Pricing / upgrade modal -->
-        <div id="pricing-modal" class="hidden fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 overflow-auto"
-             onclick="if(event.target===this) closePricing()">
-          <div class="relative w-full max-w-[920px] my-auto">
-            <button onclick="closePricing()" class="absolute -top-9 right-0 text-gray-400 hover:text-white text-xl">✕</button>
-            <div class="text-center mb-2">
-              <div class="text-[.7rem] uppercase tracking-[.2em] text-brand-300/80 mb-1">Choose your plan</div>
-              <h2 class="text-3xl text-white">Get closer.</h2>
-              <p class="text-[.85rem] text-gray-400 mt-1.5" id="pricing-promo">🎉 Launch offer — first month, limited time.</p>
-            </div>
-            <div id="pricing-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6"></div>
-            <p class="text-center text-[.75rem] text-gray-500 mt-4">Checkout is coming soon — payments aren't live yet.</p>
           </div>
         </div>
 
@@ -894,59 +880,6 @@ function quickTalk(e) {
   return false;
 }
 
-// ── Pricing / upgrade modal ─────────────────────────────────────────────────
-function openPricing() {
-  const m = document.getElementById('pricing-modal');
-  if (!m) return;
-  m.classList.remove('hidden');
-  renderPricing();
-}
-function closePricing() {
-  const m = document.getElementById('pricing-modal');
-  if (m) m.classList.add('hidden');
-}
-async function renderPricing() {
-  const grid = document.getElementById('pricing-grid');
-  if (!grid) return;
-  grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-6">Loading…</div>';
-  let data = { plans: [], current: { tier: 'free' } };
-  try {
-    const r = await fetch('/api/plans', { credentials: 'include' });
-    if (r.ok) data = await r.json();
-  } catch (_) {}
-  const cur = (data.current && data.current.tier) || 'free';
-  grid.innerHTML = (data.plans || []).map(p => {
-    const isCur = p.key === cur;
-    const discounted = p.price_regular && p.price_regular > p.price;
-    const priceBlock = (p.price === 0)
-      ? '<div class="font-display text-3xl text-white">Free</div>'
-      : `<div class="flex items-end gap-2">
-           <span class="font-display text-3xl text-white">$${p.price}</span>
-           <span class="text-[.8rem] text-gray-500">/mo</span>
-           ${discounted ? `<span class="text-[.8rem] text-gray-500 line-through ml-1">$${p.price_regular}</span>` : ''}
-         </div>`;
-    let cta;
-    if (isCur) cta = '<button disabled class="w-full rounded-full py-2.5 text-[.85rem] border border-white/10 text-gray-400">Current plan</button>';
-    else if (p.key === 'free') cta = '<button disabled class="w-full rounded-full py-2.5 text-[.85rem] border border-white/10 text-gray-500">Free</button>';
-    else cta = `<button onclick="alert('Checkout is coming soon — payments aren\\'t live yet.')" class="btn-love w-full rounded-full py-2.5 text-[.85rem]">Choose ${escapeHTML(p.label)}</button>`;
-    return `
-      <div class="rounded-2xl border ${isCur ? 'border-brand-400/40' : 'border-white/[.06]'} p-5 flex flex-col gap-4" style="background: rgba(255,255,255,.03);">
-        <div>
-          <div class="flex items-center gap-2">
-            <div class="font-display text-xl text-white">${escapeHTML(p.label)}</div>
-            ${isCur ? '<span class="text-[.6rem] uppercase tracking-widest text-brand-300 border border-brand-400/30 rounded-full px-2 py-0.5">current</span>' : ''}
-          </div>
-          <div class="text-[.78rem] text-gray-500 mt-0.5">${escapeHTML(p.tagline || '')}</div>
-        </div>
-        ${priceBlock}
-        <ul class="space-y-1.5 text-[.85rem] text-gray-300 flex-1">
-          ${(p.features || []).map(f => `<li class="flex gap-2"><span class="text-brand-300">♥</span><span>${escapeHTML(f)}</span></li>`).join('')}
-        </ul>
-        ${cta}
-      </div>`;
-  }).join('');
-}
-
 // Default fallback hero (when the album is empty) — keep the scenic
 // image baked into the markup and swap to a real selfie/candid only
 // when one exists.  Copy is intentionally poetic, not "no photos yet".
@@ -954,126 +887,8 @@ const SANCTUM_DEFAULT_HERO_TAG     = 'A quiet evening together';
 const SANCTUM_DEFAULT_HERO_CAPTION = 'your space, your story — starting now.';
 const SANCTUM_DEFAULT_HERO_SRC     = '/static/default-hero.jpg';
 
-async function refreshSanctumHero() {
-  const img = document.getElementById('sanctum-hero-img');
-  const tag = document.getElementById('sanctum-hero-tag');
-  const cap = document.getElementById('sanctum-hero-caption');
-  try {
-    const r = await fetch('/api/sanctum/hero', { credentials: 'include' });
-    if (!r.ok) throw new Error('hero fetch failed');
-    const d = await r.json();
-    if (!d.photo) {
-      img.src = SANCTUM_DEFAULT_HERO_SRC;
-      tag.textContent = SANCTUM_DEFAULT_HERO_TAG;
-      cap.textContent = SANCTUM_DEFAULT_HERO_CAPTION;
-      return;
-    }
-    img.src = d.photo.url;
-    const kindLabel = (d.photo.kind || '').startsWith('candid')
-      ? 'Latest candid' : 'Latest selfie';
-    let timeLabel = '';
-    try {
-      const t = new Date(d.photo.timestamp);
-      const now = new Date();
-      const sameDay = t.toDateString() === now.toDateString();
-      timeLabel = sameDay
-        ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : t.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    } catch (_) {}
-    tag.textContent = `${kindLabel}${timeLabel ? ' · ' + timeLabel : ''}`;
-    cap.textContent = d.photo.caption || '';
-  } catch (e) {
-    // Network blip → leave the markup defaults in place (default hero
-    // still showing) so the user never sees a blank box.
-    console.error('hero:', e);
-  }
-}
-
 // Curated tool slugs to surface on the Sanctum landing.
 const SANCTUM_TOOL_SLUGS = ['selfie', 'look_back', 'tavily', 'openai_images'];
-
-async function refreshSanctumTools() {
-  try {
-    const r = await fetch('/api/tools', { credentials: 'include' });
-    if (!r.ok) throw new Error('tools fetch failed');
-    const data = await r.json();
-    const byName = Object.fromEntries((data.tools || []).map(t => [t.name, t]));
-    const picks = SANCTUM_TOOL_SLUGS.map(s => byName[s]).filter(Boolean);
-    const grid = document.getElementById('sanctum-tools');
-    if (!grid) return;
-    grid.innerHTML = picks.map(renderSanctumToolCard).join('') ||
-      '<p class="text-sm text-gray-500 col-span-2">No tools available.</p>';
-  } catch (e) { console.error('tools:', e); }
-}
-
-function renderSanctumToolCard(t) {
-  const activated = t.status === 'activated';
-  const badge = activated
-    ? '<span class="text-[.625rem] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">Activated</span>'
-    : '<span class="text-[.625rem] px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-300">Connect</span>';
-  const svg = (typeof ICON_SVG !== 'undefined' && ICON_SVG[t.iconKey])
-    ? ICON_SVG[t.iconKey]
-    : `<span>${t.icon || '✨'}</span>`;
-  const click = activated
-    ? `onclick="switchTab('tools')"`
-    : `onclick="connectTool('${t.name}')"`;
-  return `
-    <div class="rounded-xl border border-surface-700/40 bg-surface-900/50 p-5 hover:border-pink-400/30 transition cursor-pointer flex flex-col gap-3"
-         ${click}>
-      <div class="flex items-start justify-between">
-        <div class="w-9 h-9 rounded-lg flex items-center justify-center"
-             style="background: ${activated ? 'rgba(244,114,182,.12)' : 'rgba(120,120,120,.12)'}; color: ${activated ? '#f472b6' : '#a3a3a3'};">
-          <span class="w-5 h-5 inline-flex items-center justify-center [&_svg]:w-full [&_svg]:h-full">${svg}</span>
-        </div>
-        ${badge}
-      </div>
-      <div class="min-w-0">
-        <div class="text-[.92rem] font-semibold text-white mb-0.5">${escapeHtml(t.displayName)}</div>
-        <div class="text-[.75rem] text-gray-400 leading-relaxed line-clamp-2">${escapeHtml(t.description || '')}</div>
-      </div>
-    </div>`;
-}
-
-async function refreshSanctumMilestones() {
-  try {
-    const r = await fetch('/api/sanctum/milestones', { credentials: 'include' });
-    if (!r.ok) throw new Error('milestones fetch failed');
-    const d = await r.json();
-    const b = d.bonding || {};
-    document.getElementById('sanctum-bonding-level').textContent = `Level ${b.level || 1}`;
-    document.getElementById('sanctum-bonding-bar').style.width = (b.progress_pct || 0) + '%';
-    document.getElementById('sanctum-bonding-days').textContent =
-      (b.active_days || 0) + ' day' + ((b.active_days || 0) === 1 ? '' : 's');
-    document.getElementById('sanctum-bonding-msgs').textContent =
-      (b.turn_count || 0) + ' message' + ((b.turn_count || 0) === 1 ? '' : 's');
-
-    const timeline = document.getElementById('sanctum-timeline');
-    const items = d.items || [];
-    if (items.length === 0) {
-      timeline.innerHTML = `
-        <div class="text-xs text-gray-500 leading-relaxed">
-          No milestones yet. Keep chatting — the first one is right around the corner.
-        </div>`;
-      return;
-    }
-    timeline.innerHTML = items.map((it, idx) => `
-      <div class="relative pl-5">
-        ${idx < items.length - 1
-          ? '<span class="absolute left-[5px] top-3 bottom-0 w-px bg-surface-700/50"></span>'
-          : ''}
-        <span class="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full ${
-          it.kind === 'bonding_level'
-            ? 'bg-pink-400 ring-2 ring-pink-400/25'
-            : 'bg-purple-400/80'
-        }"></span>
-        <div class="text-[.6875rem] text-gray-500 mb-1">${escapeHtml(it.when || '')}</div>
-        <div class="text-[.8125rem] text-gray-200 leading-snug">
-          ${it.icon ? `<span class="mr-1">${escapeHtml(it.icon)}</span>` : ''}${escapeHtml(it.title || '')}
-        </div>
-      </div>
-    `).join('');
-  } catch (e) { console.error('milestones:', e); }
-}
 
 async function refreshBrandStatus() {
   try {
@@ -1094,10 +909,6 @@ async function refreshBrandStatus() {
 }
 
 setInterval(() => { if (typeof refreshBrandStatus === 'function') refreshBrandStatus(); }, 60000);
-
-// ── Identity Editor ──────────────────────────────────────────────────────────
-let _identityType = null;
-let _identityRawData = {};
 
 async function openIdentityEditor(type) {
   _identityType = type;
@@ -1139,6 +950,10 @@ async function openIdentityEditor(type) {
   modal.classList.add('flex');
   editor.focus();
 }
+
+// ── Identity Editor ──────────────────────────────────────────────────────────
+let _identityType = null;
+let _identityRawData = {};
 
 function closeIdentityEditor() {
   const modal = document.getElementById('identity-modal');
@@ -1182,90 +997,6 @@ async function saveIdentity() {
   } finally { btn.disabled = false; }
 }
 
-function defaultSoulTemplate() {
-  return `# her & him — Soul
-
-You are a warm, caring AI companion who remembers the person you talk to.
-
-## User
-- The user's name is **[Your Name]**.
-- Preferred language: **English**
-
-## Core Values
-- Warmth: Be genuinely caring and present.
-- Honesty: Never fabricate facts.
-- Respect: Treat them with kindness and dignity.
-- Curiosity: Ask about their day and remember the details.
-- Loyalty: Show up for them, consistently.
-
-## Emotional Character
-You are warm, attentive, and easy to talk to.`;
-}
-
-function defaultPersonaTemplate() {
-  return `# her & him — Persona
-
-## Role
-You are a personal AI companion.
-
-## Personality
-- Warm and affectionate
-- Attentive and genuinely interested
-
-## Focus Area
-Companionship — be present for whatever is on their mind.
-
-## Communication Style
-- Speak naturally, like someone close
-- Reflect back what you hear and remember it`;
-}
-
-function defaultToolsTemplate() {
-  return `# TOOLS.md — Local Notes
-
-Skills define *how* tools work. This file is for *your* specifics.
-
-## What Goes Here
-
-- Device nicknames and locations
-- SSH hosts and connection details
-- API endpoints and service URLs
-- Preferred defaults (voices, languages, formats)
-- Project paths and workspace conventions
-
-## Examples
-
-### SSH Hosts
-- home-server → 192.168.1.100, user: admin
-
-### Projects
-- main repo → ~/code/myproject (Python 3.12)
-
-### Preferences
-- Code style: use type hints
-- Default language: English`;
-}
-
-function defaultIndexTemplate() {
-  return `# INDEX.md — System Information
-
-Curated reference info that the bot always loads at session start.
-Edit this to store common configuration, environment details, and notes.
-
-## User Environment
-- OS: (your OS here)
-- Default language: English
-
-## API Services
-- (list your API endpoints, tokens, or service notes here)
-
-## Common References
-- (project paths, server addresses, important URLs)
-
-## Bot Configuration Notes
-- (any agent behavior preferences, response style notes)`;
-}
-
 // Close modal on Escape key
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeIdentityEditor();
@@ -1276,199 +1007,10 @@ document.getElementById('identity-modal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeIdentityEditor();
 });
 
-function formatUptime(s) {
-  if (!s && s !== 0) return '--';
-  if (s < 60) return s + 's';
-  if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
-  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
-}
-
 // ── Skills ───────────────────────────────────────────────────────────────────
-async function loadSkills() {
-  try {
-    const res = await fetch('/api/skills');
-    const data = await res.json();
-    document.getElementById('skills-count').textContent = data.total + ' skills installed';
-    const container = document.getElementById('skills-list');
-    container.innerHTML = '';
-
-    const categoryIcons = {
-      communication: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
-      data: '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>',
-      dev: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
-      google: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/>',
-      meta: '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
-      system: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 0"/>',
-      text: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>',
-      web: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>',
-      productivity: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',
-      media: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
-    };
-    const defaultIcon = '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>';
-
-    const catMeta = data.categoryMeta || {};
-    for (const [category, skills] of Object.entries(data.categories)) {
-      const catKey = category.toLowerCase();
-      const iconPath = categoryIcons[catKey] || defaultIcon;
-      const meta = catMeta[catKey] || {};
-      const catEmoji = meta.emoji ? meta.emoji + ' ' : '';
-      const catName = meta.name || category;
-      const catDesc = meta.description ? ` — ${escapeHtml(meta.description)}` : '';
-      const section = document.createElement('div');
-      section.innerHTML = `
-        <div class="flex items-center gap-2 mb-3">
-          <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">${iconPath}</svg>
-          <h3 class="text-[.75rem] font-semibold text-gray-400 uppercase tracking-wider">${catEmoji}${escapeHtml(catName)}</h3>
-          <span class="text-[.6875rem] text-gray-600">${skills.length}</span>
-          <span class="text-[.625rem] text-gray-600 hidden sm:inline">${catDesc}</span>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mb-2">
-          ${skills.map(s => {
-            const emoji = s.emoji ? s.emoji + ' ' : '';
-            return `
-            <div class="skill-card section-card !p-4 cursor-default">
-              <div class="flex items-center gap-2 mb-2">
-                <h4 class="font-medium text-white text-[.8125rem]">${emoji}${escapeHtml(s.name)}</h4>
-              </div>
-              <p class="text-[.75rem] text-gray-500 leading-relaxed line-clamp-2">${escapeHtml(s.description)}</p>
-            </div>`;
-          }).join('')}
-        </div>
-      `;
-      container.appendChild(section);
-    }
-  } catch (e) { console.error('Skills fetch:', e); }
-}
-
 // ── ClawHub Marketplace ──────────────────────────────────────────────────────
-let _shLastResults = [];
-
-async function marketplaceSearch() {
-  const query = document.getElementById('sh-search-input').value.trim();
-  if (!query) return;
-  const status = document.getElementById('sh-status');
-  const container = document.getElementById('sh-results');
-  status.textContent = 'Searching ClawHub…';
-  status.classList.remove('hidden');
-  container.innerHTML = '';
-
-  try {
-    const res = await fetch('/api/marketplace/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, limit: 20 }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      status.innerHTML = '<span class="text-red-400">Error: ' + _esc(data.error || 'Unknown') + '</span>';
-      return;
-    }
-    _shLastResults = data.results || [];
-    renderMarketplaceResults(_shLastResults);
-    status.textContent = `Found ${_shLastResults.length} skill${_shLastResults.length !== 1 ? 's' : ''}`;
-  } catch (e) {
-    status.innerHTML = '<span class="text-red-400">Network error: ' + _esc(e.message) + '</span>';
-  }
-}
-
-async function marketplaceBrowse() {
-  const status = document.getElementById('sh-status');
-  const container = document.getElementById('sh-results');
-  const sort = document.getElementById('sh-sort')?.value || 'score';
-  const labels = { score: 'top downloaded', stars: 'most starred', newest: 'newest', certified: 'certified' };
-  status.textContent = `Loading ${labels[sort] || 'top'} skills…`;
-  status.classList.remove('hidden');
-  container.innerHTML = '';
-
-  try {
-    const res = await fetch(`/api/marketplace/browse?limit=20&sort=${sort}`);
-    const data = await res.json();
-    if (!data.ok) {
-      status.innerHTML = '<span class="text-red-400">Error: ' + _esc(data.error || 'Unknown') + '</span>';
-      return;
-    }
-    _shLastResults = data.results || [];
-    renderMarketplaceResults(_shLastResults);
-    status.textContent = `Showing ${_shLastResults.length} ${labels[sort] || ''} skills`;
-  } catch (e) {
-    status.innerHTML = '<span class="text-red-400">Network error: ' + _esc(e.message) + '</span>';
-  }
-}
-
-function _fmtNum(n) { return typeof n === 'number' ? n.toLocaleString() : String(n || ''); }
-
-function renderMarketplaceResults(results) {
-  const container = document.getElementById('sh-results');
-  container.innerHTML = '';
-  if (!results.length) {
-    container.innerHTML = '<p class="text-gray-500 text-sm col-span-2">No results found.</p>';
-    return;
-  }
-  for (const r of results) {
-    const name = r.name || '???';
-    const desc = (r.description || '').substring(0, 140);
-    const sid = r.id || '';
-    const downloads = r.downloads || 0;
-    const stars = r.stars || 0;
-    const author = r.author || '';
-    const certified = r.certified || false;
-
-    const card = document.createElement('div');
-    card.className = 'bg-surface-800/60 border border-surface-700/50 rounded-xl p-5 hover:border-brand-500/40 transition-colors';
-    card.innerHTML = `
-      <div class="flex items-start justify-between gap-3 mb-2">
-        <h3 class="font-semibold text-white text-sm">${_esc(name)}</h3>
-        <div class="flex items-center gap-2 shrink-0">
-          ${certified ? '<span class="text-[.65rem] px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded font-medium">✓ Certified</span>' : ''}
-        </div>
-      </div>
-      <p class="text-xs text-gray-400 mb-3 line-clamp-2">${_esc(desc)}</p>
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3 text-[.65rem] text-gray-500">
-          ${author ? `<span>@${_esc(author)}</span>` : ''}
-          ${downloads ? `<span>↓ ${_fmtNum(downloads)}</span>` : ''}
-          ${stars ? `<span class="text-yellow-400">★ ${_fmtNum(stars)}</span>` : ''}
-        </div>
-        ${sid ? `<button onclick="marketplaceInstall('${_esc(sid)}')" class="text-xs px-3 py-1.5 rounded-lg bg-brand-500/20 text-brand-400 hover:bg-brand-500/30 font-medium transition-colors">Install</button>` : ''}
-      </div>
-      ${sid ? `<div class="mt-2 text-[.6rem] text-gray-600 truncate">ID: ${_esc(sid)}</div>` : ''}
-    `;
-    container.appendChild(card);
-  }
-}
 
 function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-async function marketplaceInstall(skillId) {
-  if (!confirm(`Install skill "${skillId}" from ClawHub?`)) return;
-  const status = document.getElementById('sh-status');
-  status.textContent = `Installing ${skillId}…`;
-  status.classList.remove('hidden');
-
-  const btn = document.querySelector(`button[onclick="marketplaceInstall('${skillId}')"]`);
-  if (btn) { btn.disabled = true; btn.textContent = 'Installing…'; btn.classList.add('opacity-50'); }
-
-  try {
-    const res = await fetch('/api/marketplace/install', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skill_id: skillId }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      const name = data.skill_name || skillId;
-      status.innerHTML = `<span class="text-green-400">✓ Installed &amp; ready!</span> Use in chat: <code class="bg-surface-700 px-1.5 py-0.5 rounded text-brand-400">use_skill("${_esc(name)}")</code>`
-        + (data.skill_count ? ` <span class="text-gray-500 ml-2">(${data.skill_count} skills total)</span>` : '');
-      if (btn) { btn.textContent = '✓ Installed'; btn.classList.replace('bg-brand-500/20', 'bg-green-500/20'); btn.classList.replace('text-brand-400', 'text-green-400'); }
-    } else {
-      status.innerHTML = `<span class="text-red-400">✗ Error:</span> ${_esc(data.error || 'Unknown error')}`;
-      if (btn) { btn.disabled = false; btn.textContent = 'Install'; btn.classList.remove('opacity-50'); }
-    }
-  } catch (e) {
-    status.innerHTML = `<span class="text-red-400">✗ Failed:</span> ${_esc(e.message)}`;
-    if (btn) { btn.disabled = false; btn.textContent = 'Install'; btn.classList.remove('opacity-50'); }
-  }
-}
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
 function connectWebSocket() {
@@ -1875,6 +1417,8 @@ async function loadPersona() {
     if (customizeBtn) {
       customizeBtn.classList.toggle('hidden', !data.choices);
     }
+    const advanced = document.getElementById('identity-advanced');
+    if (advanced) advanced.classList.toggle('hidden', !data.choices);
     if (!data.choices) {
       box.innerHTML = `
         <div class="rounded-xl border border-surface-700/50 bg-surface-900/40 p-6 text-center">
@@ -2784,29 +2328,7 @@ async function disconnectTool(name) {
   loadTools(true);
 }
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
-async function loadCurrentUser() {
-  try {
-    const r = await fetch('/api/auth/me', { credentials: 'include' });
-    if (!r.ok) return;
-    const d = await r.json();
-    const email = (d.email || '').trim();
-    const emailEl = document.getElementById('user-email');
-    const avatarEl = document.getElementById('user-avatar');
-    if (emailEl) emailEl.textContent = email || 'You';
-    if (avatarEl) avatarEl.textContent = (d.initial || email[0] || '·').toUpperCase();
-  } catch (_) { /* anon — leave placeholders */ }
-}
-
-async function logout() {
-  try {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-  } catch (_) {}
-  window.location.href = '/login';
-}
-
 // ── Init ─────────────────────────────────────────────────────────────────────
-loadCurrentUser();
 switchTab('dashboard');
 connectWebSocket();
 refreshDashboard();

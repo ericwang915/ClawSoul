@@ -5,7 +5,7 @@ Sole source: ``<CLAWSOUL_HOME>/context/persona/appearance.md``, written by
 the wizard (``companion.apply_choices`` →
 ``_generate_appearance_file``).  If the file is missing or empty we
 **raise**, because a silent fallback to a hardcoded default has bitten
-us multiple times — wrong tenancy binding, missing apply_choices on
+us multiple times — missing apply_choices on
 boot, etc. — and produced an East-Asian selfie for an American persona
 with no visible error.  Failing loud means the caller (selfie / candid
 tool) returns an explicit error string to the LLM, which then has to

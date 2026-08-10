@@ -455,18 +455,16 @@ def _occupation_label(ch: dict, zh: bool) -> str:
 
 
 # The per-country city list (and the "vibe" blurbs, coordinates, timezone,
-# and signature events) all live in the seeded city store now — Tigris
-# `culture/cities/<CC>.json` + Pg `city_profiles`, see
-# scripts/seed_city_profiles.py + claw_soul.core.city.  Nothing about
-# specific places is hardcoded here anymore.
+# and signature events) all live in the local city dataset — see
+# claw_soul.core.city.  Nothing about specific places is hardcoded here.
 
 
 def random_region(country: str) -> str:
     """Pick a default city for the agent if ``companionRegion`` was left blank.
 
-    Reads the city store (authored order = pick order; first is the primary
-    city).  Empty string if the country isn't seeded — the wizard's city
-    field is free-text, so the user can still type their own."""
+    Reads the local city dataset (authored order = pick order; first is the
+    primary city).  Empty string if there's no dataset for that country —
+    the wizard's city field is free-text, so the user can still type one."""
     from .core import city as _city
     cities = _city.get_country_cities(country) or {}
     names = list(cities)
@@ -474,11 +472,12 @@ def random_region(country: str) -> str:
 
 
 def city_background(country: str, region: str) -> str:
-    """Look up the city's "vibe" blurb for (country, region).
+    """The city's "vibe" blurb for (country, region), or "" if we have none.
 
-    Reads the seeded city store (Tigris/Pg via ``core.city``); falls back
-    to a 1-line generic stub if the city isn't seeded — the LLM can still
-    ad-lib from the country alone.
+    Empty is the right answer when there's no local dataset for the city:
+    both callers already write their own "Lives in <city>, <country>." line
+    in the persona's language, so a generic stub here would only repeat it —
+    and the old stub repeated it *in Chinese*, into English personas too.
     """
     if not region:
         return ""
@@ -489,11 +488,7 @@ def city_background(country: str, region: str) -> str:
             return prof["vibe"]
     except Exception:
         pass
-    country_label = next(
-        (lbl for k, lbl, _ in _COUNTRIES if k.upper() == (country or "").upper()),
-        country,
-    )
-    return f"住在 {region}（{country_label}）。具体细节由对话中自然展开。"
+    return ""
 
 
 def country_to_culture(country: str) -> str:
@@ -2592,7 +2587,78 @@ def _optional_keys(cfg: dict) -> None:
             print("  → Deepgram key set")
 
     print()
+    _photo_backend(cfg)
     _channel_keys(cfg)
+
+
+# Backends she can take selfies with, cheapest-to-start first.  The full list
+# (fal, replicate, stability, dashscope, custom) lives in claw_soul.json —
+# a wizard that reads out thirteen options helps nobody.
+# (key, label, needs a key?)
+_PHOTO_BACKENDS = [
+    ("pollinations", "Free, no signup — try it now (prompts go to a public service)", False),
+    ("gemini",       "Gemini (Google) — same key that lets her see your photos", True),
+    ("openrouter",   "OpenRouter — the same key you may already use for chat", True),
+    ("openai",       "OpenAI — gpt-image-1", True),
+    ("bfl",          "Black Forest Labs — FLUX Kontext, best at keeping one face", True),
+    ("seedream",     "Seedream (BytePlus) — ~$0.035 / image", True),
+    ("comfyui",      "Local ComfyUI — no key, nothing leaves your machine", False),
+    ("sdwebui",      "Local Stable Diffusion WebUI — no key, nothing leaves your machine", False),
+]
+
+# Where a keyless backend lives, if it isn't a hosted service.
+_PHOTO_LOCAL_DEFAULTS = {
+    "comfyui": "http://localhost:8188",
+    "sdwebui": "http://localhost:7860",
+}
+
+
+def _photo_backend(cfg: dict) -> None:
+    """Pick who draws her selfies.  Skipping is fine — everything else works."""
+    skills = cfg.setdefault("skills", {})
+    if skills.get("image", {}).get("provider") or skills.get("seedream", {}).get("apiKey"):
+        return  # already configured
+
+    print(_c("  Photos — she can send selfies (press Enter to skip):", _DIM))
+    for i, (_key, label, _needs) in enumerate(_PHOTO_BACKENDS, 1):
+        print(_c(f"    {i}) {label}", _DIM))
+
+    choice = input(f"  Choice [1-{len(_PHOTO_BACKENDS)}, Enter to skip]: ").strip()
+    if not choice.isdigit() or not 1 <= int(choice) <= len(_PHOTO_BACKENDS):
+        print(_c("  → No photos for now (add a key later to turn them on)", _DIM))
+        print()
+        return
+
+    name, label, needs_key = _PHOTO_BACKENDS[int(choice) - 1]
+
+    if not needs_key:
+        default = _PHOTO_LOCAL_DEFAULTS.get(name)
+        if default:
+            base = input(f"  Server URL [{default}]: ").strip()
+            skills.setdefault(name, {})["baseUrl"] = base or default
+        else:
+            skills.setdefault(name, {})
+    else:
+        # She may already have a Gemini key for seeing the photos you send.
+        reuse = cfg.get("llm", {}).get(name, {}).get("apiKey", "")
+        if reuse:
+            ans = input(f"  Reuse your existing {label.split(' —')[0]} key? [Y/n]: ").strip().lower()
+            if ans in ("", "y", "yes"):
+                skills.setdefault(name, {})["apiKey"] = reuse
+                skills.setdefault("image", {})["provider"] = name
+                print(f"  → Photos on, via {name}")
+                print()
+                return
+        key = getpass.getpass("  API Key: ").strip()
+        if not key:
+            print(_c("  → No photos for now", _DIM))
+            print()
+            return
+        skills.setdefault(name, {})["apiKey"] = key
+
+    skills.setdefault("image", {})["provider"] = name
+    print(f"  → Photos on, via {name}")
+    print()
 
 
 def _channel_keys(cfg: dict) -> None:
