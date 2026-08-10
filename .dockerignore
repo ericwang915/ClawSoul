@@ -2,7 +2,6 @@
 .git
 .github
 frontend
-deploy/fly-router
 tests
 assets
 **/__pycache__

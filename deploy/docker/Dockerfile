@@ -49,7 +49,7 @@ RUN useradd -m -u 10001 -d /home/claw claw \
     && mkdir -p /data \
     && chown -R claw:claw /data
 
-COPY --chown=claw:claw deploy/fly/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chown=claw:claw deploy/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 USER claw
