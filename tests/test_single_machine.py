@@ -264,3 +264,41 @@ def test_heavy_extras_are_not_required_dependencies():
     required = pyproject.split("[project.optional-dependencies]")[0]
     assert "scikit-learn" not in required, "scikit-learn must stay optional"
     assert "scikit-learn" in pyproject, "...but still offered as an extra"
+
+
+def test_dockerfile_copies_only_paths_that_exist():
+    """deploy/fly/ was renamed to deploy/docker/ but the Dockerfile kept the
+    old path, so the published image never built — and the one-line quickstart
+    in the README worked for nobody. CI only catches this on a release tag."""
+    import re
+    df = (ROOT / "deploy/docker/Dockerfile").read_text()
+    missing = []
+    for line in df.splitlines():
+        m = re.match(r"\s*COPY\s+(.*)$", line)
+        if not m:
+            continue
+        parts = [p for p in m.group(1).split() if not p.startswith("--")]
+        for src in parts[:-1]:
+            if src.startswith("/"):     # copied from an earlier build stage
+                continue
+            if not (ROOT / src).exists():
+                missing.append(src)
+    assert not missing, f"Dockerfile COPYs paths that don't exist: {missing}"
+
+
+def test_readmes_quickstart_image_matches_what_ci_publishes():
+    """The headline command must name the image the workflow actually pushes.
+
+    The workflow templates the owner (``${{ github.repository_owner }}``), so
+    compare the image name only — that's the part a typo would break.
+    """
+    import re
+    wf = (ROOT / ".github/workflows/docker-publish.yml").read_text()
+    # the owner is a ${{ ... }} template containing spaces — match the tail
+    published = set(re.findall(r"images:.*?ghcr\.io/.*/([\w.-]+)\s*$", wf, re.M))
+    assert published, "workflow declares no ghcr.io image"
+    for readme in ("README.md", "README.zh-CN.md"):
+        pulled = set(re.findall(r"ghcr\.io/[\w.-]+/([\w.-]+)",
+                                (ROOT / readme).read_text()))
+        unknown = pulled - published
+        assert not unknown, f"{readme} tells users to pull {unknown}, which CI never pushes"
