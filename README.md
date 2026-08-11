@@ -317,14 +317,27 @@ All runtime data lives under `~/.claw_soul/`:
 
 ## 🧠 Supported LLMs
 
-| Provider | Default model |
-|----------|---------------|
-| **DeepSeek** | `deepseek-chat` (V4) |
-| **Grok (xAI)** | `grok-3` |
-| **Claude (Anthropic)** | `claude-sonnet-4-20250514` |
-| **Gemini (Google)** | `gemini-2.0-flash` |
-| **Kimi (Moonshot)** | `moonshot-v1-128k` |
-| **GLM (Zhipu)** | `glm-4-flash` |
+**16 providers.** Set one key and it's auto-detected (`CLAW_<PROVIDER>_API_KEY`),
+or pin it with `CLAW_LLM_PROVIDER`. Two run **fully local** — no key, no cloud.
+
+| Provider | Key env var | Default model |
+|----------|-------------|---------------|
+| **DeepSeek** | `CLAW_DEEPSEEK_API_KEY` | `deepseek-chat` |
+| **OpenAI** | `CLAW_OPENAI_API_KEY` | `gpt-4o-mini` |
+| **Claude (Anthropic)** | `CLAW_CLAUDE_API_KEY` | `claude-sonnet-4-20250514` |
+| **Gemini (Google)** | `CLAW_GEMINI_API_KEY` | `gemini-2.5-flash` |
+| **OpenRouter** | `CLAW_OPENROUTER_API_KEY` | `deepseek/deepseek-chat` |
+| **Grok (xAI)** | `CLAW_GROK_API_KEY` | `grok-3` |
+| **Kimi (Moonshot)** | `CLAW_KIMI_API_KEY` | `moonshot-v1-128k` |
+| **GLM (Zhipu)** | `CLAW_GLM_API_KEY` | `glm-4-flash` |
+| **Qwen (Alibaba)** | `CLAW_QWEN_API_KEY` | `qwen-plus` |
+| **Mistral** | `CLAW_MISTRAL_API_KEY` | `mistral-large-latest` |
+| **Groq** | `CLAW_GROQ_API_KEY` | `llama-3.3-70b-versatile` |
+| **Together** | `CLAW_TOGETHER_API_KEY` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
+| **SiliconFlow** | `CLAW_SILICONFLOW_API_KEY` | `deepseek-ai/DeepSeek-V3` |
+| **Ollama** 🏠 local | *none* | `llama3.1` |
+| **LM Studio** 🏠 local | *none* | your loaded model |
+| **Custom** | `CLAW_CUSTOM_API_KEY` | any OpenAI-compatible endpoint |
 
 ---
 
