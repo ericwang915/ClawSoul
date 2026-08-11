@@ -780,6 +780,58 @@ _RELATIONSHIP_TYPES = [
 
 # ── Companion wizard ─────────────────────────────────────────────────────────
 
+# Personality defaults used by express setup — a warm, balanced companion.
+# Mirrors the web wizard's Quick Start; everything is tunable later from the
+# dashboard, and growth-tier edits don't wipe memory.
+_EXPRESS_DEFAULTS = {
+    "userGender": "other", "userAge": "26-35",
+    "companionAge": "26-35",
+    "archetype": "playful", "dynamic": "romance", "tone": "casual",
+    "proactivity": "attentive", "stress": "listen", "deepTalk": "everyday",
+}
+
+
+def _express_wizard(cfg: dict) -> dict:
+    """The two-minute path: four questions, sensible defaults for the rest.
+
+    The web wizard has had this since Quick Start; the CLI made everyone
+    answer all ~20 personality screens with no way out — exactly the crowd
+    that chose `pipx install` over Docker.
+    """
+    existing = cfg.get("companion", {})
+    choices = dict(_EXPRESS_DEFAULTS)
+
+    print()
+    name = input("  Your name: ").strip() or existing.get("userName", "")
+    while not name:
+        name = input("  Your name: ").strip()
+    choices["userName"] = name
+
+    choices["userLanguage"] = _ask_choice(
+        "Chat language", "", _LANGUAGES,
+        default=existing.get("userLanguage", "en"),
+    )
+    choices["companionGender"] = _ask_choice(
+        "Your companion", "", _COMPANION_GENDERS,
+        default=existing.get("companionGender", ""),
+    )
+    default_comp = existing.get("companionName") or (
+        "小爪" if str(choices["userLanguage"]).startswith("zh") else "Claw")
+    comp_name = input(f"\n  Their name [{default_comp}]: ").strip()
+    choices["companionName"] = comp_name or default_comp
+
+    print()
+    print(_c("  → Everything else gets warm defaults — fine-tune anytime in "
+             "the dashboard (Settings → Customize).", _DIM))
+
+    # Same canonical cleaning the web wizard gets (fills userCountry etc.),
+    # so downstream file generation sees the exact shape it always has.
+    from . import companion as _companion
+    cleaned = _companion.validate(choices)
+    cfg["companion"] = cleaned
+    return cleaned
+
+
 def _companion_wizard(cfg: dict) -> dict:
     """Run the mandatory companion personality wizard.
 
@@ -2440,8 +2492,20 @@ def run_onboard(config_path: str | None = None) -> Path:
 
     cfg = _load_existing(config_path)
 
-    # 1. Companion personality setup (the fun part first!)
-    choices = _companion_wizard(cfg)
+    # 0. Express or full? First-time users overwhelmingly want to be
+    # talking in two minutes; the 20-screen version stays for people who
+    # enjoy designing her from scratch (and for re-runs, which pre-fill).
+    print(_c("  1) Express — 4 questions, chatting in ~2 minutes", _BOLD))
+    print(_c("     Warm defaults for personality; fine-tune later in the dashboard.", _DIM))
+    print(_c("  2) Full custom — design everything (~20 questions)", _BOLD))
+    mode = input("\n  Choose (1-2) [1]: ").strip() or "1"
+    print()
+
+    # 1. Companion personality setup
+    if mode == "2":
+        choices = _companion_wizard(cfg)
+    else:
+        choices = _express_wizard(cfg)
 
     # 2. Choose LLM provider
     provider = _choose_provider(cfg)
@@ -2460,7 +2524,7 @@ def run_onboard(config_path: str | None = None) -> Path:
         cfg["llm"][prov].setdefault("baseUrl", provider["default_base"])
 
     # 5. Optional keys
-    _optional_keys(cfg)
+    _optional_keys(cfg, express=(mode != "2"))
 
     # 6. Validate LLM key
     _validate_key(cfg, provider)
@@ -2566,7 +2630,14 @@ def _get_api_key(provider: dict, cfg: dict) -> str:
     return key
 
 
-def _optional_keys(cfg: dict) -> None:
+def _optional_keys(cfg: dict, express: bool = False) -> None:
+    if express:
+        # Express keeps only what defines the product: photos (skippable)
+        # and Telegram (skippable). Search/voice/Discord/WhatsApp wait for
+        # the dashboard or a re-run of `claw_soul onboard`.
+        _photo_backend(cfg)
+        _telegram_only(cfg)
+        return
     print(_c("  Optional services (press Enter to skip):", _DIM))
     print()
 
@@ -2658,6 +2729,23 @@ def _photo_backend(cfg: dict) -> None:
 
     skills.setdefault("image", {})["provider"] = name
     print(f"  → Photos on, via {name}")
+    print()
+
+
+def _telegram_only(cfg: dict) -> None:
+    print(_c("  Telegram — lets her live in your pocket (press Enter to skip):", _DIM))
+    channels = cfg.setdefault("channels", {})
+    tg = channels.setdefault("telegram", {"token": "", "allowedUsers": []})
+    token = input("  Telegram Bot Token: ").strip()
+    if token:
+        tg["token"] = token
+        allowed = input("  Your Telegram user ID (Enter to allow all): ").strip()
+        if allowed:
+            try:
+                tg["allowedUsers"] = [int(x) for x in allowed.replace(",", " ").split()]
+            except ValueError:
+                pass
+        print("  → Telegram connected")
     print()
 
 
