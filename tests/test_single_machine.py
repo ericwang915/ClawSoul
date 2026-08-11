@@ -334,3 +334,37 @@ def test_presence_reads_storage_timestamps_in_the_right_timezone():
     last = sanctum_api._fetch_last_message_at()
     gap = (datetime.now(timezone.utc) - last).total_seconds()
     assert 0 <= gap < 60, f"a just-sent message reads as {gap:.0f}s ago"
+
+
+def test_cli_onboard_has_a_two_minute_express_path(monkeypatch):
+    """`pipx install` users hit a ~30-question wizard with no skip path,
+    while the web wizard has had Quick Start all along. Express must stay
+    under 10 prompts and still produce a valid persisted persona."""
+    import builtins
+    import io
+    import json
+    from unittest import mock
+
+    from claw_soul import onboard
+
+    answers = iter(["", "Eric", "", "1", "", "5", "", ""])
+    prompts = []
+
+    def fake_input(prompt=""):
+        prompts.append(str(prompt))
+        return next(answers, "")
+
+    with mock.patch.object(builtins, "input", fake_input), \
+         mock.patch.object(onboard.getpass, "getpass",
+                           lambda *a: (prompts.append("key"), "sk-test")[1]), \
+         mock.patch.object(onboard, "_validate_key", lambda *a, **k: True), \
+         mock.patch("sys.stdout", io.StringIO()):
+        path = onboard.run_onboard(None)
+
+    assert len(prompts) <= 10, f"express asked {len(prompts)} questions"
+    cfg = json.loads(path.read_text())
+    c = cfg["companion"]
+    assert c["userName"] == "Eric"
+    assert c["companionGender"] in ("female", "male")
+    assert c["archetype"], "personality defaults must be filled"
+    assert cfg["llm"][cfg["llm"]["provider"]]["apiKey"] == "sk-test"
