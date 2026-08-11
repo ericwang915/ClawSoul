@@ -252,7 +252,10 @@ def _fetch_last_message_at() -> datetime | None:
         ts = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
     except ValueError:
         return None
-    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+    # StorageManager writes naive *local* time. Reading it as UTC put the
+    # last message up to a day in the future, so the presence badge showed
+    # "online" for hours after the user left.
+    return ts if ts.tzinfo else ts.astimezone()
 
 
 # ── Bonding-level helpers used by background emitters ───────────────────

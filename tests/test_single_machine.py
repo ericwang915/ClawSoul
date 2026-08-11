@@ -318,3 +318,19 @@ def test_readme_llm_table_covers_every_provider_in_the_registry():
     for local in ("ollama", "lmstudio"):
         assert local in table.lower().replace(" ", ""), f"{local} missing from the table"
     assert not missing, f"providers missing from the README table: {missing}"
+
+
+def test_presence_reads_storage_timestamps_in_the_right_timezone():
+    """StorageManager stamps turns with naive local time; the presence badge
+    read them as UTC, so on any UTC+N machine she showed 'online' for N hours
+    after the user left (seconds_since was negative)."""
+    from datetime import datetime, timezone
+
+    from claw_soul.core.storage import StorageManager
+    from claw_soul.web import sanctum_api
+
+    StorageManager.reset_for_tests()
+    StorageManager.instance().index_turn("web:main", "user", "hi")  # default ts: naive local now
+    last = sanctum_api._fetch_last_message_at()
+    gap = (datetime.now(timezone.utc) - last).total_seconds()
+    assert 0 <= gap < 60, f"a just-sent message reads as {gap:.0f}s ago"
