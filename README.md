@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-300.png" alt="ClawSoul" width="160">
+  <img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/logo-300.png" alt="ClawSoul" width="160">
 </p>
 
 <h1 align="center">ClawSoul 🐾💕</h1>
@@ -103,9 +103,9 @@ translated below — she speaks whatever language you pick).
 
 <table>
 <tr>
-<td width="33%"><img src="assets/demo/proactive-and-sass.jpg" alt="proactive good-morning, a selfie, and attitude"></td>
-<td width="33%"><img src="assets/demo/same-face-selfies.jpg" alt="two selfies of the same person"></td>
-<td width="33%"><img src="assets/demo/sees-your-photo.jpg" alt="she looks at a photo you sent"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/proactive-and-sass.jpg" alt="proactive good-morning, a selfie, and attitude"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/same-face-selfies.jpg" alt="two selfies of the same person"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/sees-your-photo.jpg" alt="she looks at a photo you sent"></td>
 </tr>
 <tr>
 <td valign="top">
@@ -173,9 +173,9 @@ the weather, what she's doing right now. Same face, every time.
 
 <table>
 <tr>
-<td width="33%"><img src="assets/samples/morning.jpg" alt="cozy morning, coffee in hand"></td>
-<td width="33%"><img src="assets/samples/lunch.jpg" alt="in the park at lunchtime"></td>
-<td width="33%"><img src="assets/samples/cozy.jpg" alt="on the couch in the evening"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/morning.jpg" alt="cozy morning, coffee in hand"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/lunch.jpg" alt="in the park at lunchtime"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/cozy.jpg" alt="on the couch in the evening"></td>
 </tr>
 <tr>
 <td align="center"><sub><b>08:30</b> · sleepy ☕<br>"morning…just made coffee. you up?"</sub></td>
@@ -188,9 +188,9 @@ the weather, what she's doing right now. Same face, every time.
 
 <table>
 <tr>
-<td width="33%"><img src="assets/samples/anime-male-rush.jpg" alt="running late with toast"></td>
-<td width="33%"><img src="assets/samples/anime-male-ramen.jpg" alt="at a ramen counter"></td>
-<td width="33%"><img src="assets/samples/anime-male-gaming.jpg" alt="late-night gaming"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/anime-male-rush.jpg" alt="running late with toast"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/anime-male-ramen.jpg" alt="at a ramen counter"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/anime-male-gaming.jpg" alt="late-night gaming"></td>
 </tr>
 <tr>
 <td align="center"><sub><b>07:45</b> · running late 🍞<br>"toast in mouth, tie not done. running."</sub></td>
@@ -204,12 +204,12 @@ the weather, what she's doing right now. Same face, every time.
 
 <table>
 <tr>
-<td width="16%"><img src="assets/samples/realistic-asian.jpg"></td>
-<td width="16%"><img src="assets/samples/realistic-european.jpg"></td>
-<td width="16%"><img src="assets/samples/realistic-black.jpg"></td>
-<td width="16%"><img src="assets/samples/realistic-male-gym.jpg"></td>
-<td width="16%"><img src="assets/samples/realistic-male-bike.jpg"></td>
-<td width="16%"><img src="assets/samples/realistic-male-rooftop.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-asian.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-european.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-black.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-male-gym.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-male-bike.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-male-rooftop.jpg"></td>
 </tr>
 </table>
 

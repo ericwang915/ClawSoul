@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-300.png" alt="ClawSoul" width="160">
+  <img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/logo-300.png" alt="ClawSoul" width="160">
 </p>
 
 <h1 align="center">ClawSoul 🐾💕</h1>
@@ -86,9 +86,9 @@ claw_soul chat
 
 <table>
 <tr>
-<td width="33%"><img src="assets/demo/proactive-and-sass.jpg" alt="主动早安、自拍、以及被冷落后的小情绪"></td>
-<td width="33%"><img src="assets/demo/same-face-selfies.jpg" alt="同一个人的两张自拍"></td>
-<td width="33%"><img src="assets/demo/sees-your-photo.jpg" alt="她看你发的照片"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/proactive-and-sass.jpg" alt="主动早安、自拍、以及被冷落后的小情绪"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/same-face-selfies.jpg" alt="同一个人的两张自拍"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/sees-your-photo.jpg" alt="她看你发的照片"></td>
 </tr>
 <tr>
 <td valign="top">
