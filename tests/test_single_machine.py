@@ -302,3 +302,19 @@ def test_readmes_quickstart_image_matches_what_ci_publishes():
                                 (ROOT / readme).read_text()))
         unknown = pulled - published
         assert not unknown, f"{readme} tells users to pull {unknown}, which CI never pushes"
+
+
+def test_readme_llm_table_covers_every_provider_in_the_registry():
+    """The 'Supported LLMs' table sat at 6 rows while the code supported 16 —
+    a reader comparing companions would count six and move on."""
+    import re
+    from claw_soul.main import _OPENAI_COMPATIBLE
+    readme = (ROOT / "README.md").read_text()
+    table = re.search(r"## 🧠 Supported LLMs\n.*?(?=\n---)", readme, re.S).group(0)
+    providers = set(_OPENAI_COMPATIBLE) | {"claude", "gemini"}
+    missing = [p for p in providers
+               if f"CLAW_{p.upper()}_API_KEY" not in table
+               and p not in ("ollama", "lmstudio", "custom")]
+    for local in ("ollama", "lmstudio"):
+        assert local in table.lower().replace(" ", ""), f"{local} missing from the table"
+    assert not missing, f"providers missing from the README table: {missing}"
