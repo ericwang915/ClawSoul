@@ -46,7 +46,7 @@ docker run -e CLAW_OPENROUTER_API_KEY=sk-or-... -p 7788:7788 -v clawsoul:/data g
 ### 更喜欢 Python？直接装
 
 ```bash
-pipx install claw-soul          # 或者：pip install claw-soul
+pipx install clawsoul-ai        # 或者：pip install clawsoul-ai
                                 # 想要更准的记忆检索：装 [search] 附加项
 claw_soul onboard               # 选模型、填 key、设计你的伴侣
 claw_soul start                 # 面板在 http://localhost:7788

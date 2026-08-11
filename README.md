@@ -62,7 +62,7 @@ and use no key at all. Want her on your phone? Add a Telegram bot token.
 ### Prefer Python? Install it directly
 
 ```bash
-pipx install claw-soul          # or: pip install claw-soul
+pipx install clawsoul-ai        # or: pip install clawsoul-ai
                                 # add [search] for sharper memory recall
 claw_soul onboard               # pick a provider, paste your key, design your companion
 claw_soul start                 # dashboard at http://localhost:7788
