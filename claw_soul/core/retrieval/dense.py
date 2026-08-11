@@ -158,7 +158,7 @@ class EmbeddingRetriever:
                 _WARNED_FALLBACK = True
                 logger.info(
                     "[retrieval] using character-bigram similarity. For sharper "
-                    "recall: pip install 'claw-soul[search]'"
+                    "recall: pip install 'clawsoul-ai[search]'"
                 )
 
     def fit(self, corpus: list[dict]) -> None:

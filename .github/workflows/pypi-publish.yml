@@ -1,11 +1,17 @@
 name: Publish to PyPI
 
-# Publishes on every version tag (v*), so `pip install claw-soul` and
-# `pipx install claw-soul` work without cloning.
+# Publishes on every version tag (v*), so `pip install clawsoul-ai` and
+# `pipx install clawsoul-ai` work without cloning.
 #
-# Uses PyPI Trusted Publishing (OIDC) — no API token to store or rotate.
-# One-time setup: on pypi.org → your project → Publishing → add a GitHub
-# publisher with owner=ericwang915, repo=ClawSoul, workflow=pypi-publish.yml.
+# (`claw-soul`/`clawsoul` are blocked on PyPI — an unrelated "ClawSouls"
+# project owns the ultra-normalized name, and PyPI treats all punctuation
+# variants as the same name.)
+#
+# Auth: a PyPI API token in the PYPI_API_TOKEN repo secret. Set it with:
+#   gh secret set PYPI_API_TOKEN
+# (Trusted Publishing/OIDC also works — add a publisher on pypi.org for
+# owner=ericwang915, repo=ClawSoul, workflow=pypi-publish.yml, then drop
+# the password line below.)
 
 on:
   push:
@@ -45,12 +51,11 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write        # required for Trusted Publishing
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
