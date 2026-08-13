@@ -6,7 +6,7 @@ import tempfile
 import pytest
 from unittest.mock import MagicMock
 
-from claw_soul.core.agent import Agent, _load_text_dir_or_file
+from herandhim.core.agent import Agent, _load_text_dir_or_file
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ class TestAgentSoulLoading:
 
 class TestSessionManager:
     def _make_sm(self):
-        from claw_soul.session_manager import SessionManager
+        from herandhim.session_manager import SessionManager
         calls = []
         def factory(sid):
             calls.append(1)
@@ -215,35 +215,35 @@ telegram = pytest.importorskip("telegram", reason="python-telegram-bot not insta
 
 class TestTelegramBot:
     def _make_sm(self):
-        from claw_soul.session_manager import SessionManager
+        from herandhim.session_manager import SessionManager
         return SessionManager(lambda sid: MagicMock())
 
     def test_import(self):
-        from claw_soul.channels.telegram_bot import TelegramBot
+        from herandhim.channels.telegram_bot import TelegramBot
         assert TelegramBot is not None
 
     def test_allowlist_empty_allows_all(self):
-        from claw_soul.channels.telegram_bot import TelegramBot
+        from herandhim.channels.telegram_bot import TelegramBot
         bot = TelegramBot(session_manager=self._make_sm(), token="dummy", allowed_users=None)
         assert bot._is_allowed(123456)
         assert bot._is_allowed(999999)
 
     def test_allowlist_restricts_access(self):
-        from claw_soul.channels.telegram_bot import TelegramBot
+        from herandhim.channels.telegram_bot import TelegramBot
         bot = TelegramBot(session_manager=self._make_sm(), token="dummy", allowed_users=[111, 222])
         assert bot._is_allowed(111)
         assert not bot._is_allowed(333)
 
     def test_each_chat_keeps_its_own_history(self):
         """One bot can serve several chats; they must not share a session."""
-        from claw_soul.channels.telegram_bot import TelegramBot
+        from herandhim.channels.telegram_bot import TelegramBot
         bot = TelegramBot.__new__(TelegramBot)
         assert bot._session_id(42) == "telegram:42"
         assert bot._session_id(42) != bot._session_id(999)
 
     def test_messages_use_session_manager(self):
-        from claw_soul.session_manager import SessionManager
-        from claw_soul.channels.telegram_bot import TelegramBot
+        from herandhim.session_manager import SessionManager
+        from herandhim.channels.telegram_bot import TelegramBot
         calls = []
         def factory(sid):
             calls.append(1)
@@ -256,8 +256,8 @@ class TestTelegramBot:
         assert len(calls) == 1, "Same chat should reuse one Agent"
 
     def test_reset_via_session_manager(self):
-        from claw_soul.session_manager import SessionManager
-        from claw_soul.channels.telegram_bot import TelegramBot
+        from herandhim.session_manager import SessionManager
+        from herandhim.channels.telegram_bot import TelegramBot
         calls = []
         sm = SessionManager(lambda sid: (calls.append(1), MagicMock())[1])
         TelegramBot(session_manager=sm, token="dummy")
@@ -266,12 +266,12 @@ class TestTelegramBot:
         assert a1 is not a2
 
     def test_split_message_short(self):
-        from claw_soul.channels.telegram_bot import _split_message
+        from herandhim.channels.telegram_bot import _split_message
         chunks = _split_message("Hello", limit=4096)
         assert chunks == ["Hello"]
 
     def test_split_message_long(self):
-        from claw_soul.channels.telegram_bot import _split_message
+        from herandhim.channels.telegram_bot import _split_message
         text = "A" * 5000
         chunks = _split_message(text, limit=4096)
         assert len(chunks) == 2
@@ -283,31 +283,31 @@ class TestTelegramBot:
 
 class TestCronScheduler:
     def _make_sm(self):
-        from claw_soul.session_manager import SessionManager
+        from herandhim.session_manager import SessionManager
         return SessionManager(lambda sid: MagicMock())
 
     def test_import(self):
-        from claw_soul.scheduler.cron import CronScheduler
+        from herandhim.scheduler.cron import CronScheduler
         assert CronScheduler is not None
 
     def test_parse_cron_valid(self):
-        from claw_soul.scheduler.cron import _parse_cron
+        from herandhim.scheduler.cron import _parse_cron
         trigger = _parse_cron("0 9 * * *")
         assert trigger is not None
 
     def test_parse_cron_invalid_raises(self):
-        from claw_soul.scheduler.cron import _parse_cron
+        from herandhim.scheduler.cron import _parse_cron
         with pytest.raises(ValueError):
             _parse_cron("0 9 *")  # only 3 fields
 
     def test_load_jobs_missing_file(self, tmp_path):
-        from claw_soul.scheduler.cron import CronScheduler
+        from herandhim.scheduler.cron import CronScheduler
         s = CronScheduler(session_manager=self._make_sm(), jobs_path=str(tmp_path / "missing.yaml"))
         jobs = s._load_jobs()
         assert jobs == []
 
     def test_load_jobs_from_yaml(self, tmp_path):
-        from claw_soul.scheduler.cron import CronScheduler
+        from herandhim.scheduler.cron import CronScheduler
         jobs_file = tmp_path / "jobs.yaml"
         jobs_file.write_text(
             "jobs:\n"
@@ -322,7 +322,7 @@ class TestCronScheduler:
         assert jobs[0]["id"] == "test_job"
 
     def test_disabled_job_not_registered(self, tmp_path):
-        from claw_soul.scheduler.cron import CronScheduler
+        from herandhim.scheduler.cron import CronScheduler
         jobs_file = tmp_path / "jobs.yaml"
         jobs_file.write_text(
             "jobs:\n"
@@ -336,7 +336,7 @@ class TestCronScheduler:
         assert count == 0
 
     def test_enabled_job_registered(self, tmp_path):
-        from claw_soul.scheduler.cron import CronScheduler
+        from herandhim.scheduler.cron import CronScheduler
         jobs_file = tmp_path / "jobs.yaml"
         jobs_file.write_text(
             "jobs:\n"
@@ -350,8 +350,8 @@ class TestCronScheduler:
         assert count == 1
 
     def test_each_job_gets_isolated_session(self, tmp_path):
-        from claw_soul.scheduler.cron import CronScheduler
-        from claw_soul.session_manager import SessionManager
+        from herandhim.scheduler.cron import CronScheduler
+        from herandhim.session_manager import SessionManager
         calls = []
         sm = SessionManager(lambda sid: (calls.append(1), MagicMock())[1])
         jobs_file = tmp_path / "jobs.yaml"
@@ -380,11 +380,11 @@ class TestCronScheduler:
 
 class TestHeartbeatMonitor:
     def test_import(self):
-        from claw_soul.scheduler.heartbeat import HeartbeatMonitor
+        from herandhim.scheduler.heartbeat import HeartbeatMonitor
         assert HeartbeatMonitor is not None
 
     def test_create_from_env_defaults(self, monkeypatch):
-        from claw_soul.scheduler.heartbeat import create_heartbeat_from_env, DEFAULT_INTERVAL
+        from herandhim.scheduler.heartbeat import create_heartbeat_from_env, DEFAULT_INTERVAL
         monkeypatch.delenv("HEARTBEAT_INTERVAL_SEC", raising=False)
         monkeypatch.delenv("HEARTBEAT_ALERT_CHAT_ID", raising=False)
         hb = create_heartbeat_from_env(provider=MagicMock())
@@ -392,7 +392,7 @@ class TestHeartbeatMonitor:
         assert hb._alert_chat_id is None
 
     def test_create_from_env_custom(self, monkeypatch):
-        from claw_soul.scheduler.heartbeat import create_heartbeat_from_env
+        from herandhim.scheduler.heartbeat import create_heartbeat_from_env
         monkeypatch.setenv("HEARTBEAT_INTERVAL_SEC", "30")
         monkeypatch.setenv("HEARTBEAT_ALERT_CHAT_ID", "9999")
         hb = create_heartbeat_from_env(provider=MagicMock())
@@ -401,7 +401,7 @@ class TestHeartbeatMonitor:
 
     def test_probe_ok_sets_last_ok_true(self):
         import asyncio
-        from claw_soul.scheduler.heartbeat import HeartbeatMonitor
+        from herandhim.scheduler.heartbeat import HeartbeatMonitor
         provider = MagicMock()
         provider.chat.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="pong"))]
@@ -412,7 +412,7 @@ class TestHeartbeatMonitor:
 
     def test_probe_fail_sets_last_ok_false(self):
         import asyncio
-        from claw_soul.scheduler.heartbeat import HeartbeatMonitor
+        from herandhim.scheduler.heartbeat import HeartbeatMonitor
         provider = MagicMock()
         provider.chat.side_effect = ConnectionError("LLM unreachable")
         hb = HeartbeatMonitor(provider=provider, interval_sec=60, log_path="/tmp/test_heartbeat.log")
@@ -424,13 +424,13 @@ class TestHeartbeatMonitor:
 
 class TestInit:
     def test_soul_component_created(self, tmp_path):
-        from claw_soul.init import init
+        from herandhim.init import init
         init(str(tmp_path))
         soul_dir = tmp_path / "context" / "soul"
         assert soul_dir.exists(), "context/soul/ should be created by init()"
 
     def test_soul_md_copied_from_template(self, tmp_path):
-        from claw_soul.init import init
+        from herandhim.init import init
         init(str(tmp_path))
         soul_file = tmp_path / "context" / "soul" / "SOUL.md"
         assert soul_file.exists(), "SOUL.md should be copied from template"

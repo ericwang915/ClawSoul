@@ -5,7 +5,7 @@ import json
 import os
 from unittest.mock import MagicMock
 
-from claw_soul.core.compaction import (
+from herandhim.core.compaction import (
     estimate_tokens,
     messages_to_text,
     persist_compaction,
@@ -265,7 +265,7 @@ class TestMemoryFlush:
 
 class TestAgentCompact:
     def _make_agent(self, tmp_path):
-        from claw_soul.core.agent import Agent
+        from herandhim.core.agent import Agent
         provider = MagicMock()
         provider.chat.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="[]"))]

@@ -1,9 +1,9 @@
 name: Publish Docker image
 
-# Builds and pushes the all-in-one image to GHCR so users can run ClawSoul
+# Builds and pushes the all-in-one image to GHCR so users can run HerAndHim
 # with a single command — no clone, no local build:
-#   docker run -e CLAW_DEEPSEEK_API_KEY=sk-... -p 7788:7788 \
-#     -v clawsoul:/data ghcr.io/<owner>/clawsoul
+#   docker run -e HERANDHIM_DEEPSEEK_API_KEY=sk-... -p 7788:7788 \
+#     -v herandhim:/data ghcr.io/<owner>/herandhim
 #
 # Fires on every push to main and on version tags (v*).
 
@@ -37,7 +37,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/clawsoul
+          images: ghcr.io/${{ github.repository_owner }}/herandhim
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag

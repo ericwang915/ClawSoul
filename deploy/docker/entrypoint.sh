@@ -1,15 +1,15 @@
 #!/bin/sh
-# ClawSoul container entrypoint.
+# HerAndHim container entrypoint.
 #
-# Materializes /data/claw_soul.json from environment variables on first boot,
+# Materializes /data/herandhim.json from environment variables on first boot,
 # then launches the daemon in the foreground.
 #
-# Env vars (written to claw_soul.json):
-#   CLAW_<PROVIDER>_API_KEY   the only one that's required, e.g.
-#                             CLAW_DEEPSEEK_API_KEY — the provider is inferred
-#   CLAW_LLM_PROVIDER         optional override, e.g. "deepseek"
-#   CLAW_TELEGRAM_TOKEN       your bot token (optional if web-only)
-#   CLAW_IMAGE_PROVIDER       optional: gemini|openai|seedream|fal|replicate|
+# Env vars (written to herandhim.json):
+#   HERANDHIM_<PROVIDER>_API_KEY   the only one that's required, e.g.
+#                             HERANDHIM_DEEPSEEK_API_KEY — the provider is inferred
+#   HERANDHIM_LLM_PROVIDER         optional override, e.g. "deepseek"
+#   HERANDHIM_TELEGRAM_TOKEN       your bot token (optional if web-only)
+#   HERANDHIM_IMAGE_PROVIDER       optional: gemini|openai|seedream|fal|replicate|
 #                             sdwebui|custom — also inferred from whichever
 #                             image key is set
 #
@@ -17,8 +17,8 @@
 
 set -eu
 
-CONFIG_DIR="${CLAWSOUL_HOME:-/data}"
-CONFIG_FILE="$CONFIG_DIR/claw_soul.json"
+CONFIG_DIR="${HERANDHIM_HOME:-/data}"
+CONFIG_FILE="$CONFIG_DIR/herandhim.json"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -32,7 +32,7 @@ def env(key, default=""):
     return os.environ.get(key, default)
 
 # provider key -> (default model, default base URL). Keep in sync with
-# _OPENAI_COMPATIBLE in claw_soul/main.py. Claude and Gemini use native SDKs
+# _OPENAI_COMPATIBLE in herandhim/main.py. Claude and Gemini use native SDKs
 # and take no base URL.
 PROVIDERS = {
     "openai":      ("gpt-4o-mini",                             "https://api.openai.com/v1"),
@@ -52,11 +52,11 @@ PROVIDERS = {
 }
 
 # Default to whichever provider actually has a key, so `docker run -e
-# CLAW_OPENAI_API_KEY=...` just works without also setting CLAW_LLM_PROVIDER.
-provider = env("CLAW_LLM_PROVIDER").lower()
+# HERANDHIM_OPENAI_API_KEY=...` just works without also setting HERANDHIM_LLM_PROVIDER.
+provider = env("HERANDHIM_LLM_PROVIDER").lower()
 if not provider:
     for name in list(PROVIDERS) + ["claude", "gemini"]:
-        if env(f"CLAW_{name.upper()}_API_KEY"):
+        if env(f"HERANDHIM_{name.upper()}_API_KEY"):
             provider = name
             break
     else:
@@ -65,43 +65,43 @@ if not provider:
 llm = {"provider": provider}
 for name, (model, base) in PROVIDERS.items():
     entry = {
-        "apiKey": env(f"CLAW_{name.upper()}_API_KEY"),
-        "model":  env(f"CLAW_{name.upper()}_MODEL", model),
+        "apiKey": env(f"HERANDHIM_{name.upper()}_API_KEY"),
+        "model":  env(f"HERANDHIM_{name.upper()}_MODEL", model),
     }
-    base_url = env(f"CLAW_{name.upper()}_BASE_URL", base)
+    base_url = env(f"HERANDHIM_{name.upper()}_BASE_URL", base)
     if base_url:
         entry["baseUrl"] = base_url
     llm[name] = entry
 llm["claude"] = {
-    "apiKey": env("CLAW_CLAUDE_API_KEY"),
-    "model":  env("CLAW_CLAUDE_MODEL", "claude-sonnet-4-20250514"),
+    "apiKey": env("HERANDHIM_CLAUDE_API_KEY"),
+    "model":  env("HERANDHIM_CLAUDE_MODEL", "claude-sonnet-4-20250514"),
 }
 llm["gemini"] = {
-    "apiKey": env("CLAW_GEMINI_API_KEY"),
-    "model":  env("CLAW_GEMINI_MODEL", "gemini-2.0-flash"),
+    "apiKey": env("HERANDHIM_GEMINI_API_KEY"),
+    "model":  env("HERANDHIM_GEMINI_MODEL", "gemini-2.0-flash"),
 }
 
 # ── Photos ──────────────────────────────────────────────────────────────
 # Any of these backends can draw her selfies.  Setting one key is enough:
 # the provider is inferred, same as for the LLM.
 IMAGE_BACKENDS = {
-    "seedream":     ("CLAW_SEEDREAM_API_KEY",  "seedream-5-0-lite-260128",
+    "seedream":     ("HERANDHIM_SEEDREAM_API_KEY",  "seedream-5-0-lite-260128",
                      "https://ark.ap-southeast.bytepluses.com/api/v3"),
-    "openai":       ("CLAW_IMAGE_OPENAI_KEY",  "gpt-image-1", ""),
-    "gemini":       ("CLAW_IMAGE_GEMINI_KEY",  "gemini-2.5-flash-image", ""),
-    "openrouter":   ("CLAW_IMAGE_OPENROUTER_KEY", "google/gemini-2.5-flash-image", ""),
-    "bfl":          ("CLAW_BFL_API_KEY",       "flux-kontext-pro", ""),
-    "fal":          ("CLAW_FAL_KEY",           "fal-ai/flux/schnell", ""),
-    "replicate":    ("CLAW_REPLICATE_API_TOKEN", "black-forest-labs/flux-schnell", ""),
-    "stability":    ("CLAW_STABILITY_API_KEY", "core", ""),
-    "dashscope":    ("CLAW_DASHSCOPE_API_KEY", "wan2.2-t2i-flash", ""),
+    "openai":       ("HERANDHIM_IMAGE_OPENAI_KEY",  "gpt-image-1", ""),
+    "gemini":       ("HERANDHIM_IMAGE_GEMINI_KEY",  "gemini-2.5-flash-image", ""),
+    "openrouter":   ("HERANDHIM_IMAGE_OPENROUTER_KEY", "google/gemini-2.5-flash-image", ""),
+    "bfl":          ("HERANDHIM_BFL_API_KEY",       "flux-kontext-pro", ""),
+    "fal":          ("HERANDHIM_FAL_KEY",           "fal-ai/flux/schnell", ""),
+    "replicate":    ("HERANDHIM_REPLICATE_API_TOKEN", "black-forest-labs/flux-schnell", ""),
+    "stability":    ("HERANDHIM_STABILITY_API_KEY", "core", ""),
+    "dashscope":    ("HERANDHIM_DASHSCOPE_API_KEY", "wan2.2-t2i-flash", ""),
     "sdwebui":      ("",                       "", "http://localhost:7860"),
     "comfyui":      ("",                       "", "http://localhost:8188"),
     "pollinations": ("",                       "flux", ""),
-    "custom":       ("CLAW_IMAGE_API_KEY",     "", ""),
+    "custom":       ("HERANDHIM_IMAGE_API_KEY",     "", ""),
 }
 
-image_provider = env("CLAW_IMAGE_PROVIDER").lower()
+image_provider = env("HERANDHIM_IMAGE_PROVIDER").lower()
 if not image_provider:
     for name, (key_env, *_r) in IMAGE_BACKENDS.items():
         if key_env and env(key_env):
@@ -110,13 +110,13 @@ if not image_provider:
     else:
         # Local servers, then keys already set for chat/vision. An explicitly
         # set image key always wins over these.
-        if env("CLAW_COMFYUI_BASE_URL"):
+        if env("HERANDHIM_COMFYUI_BASE_URL"):
             image_provider = "comfyui"
-        elif env("CLAW_SDWEBUI_BASE_URL"):
+        elif env("HERANDHIM_SDWEBUI_BASE_URL"):
             image_provider = "sdwebui"
-        elif env("CLAW_GEMINI_API_KEY"):
+        elif env("HERANDHIM_GEMINI_API_KEY"):
             image_provider = "gemini"
-        elif env("CLAW_OPENROUTER_API_KEY"):
+        elif env("HERANDHIM_OPENROUTER_API_KEY"):
             image_provider = "openrouter"
 
 skills = {}
@@ -126,15 +126,15 @@ for name, (key_env, model, base) in IMAGE_BACKENDS.items():
     # Gemini and OpenRouter keys already set for chat/vision work for images
     # too — don't make people paste the same key under a second name.
     if not key and name == image_provider:
-        key = env(f"CLAW_{name.upper()}_API_KEY")
+        key = env(f"HERANDHIM_{name.upper()}_API_KEY")
     if key:
         entry["apiKey"] = key
-    override = env("CLAW_IMAGE_MODEL") if name == image_provider else ""
+    override = env("HERANDHIM_IMAGE_MODEL") if name == image_provider else ""
     if name == "seedream":
-        override = override or env("CLAW_SEEDREAM_MODEL")
+        override = override or env("HERANDHIM_SEEDREAM_MODEL")
     if override or model:
         entry["model"] = override or model
-    base_val = env(f"CLAW_{name.upper()}_BASE_URL", base)
+    base_val = env(f"HERANDHIM_{name.upper()}_BASE_URL", base)
     if base_val:
         entry["baseUrl"] = base_val
     skills[name] = entry
@@ -146,25 +146,25 @@ config = {
     "llm": llm,
     "channels": {
         "telegram": {
-            "token": env("CLAW_TELEGRAM_TOKEN"),
+            "token": env("HERANDHIM_TELEGRAM_TOKEN"),
             "allowedUsers": [
-                int(x) for x in env("CLAW_TELEGRAM_ALLOWED_USERS", "").replace(",", " ").split() if x
+                int(x) for x in env("HERANDHIM_TELEGRAM_ALLOWED_USERS", "").replace(",", " ").split() if x
             ],
         },
     },
     "skills": skills,
-    "deepgram": {"apiKey": env("CLAW_DEEPGRAM_API_KEY")},
-    "tavily":   {"apiKey": env("CLAW_TAVILY_API_KEY")},
+    "deepgram": {"apiKey": env("HERANDHIM_DEEPGRAM_API_KEY")},
+    "tavily":   {"apiKey": env("HERANDHIM_TAVILY_API_KEY")},
     "web": {
         "host": "0.0.0.0",
         "port": int(env("PORT", "7788")),
     },
 }
 
-path = pathlib.Path(os.environ.get("CONFIG_FILE", "/data/claw_soul.json"))
+path = pathlib.Path(os.environ.get("CONFIG_FILE", "/data/herandhim.json"))
 path.write_text(json.dumps(config, indent=2))
 PY
 
 # ── Launch ──────────────────────────────────────────────────────────────
 # Single-process daemon: web dashboard + (if a Telegram token is set) the bot.
-exec python -m claw_soul --config "$CONFIG_FILE" start --foreground
+exec python -m herandhim --config "$CONFIG_FILE" start --foreground

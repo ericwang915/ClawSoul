@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from claw_soul.core import tools
+from herandhim.core import tools
 
 
 def test_clear_chat_history_is_in_memory_tools():
@@ -26,10 +26,10 @@ def test_clear_chat_history_has_optional_reason_param():
 def test_agent_dispatch_sets_pending_flag(monkeypatch, tmp_path):
     """Dispatching clear_chat_history must set the deferred flag, NOT wipe
     messages mid-turn (would break the running tool loop)."""
-    from claw_soul import config
-    from claw_soul.core.agent import Agent
+    from herandhim import config
+    from herandhim.core.agent import Agent
 
-    monkeypatch.setattr(config, "_CLAWSOUL_BASE", tmp_path)
+    monkeypatch.setattr(config, "_HERANDHIM_BASE", tmp_path)
     config._configs.clear()
 
     # Build a minimal Agent — provider is mocked to avoid LLM calls
@@ -66,7 +66,7 @@ def test_agent_dispatch_sets_pending_flag(monkeypatch, tmp_path):
 
 
 def test_maybe_clear_after_turn_runs_clear():
-    from claw_soul.core.agent import Agent
+    from herandhim.core.agent import Agent
 
     with patch.object(Agent, "_init_system_prompt"):
         a = Agent.__new__(Agent)
@@ -90,7 +90,7 @@ def test_maybe_clear_after_turn_runs_clear():
 
 
 def test_maybe_clear_is_noop_without_flag():
-    from claw_soul.core.agent import Agent
+    from herandhim.core.agent import Agent
 
     a = Agent.__new__(Agent)
     a._pending_clear_history = False

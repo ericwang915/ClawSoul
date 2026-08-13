@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature for ClawSoul
+about: Suggest a new feature for HerAndHim
 title: "[Feature] "
 labels: enhancement
 assignees: ''

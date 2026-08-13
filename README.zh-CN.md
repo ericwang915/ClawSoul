@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/logo-300.png" alt="ClawSoul" width="160">
+  <img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/logo-300.png" alt="HerAndHim" width="160">
 </p>
 
-<h1 align="center">ClawSoul 🐾💕</h1>
+<h1 align="center">HerAndHim 🐾💕</h1>
 
 <p align="center">
   <strong>一个有自己生活的自托管 AI 伴侣。</strong>
@@ -19,11 +19,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ericwang915/ClawSoul/stargazers">
-    <img src="https://img.shields.io/github/stars/ericwang915/ClawSoul?style=social" alt="GitHub stars">
+  <a href="https://github.com/ericwang915/HerAndHim/stargazers">
+    <img src="https://img.shields.io/github/stars/ericwang915/HerAndHim?style=social" alt="GitHub stars">
   </a>
-  <a href="https://github.com/ericwang915/ClawSoul/actions/workflows/ci.yml">
-    <img src="https://github.com/ericwang915/ClawSoul/actions/workflows/ci.yml/badge.svg" alt="CI">
+  <a href="https://github.com/ericwang915/HerAndHim/actions/workflows/ci.yml">
+    <img src="https://github.com/ericwang915/HerAndHim/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0">
@@ -38,18 +38,18 @@
 ## 🚀 一条命令跑起来
 
 ```bash
-docker run -e CLAW_OPENROUTER_API_KEY=sk-or-... -p 7788:7788 -v clawsoul:/data ghcr.io/ericwang915/clawsoul
+docker run -e HERANDHIM_OPENROUTER_API_KEY=sk-or-... -p 7788:7788 -v herandhim:/data ghcr.io/ericwang915/herandhim
 ```
 
-打开 **http://localhost:7788**，在向导里捏好你的伴侣，就可以聊了。**只需要一个文本大模型的 key** —— 而且会自动识别，`CLAW_OPENAI_API_KEY`、`CLAW_DEEPSEEK_API_KEY`、`CLAW_CLAUDE_API_KEY`、`CLAW_QWEN_API_KEY`、`CLAW_GLM_API_KEY`…… 任意一个都行。希望数据完全不出本机？指向 [Ollama](https://ollama.com)，连 key 都不用。想让她住进你手机？再加一个 Telegram bot token。
+打开 **http://localhost:7788**，在向导里捏好你的伴侣，就可以聊了。**只需要一个文本大模型的 key** —— 而且会自动识别，`HERANDHIM_OPENAI_API_KEY`、`HERANDHIM_DEEPSEEK_API_KEY`、`HERANDHIM_CLAUDE_API_KEY`、`HERANDHIM_QWEN_API_KEY`、`HERANDHIM_GLM_API_KEY`…… 任意一个都行。希望数据完全不出本机？指向 [Ollama](https://ollama.com)，连 key 都不用。想让她住进你手机？再加一个 Telegram bot token。
 
 ### 更喜欢 Python？直接装
 
 ```bash
-pipx install clawsoul-ai        # 或者：pip install clawsoul-ai
+pipx install herandhim        # 或者：pip install herandhim
                                 # 想要更准的记忆检索：装 [search] 附加项
-claw_soul onboard               # 选模型、填 key、设计你的伴侣
-claw_soul start                 # 面板在 http://localhost:7788
+herandhim onboard               # 选模型、填 key、设计你的伴侣
+herandhim start                 # 面板在 http://localhost:7788
 ```
 
 <details>
@@ -57,10 +57,10 @@ claw_soul start                 # 面板在 http://localhost:7788
 
 ```bash
 # 直接装 GitHub 上的最新版，不用 clone
-pip install "git+https://github.com/ericwang915/ClawSoul.git"
+pip install "git+https://github.com/ericwang915/HerAndHim.git"
 
 # 从本地 clone 装（贡献者用，可编辑模式）
-git clone https://github.com/ericwang915/ClawSoul.git && cd ClawSoul
+git clone https://github.com/ericwang915/HerAndHim.git && cd HerAndHim
 pip install -e ".[all]"         # 可选 extras：cloud（S3）、twitter、all
 pytest tests/                   # 208 个测试
 
@@ -69,11 +69,11 @@ cp deploy/local/.env.example deploy/local/.env   # 填上你的 key
 docker compose -f deploy/local/docker-compose.yml up --build
 
 # 只用终端，不开网页
-claw_soul chat
+herandhim chat
 ```
 
 命令：`onboard` · `start`（`-f` 前台）· `stop` · `status` · `chat`。
-所有数据都在 `~/.claw_soul/`，删掉这个文件夹就干干净净。
+所有数据都在 `~/.herandhim/`，删掉这个文件夹就干干净净。
 
 部署到云上跑你自己的一份：见 [deploy/docker/README.md](deploy/docker/README.md)。
 </details>
@@ -86,9 +86,9 @@ claw_soul chat
 
 <table>
 <tr>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/proactive-and-sass.jpg" alt="主动早安、自拍、以及被冷落后的小情绪"></td>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/same-face-selfies.jpg" alt="同一个人的两张自拍"></td>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/sees-your-photo.jpg" alt="她看你发的照片"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/demo/proactive-and-sass.jpg" alt="主动早安、自拍、以及被冷落后的小情绪"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/demo/same-face-selfies.jpg" alt="同一个人的两张自拍"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/demo/sees-your-photo.jpg" alt="她看你发的照片"></td>
 </tr>
 <tr>
 <td valign="top">
@@ -129,7 +129,7 @@ claw_soul chat
 
 ## 💗 为什么她像个真人
 
-大多数 AI 伴侣只是"回答你"。ClawSoul 是在**过日子**，然后像人一样给你发消息。
+大多数 AI 伴侣只是"回答你"。HerAndHim 是在**过日子**，然后像人一样给你发消息。
 
 - **她有自己的一天。** 真实城市里的日程（跟着天气换衣服、吃饭、通勤）—— 你问"在干嘛"，答案是从她当下所在的时间点长出来的，不是套话。
 - **她像人一样打字。** 一次发 2–3 条短消息带打字停顿；看到你的照片先回个 ❤️ 再说话；她那边凌晨三点会迷迷糊糊；你一整天没消息她会察觉 —— 而且如果你已读不回，她会有点小脾气。
@@ -153,7 +153,7 @@ claw_soul chat
 
 ## 🆚 和托管型产品比
 
-| | ClawSoul | Replika | Nomi | Character.AI |
+| | HerAndHim | Replika | Nomi | Character.AI |
 |---|:---:|:---:|:---:|:---:|
 | 自托管、数据归你 | ✅ | ❌ | ❌ | ❌ |
 | 用你自己的 key / 模型 | ✅ 任意 | ❌ | ❌ | ❌ |
@@ -167,14 +167,14 @@ claw_soul chat
 
 ## 🛡️ 安全与自托管责任
 
-ClawSoul 是**面向成年人（18+）的关系模拟引擎** —— 一个情感陪伴方向的开源研究项目，**不是成人内容生成器**。她说的一切都是生成的虚构内容：她不是真人，也不能替代专业帮助。
+HerAndHim 是**面向成年人（18+）的关系模拟引擎** —— 一个情感陪伴方向的开源研究项目，**不是成人内容生成器**。她说的一切都是生成的虚构内容：她不是真人，也不能替代专业帮助。
 
 **默认 SFW。** 内置的人设、提示词和图像流程都是围绕日常陪伴写的 —— 一个会跟你聊今天过得怎样的朋友。露骨性内容不是本项目的功能、不随项目提供；图像守卫会直接拒绝违法生成。**未成年人设在代码层被封禁**，任何形式（包括纯文字）都不被接受。
 
 两道护栏默认开启，且刻意不做成配置开关：
 
-- **危机干预**（`claw_soul/core/safety.py`）—— 识别急性心理危机信号，优先于人设沉浸，以关心的口吻给出真实求助热线。
-- **图像内容守卫**（`claw_soul/core/image_gen/guard.py`）—— 在唯一入口拒绝违法生成。
+- **危机干预**（`herandhim/core/safety.py`）—— 识别急性心理危机信号，优先于人设沉浸，以关心的口吻给出真实求助热线。
+- **图像内容守卫**（`herandhim/core/image_gen/guard.py`）—— 在唯一入口拒绝违法生成。
 
 自托管意味着你就是运营者：所在地关于 AI 聊天服务、数据保护、年龄限制的法律由你负责。
 
@@ -196,5 +196,5 @@ ClawSoul 是**面向成年人（18+）的关系模拟引擎** —— 一个情�
 ---
 
 <p align="center">
-  <sub>Made with 💕 by ClawSoul</sub>
+  <sub>Made with 💕 by HerAndHim</sub>
 </p>

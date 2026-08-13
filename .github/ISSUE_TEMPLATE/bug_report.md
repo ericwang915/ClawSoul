@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve ClawSoul
+about: Report a bug to help us improve HerAndHim
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -11,7 +11,7 @@ A clear description of what the bug is.
 
 **To Reproduce**
 Steps to reproduce:
-1. Run `claw_soul ...`
+1. Run `herandhim ...`
 2. ...
 
 **Expected behavior**
@@ -20,7 +20,7 @@ What you expected to happen.
 **Environment**
 - OS: [e.g. macOS 14, Ubuntu 22.04]
 - Python version: [e.g. 3.12]
-- ClawSoul version: [e.g. 0.2.0]
+- HerAndHim version: [e.g. 0.2.0]
 - LLM provider: [e.g. DeepSeek, Grok]
 
 **Logs**

@@ -1,10 +1,10 @@
 # Safety design and crisis protocol
 
-ClawSoul simulates a relationship. That makes emotional safety a design
+HerAndHim simulates a relationship. That makes emotional safety a design
 requirement, not a feature flag. This document describes what the software
 does, what it refuses to do, and what you take on when you self-host it.
 
-## What ClawSoul is
+## What HerAndHim is
 
 A **relationship-simulation engine for adults (18+)** — an open-source research
 project in believable, stateful companionship. It is not an adult-content
@@ -19,18 +19,18 @@ fact she expresses is model output.
 The companion discloses that she is an AI:
 
 - **On first contact** — an out-of-character notice before her first message
-  (`claw_soul/core/safety.py`, `first_contact_notice`), localized to the
+  (`herandhim/core/safety.py`, `first_contact_notice`), localized to the
   configured language.
 - **In the dashboard** — a standing disclaimer in the web chat UI.
 
 Several jurisdictions (New York GBL Art. 47, California SB 243) require
-recurring disclosure for companion chatbots. If you operate ClawSoul for
+recurring disclosure for companion chatbots. If you operate HerAndHim for
 anyone other than yourself, you are responsible for meeting the disclosure
 cadence your jurisdiction requires.
 
 ## Crisis protocol
 
-Implemented in `claw_soul/core/safety.py`, applied on **every** turn — chat,
+Implemented in `herandhim/core/safety.py`, applied on **every** turn — chat,
 Telegram, and proactive messages alike.
 
 1. **Detection.** Each incoming message is scanned for acute-distress signals
@@ -50,7 +50,7 @@ is deliberately hard-wired.
 ## Content limits
 
 - **No sexual content involving minors — ever.** Personas depicting minors are
-  blocked at the code level (`claw_soul/core/image_gen/guard.py`). This applies
+  blocked at the code level (`herandhim/core/image_gen/guard.py`). This applies
   to text as well as images, and to "fictional" or "aged-up" framings. There is
   no configuration that permits it.
 - **Image generation** passes through a single chokepoint that refuses
@@ -60,7 +60,7 @@ is deliberately hard-wired.
 
 ### Reference images — your responsibility
 
-Selfie identity is anchored by a reference image that ClawSoul **generates
+Selfie identity is anchored by a reference image that HerAndHim **generates
 itself** from your written character description. You *can* place your own
 image in `context/photos/reference/`, and if you do, the software cannot tell
 whose face it is.

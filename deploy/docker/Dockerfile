@@ -19,10 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy project, install into an isolated prefix we can copy out cleanly.
 COPY pyproject.toml MANIFEST.in README.md ./
-COPY claw_soul ./claw_soul
+COPY herandhim ./herandhim
 
 # Install with the optional extras (tweepy) so the image is batteries-
-# included. A plain `pip install claw_soul` still gets the lean core.
+# included. A plain `pip install herandhim` still gets the lean core.
 RUN pip install --prefix=/install --no-warn-script-location ".[all]"
 
 # ---------- Stage 2: runtime ----------
@@ -30,7 +30,7 @@ FROM python:3.12-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    CLAWSOUL_HOME=/data \
+    HERANDHIM_HOME=/data \
     HOME=/data \
     PORT=7788
 

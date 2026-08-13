@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from claw_soul.core.skill_loader import (
+from herandhim.core.skill_loader import (
     SkillRegistry,
     load_skill_by_name,
     search_skills,
