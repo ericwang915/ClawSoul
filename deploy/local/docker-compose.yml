@@ -1,5 +1,5 @@
 services:
-  clawsoul:
+  herandhim:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
@@ -9,8 +9,8 @@ services:
       - .env
     volumes:
       # Persistent data: memory, chat history, config, photos.
-      - clawsoul_data:/data
+      - herandhim_data:/data
     restart: unless-stopped
 
 volumes:
-  clawsoul_data:
+  herandhim_data:

@@ -6,12 +6,12 @@ import json
 
 import pytest
 
-from claw_soul import companion, config
+from herandhim import companion, config
 
 
 @pytest.fixture(autouse=True)
 def _reset(monkeypatch, tmp_path):
-    monkeypatch.setattr(config, "_CLAWSOUL_BASE", tmp_path)
+    monkeypatch.setattr(config, "_HERANDHIM_BASE", tmp_path)
     config._configs.clear()
     config._config_paths.clear()
 
@@ -76,7 +76,7 @@ def test_apply_choices_writes_the_identity_files(tmp_path):
     assert (ctx / "persona").exists()
     assert (ctx / "profile").exists()
 
-    saved = json.loads((tmp_path / "claw_soul.json").read_text())
+    saved = json.loads((tmp_path / "herandhim.json").read_text())
     assert saved["companion"]["archetype"] == "healer"
 
 
@@ -89,7 +89,7 @@ def test_reapplying_choices_rewrites_the_identity(tmp_path):
     witty = (tmp_path / "context/soul/SOUL.md").read_text()
 
     assert healer != witty
-    cfg = json.loads((tmp_path / "claw_soul.json").read_text())
+    cfg = json.loads((tmp_path / "herandhim.json").read_text())
     assert cfg["companion"]["archetype"] == "witty"
 
 

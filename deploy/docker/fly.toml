@@ -1,9 +1,9 @@
-# Fly.io config — run your own ClawSoul in the cloud instead of on a machine
+# Fly.io config — run your own HerAndHim in the cloud instead of on a machine
 # at home. One instance, one companion, your keys.
 #
-# App name is global on fly.dev — change if "clawsoul" is taken.
+# App name is global on fly.dev — change if "herandhim" is taken.
 
-app             = "clawsoul"
+app             = "herandhim"
 primary_region  = "sin"        # pick the region closest to you
 swap_size_mb    = 512
 
@@ -12,7 +12,7 @@ swap_size_mb    = 512
 
 [env]
   PORT          = "7788"
-  CLAWSOUL_HOME = "/data"
+  HERANDHIM_HOME = "/data"
 
 [http_service]
   internal_port        = 7788
@@ -34,7 +34,7 @@ swap_size_mb    = 512
   size   = "shared-cpu-2x"
   memory = "1gb"
 
-# Persistent volume for ~/.claw_soul/ contents (config, memory, photos, logs).
+# Persistent volume for ~/.herandhim/ contents (config, memory, photos, logs).
 # Volume is created once via `fly volumes create` (see README) and
 # auto-attaches to the machine on every deploy.
 [[mounts]]

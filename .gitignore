@@ -163,14 +163,14 @@ cython_debug/
 *.key
 credentials.json
 pythonclaw.json
-claw_soul.json
+herandhim.json
 claw_girl.json
 
 # Runtime context (generated at first run, user-specific)
 context/
 
 # Daemon state
-~/.claw_soul/
+~/.herandhim/
 Gemini_Generated_Image_*
 
 frontend/

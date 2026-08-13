@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/logo-300.png" alt="ClawSoul" width="160">
+  <img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/logo-300.png" alt="HerAndHim" width="160">
 </p>
 
-<h1 align="center">ClawSoul 🐾💕</h1>
+<h1 align="center">HerAndHim 🐾💕</h1>
 
 <p align="center">
   <strong>A self-hosted AI companion with a life of her own.</strong>
@@ -15,18 +15,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ericwang915/ClawSoul/stargazers">
-    <img src="https://img.shields.io/github/stars/ericwang915/ClawSoul?style=social" alt="GitHub stars">
+  <a href="https://github.com/ericwang915/HerAndHim/stargazers">
+    <img src="https://img.shields.io/github/stars/ericwang915/HerAndHim?style=social" alt="GitHub stars">
   </a>
-  <a href="https://github.com/ericwang915/ClawSoul/actions/workflows/ci.yml">
-    <img src="https://github.com/ericwang915/ClawSoul/actions/workflows/ci.yml/badge.svg" alt="CI">
+  <a href="https://github.com/ericwang915/HerAndHim/actions/workflows/ci.yml">
+    <img src="https://github.com/ericwang915/HerAndHim/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 License">
   </a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
-  <a href="https://github.com/ericwang915/ClawSoul/pkgs/container/clawsoul">
-    <img src="https://img.shields.io/badge/ghcr.io-clawsoul-2496ED?logo=docker&logoColor=white" alt="Docker image">
+  <a href="https://github.com/ericwang915/HerAndHim/pkgs/container/herandhim">
+    <img src="https://img.shields.io/badge/ghcr.io-herandhim-2496ED?logo=docker&logoColor=white" alt="Docker image">
   </a>
 </p>
 
@@ -49,23 +49,23 @@
 ## 🚀 Run it (one command)
 
 ```bash
-docker run -e CLAW_OPENROUTER_API_KEY=sk-or-... -p 7788:7788 -v clawsoul:/data ghcr.io/ericwang915/clawsoul
+docker run -e HERANDHIM_OPENROUTER_API_KEY=sk-or-... -p 7788:7788 -v herandhim:/data ghcr.io/ericwang915/herandhim
 ```
 
 Open **http://localhost:7788**, design your companion in the wizard, and start
 talking. **One text-LLM key is all you need** — it's auto-detected, so any of
-`CLAW_OPENAI_API_KEY`, `CLAW_DEEPSEEK_API_KEY`, `CLAW_CLAUDE_API_KEY`,
-`CLAW_GEMINI_API_KEY`, `CLAW_GROK_API_KEY`, `CLAW_QWEN_API_KEY`… works the same
+`HERANDHIM_OPENAI_API_KEY`, `HERANDHIM_DEEPSEEK_API_KEY`, `HERANDHIM_CLAUDE_API_KEY`,
+`HERANDHIM_GEMINI_API_KEY`, `HERANDHIM_GROK_API_KEY`, `HERANDHIM_QWEN_API_KEY`… works the same
 way. Prefer nothing leaving your machine? Point it at [Ollama](https://ollama.com)
 and use no key at all. Want her on your phone? Add a Telegram bot token.
 
 ### Prefer Python? Install it directly
 
 ```bash
-pipx install clawsoul-ai        # or: pip install clawsoul-ai
+pipx install herandhim        # or: pip install herandhim
                                 # add [search] for sharper memory recall
-claw_soul onboard               # pick a provider, paste your key, design your companion
-claw_soul start                 # dashboard at http://localhost:7788
+herandhim onboard               # pick a provider, paste your key, design your companion
+herandhim start                 # dashboard at http://localhost:7788
 ```
 
 <details>
@@ -73,10 +73,10 @@ claw_soul start                 # dashboard at http://localhost:7788
 
 ```bash
 # Latest from GitHub, no clone needed
-pip install "git+https://github.com/ericwang915/ClawSoul.git"
+pip install "git+https://github.com/ericwang915/HerAndHim.git"
 
 # From a local clone (contributors — editable install)
-git clone https://github.com/ericwang915/ClawSoul.git && cd ClawSoul
+git clone https://github.com/ericwang915/HerAndHim.git && cd HerAndHim
 pip install -e ".[all]"         # extras: cloud (S3), twitter, all
 pytest tests/                   # 208 tests
 
@@ -85,11 +85,11 @@ cp deploy/local/.env.example deploy/local/.env   # add your key
 docker compose -f deploy/local/docker-compose.yml up --build
 
 # Terminal-only, no web UI
-claw_soul chat
+herandhim chat
 ```
 
 CLI: `onboard` · `start` (`-f` foreground) · `stop` · `status` · `chat`.
-Everything lives in `~/.claw_soul/` — delete that folder and it's gone.
+Everything lives in `~/.herandhim/` — delete that folder and it's gone.
 
 Deploy your own instance to the cloud: see [deploy/docker/README.md](deploy/docker/README.md).
 </details>
@@ -98,14 +98,14 @@ Deploy your own instance to the cloud: see [deploy/docker/README.md](deploy/dock
 
 ## 👀 What it actually looks like
 
-Real screenshots from a live ClawSoul bot on Telegram (Chinese conversation,
+Real screenshots from a live HerAndHim bot on Telegram (Chinese conversation,
 translated below — she speaks whatever language you pick).
 
 <table>
 <tr>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/proactive-and-sass.jpg" alt="proactive good-morning, a selfie, and attitude"></td>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/same-face-selfies.jpg" alt="two selfies of the same person"></td>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/demo/sees-your-photo.jpg" alt="she looks at a photo you sent"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/demo/proactive-and-sass.jpg" alt="proactive good-morning, a selfie, and attitude"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/demo/same-face-selfies.jpg" alt="two selfies of the same person"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/demo/sees-your-photo.jpg" alt="she looks at a photo you sent"></td>
 </tr>
 <tr>
 <td valign="top">
@@ -146,7 +146,7 @@ Vision + real timezones + the same pet, every time.
 
 ## 💗 Why she feels real
 
-Most AI companions answer you. ClawSoul lives a life and texts you like a person.
+Most AI companions answer you. HerAndHim lives a life and texts you like a person.
 
 - **She has a day.** A real schedule in a real city (weather-aware outfits,
   meals, a commute) — ask "what are you up to?" and the answer is anchored to
@@ -173,9 +173,9 @@ the weather, what she's doing right now. Same face, every time.
 
 <table>
 <tr>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/morning.jpg" alt="cozy morning, coffee in hand"></td>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/lunch.jpg" alt="in the park at lunchtime"></td>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/cozy.jpg" alt="on the couch in the evening"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/morning.jpg" alt="cozy morning, coffee in hand"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/lunch.jpg" alt="in the park at lunchtime"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/cozy.jpg" alt="on the couch in the evening"></td>
 </tr>
 <tr>
 <td align="center"><sub><b>08:30</b> · sleepy ☕<br>"morning…just made coffee. you up?"</sub></td>
@@ -188,9 +188,9 @@ the weather, what she's doing right now. Same face, every time.
 
 <table>
 <tr>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/anime-male-rush.jpg" alt="running late with toast"></td>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/anime-male-ramen.jpg" alt="at a ramen counter"></td>
-<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/anime-male-gaming.jpg" alt="late-night gaming"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/anime-male-rush.jpg" alt="running late with toast"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/anime-male-ramen.jpg" alt="at a ramen counter"></td>
+<td width="33%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/anime-male-gaming.jpg" alt="late-night gaming"></td>
 </tr>
 <tr>
 <td align="center"><sub><b>07:45</b> · running late 🍞<br>"toast in mouth, tie not done. running."</sub></td>
@@ -204,12 +204,12 @@ the weather, what she's doing right now. Same face, every time.
 
 <table>
 <tr>
-<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-asian.jpg"></td>
-<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-european.jpg"></td>
-<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-black.jpg"></td>
-<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-male-gym.jpg"></td>
-<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-male-bike.jpg"></td>
-<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/ClawSoul/main/assets/samples/realistic-male-rooftop.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/realistic-asian.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/realistic-european.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/realistic-black.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/realistic-male-gym.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/realistic-male-bike.jpg"></td>
+<td width="16%"><img src="https://raw.githubusercontent.com/ericwang915/HerAndHim/main/assets/samples/realistic-male-rooftop.jpg"></td>
 </tr>
 </table>
 
@@ -237,16 +237,16 @@ ever leaves your machine. Skip them entirely and everything else still works.
 
 | Command | Description |
 |---------|-------------|
-| `claw_soul onboard` | Interactive setup wizard |
-| `claw_soul start` | Start the daemon (web + Telegram) |
-| `claw_soul chat` | Interactive terminal chat |
-| `claw_soul status` / `stop` | Daemon lifecycle |
+| `herandhim onboard` | Interactive setup wizard |
+| `herandhim start` | Start the daemon (web + Telegram) |
+| `herandhim chat` | Interactive terminal chat |
+| `herandhim status` / `stop` | Daemon lifecycle |
 
 ---
 
 ## 🆚 vs. the hosted apps
 
-| | ClawSoul | Replika | Nomi | Character.AI |
+| | HerAndHim | Replika | Nomi | Character.AI |
 |---|:---:|:---:|:---:|:---:|
 | Self-hosted, your data | ✅ | ❌ | ❌ | ❌ |
 | Your own API keys / model | ✅ any | ❌ | ❌ | ❌ |
@@ -260,12 +260,12 @@ ever leaves your machine. Skip them entirely and everything else still works.
 
 ## ⚙️ Configuration
 
-All runtime data lives under `~/.claw_soul/`:
+All runtime data lives under `~/.herandhim/`:
 
 ```
-~/.claw_soul/
-├── claw_soul.json           # config
-├── claw_soul.pid            # daemon PID
+~/.herandhim/
+├── herandhim.json           # config
+├── herandhim.pid            # daemon PID
 ├── daemon.log               # daemon log
 └── context/
     ├── soul/SOUL.md         # core personality
@@ -279,7 +279,7 @@ All runtime data lives under `~/.claw_soul/`:
     └── logs/                # per-day conversation logs
 ```
 
-`claw_soul.json` is created by `claw_soul onboard`. See [`claw_soul.example.json`](claw_soul.example.json) for the full schema:
+`herandhim.json` is created by `herandhim onboard`. See [`herandhim.example.json`](herandhim.example.json) for the full schema:
 
 ```jsonc
 {
@@ -317,27 +317,27 @@ All runtime data lives under `~/.claw_soul/`:
 
 ## 🧠 Supported LLMs
 
-**16 providers.** Set one key and it's auto-detected (`CLAW_<PROVIDER>_API_KEY`),
-or pin it with `CLAW_LLM_PROVIDER`. Two run **fully local** — no key, no cloud.
+**16 providers.** Set one key and it's auto-detected (`HERANDHIM_<PROVIDER>_API_KEY`),
+or pin it with `HERANDHIM_LLM_PROVIDER`. Two run **fully local** — no key, no cloud.
 
 | Provider | Key env var | Default model |
 |----------|-------------|---------------|
-| **DeepSeek** | `CLAW_DEEPSEEK_API_KEY` | `deepseek-chat` |
-| **OpenAI** | `CLAW_OPENAI_API_KEY` | `gpt-4o-mini` |
-| **Claude (Anthropic)** | `CLAW_CLAUDE_API_KEY` | `claude-sonnet-4-20250514` |
-| **Gemini (Google)** | `CLAW_GEMINI_API_KEY` | `gemini-2.5-flash` |
-| **OpenRouter** | `CLAW_OPENROUTER_API_KEY` | `deepseek/deepseek-chat` |
-| **Grok (xAI)** | `CLAW_GROK_API_KEY` | `grok-3` |
-| **Kimi (Moonshot)** | `CLAW_KIMI_API_KEY` | `moonshot-v1-128k` |
-| **GLM (Zhipu)** | `CLAW_GLM_API_KEY` | `glm-4-flash` |
-| **Qwen (Alibaba)** | `CLAW_QWEN_API_KEY` | `qwen-plus` |
-| **Mistral** | `CLAW_MISTRAL_API_KEY` | `mistral-large-latest` |
-| **Groq** | `CLAW_GROQ_API_KEY` | `llama-3.3-70b-versatile` |
-| **Together** | `CLAW_TOGETHER_API_KEY` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
-| **SiliconFlow** | `CLAW_SILICONFLOW_API_KEY` | `deepseek-ai/DeepSeek-V3` |
+| **DeepSeek** | `HERANDHIM_DEEPSEEK_API_KEY` | `deepseek-chat` |
+| **OpenAI** | `HERANDHIM_OPENAI_API_KEY` | `gpt-4o-mini` |
+| **Claude (Anthropic)** | `HERANDHIM_CLAUDE_API_KEY` | `claude-sonnet-4-20250514` |
+| **Gemini (Google)** | `HERANDHIM_GEMINI_API_KEY` | `gemini-2.5-flash` |
+| **OpenRouter** | `HERANDHIM_OPENROUTER_API_KEY` | `deepseek/deepseek-chat` |
+| **Grok (xAI)** | `HERANDHIM_GROK_API_KEY` | `grok-3` |
+| **Kimi (Moonshot)** | `HERANDHIM_KIMI_API_KEY` | `moonshot-v1-128k` |
+| **GLM (Zhipu)** | `HERANDHIM_GLM_API_KEY` | `glm-4-flash` |
+| **Qwen (Alibaba)** | `HERANDHIM_QWEN_API_KEY` | `qwen-plus` |
+| **Mistral** | `HERANDHIM_MISTRAL_API_KEY` | `mistral-large-latest` |
+| **Groq** | `HERANDHIM_GROQ_API_KEY` | `llama-3.3-70b-versatile` |
+| **Together** | `HERANDHIM_TOGETHER_API_KEY` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
+| **SiliconFlow** | `HERANDHIM_SILICONFLOW_API_KEY` | `deepseek-ai/DeepSeek-V3` |
 | **Ollama** 🏠 local | *none* | `llama3.1` |
 | **LM Studio** 🏠 local | *none* | your loaded model |
-| **Custom** | `CLAW_CUSTOM_API_KEY` | any OpenAI-compatible endpoint |
+| **Custom** | `HERANDHIM_CUSTOM_API_KEY` | any OpenAI-compatible endpoint |
 
 ---
 
@@ -345,23 +345,23 @@ or pin it with `CLAW_LLM_PROVIDER`. Two run **fully local** — no key, no cloud
 
 **Thirteen backends** — set one key and the right one is picked
 automatically, or name it explicitly with `skills.image.provider` /
-`CLAW_IMAGE_PROVIDER`:
+`HERANDHIM_IMAGE_PROVIDER`:
 
 | Backend | Default model | Key | Same face across shots |
 |---------|---------------|-----|------------------------|
 | **`pollinations`** | `flux` | *none* | — |
-| **`gemini`** | `gemini-2.5-flash-image` | `CLAW_IMAGE_GEMINI_KEY` | ✅ |
-| **`openrouter`** | `google/gemini-2.5-flash-image` | `CLAW_IMAGE_OPENROUTER_KEY` | ✅ |
-| **`openai`** | `gpt-image-1` | `CLAW_IMAGE_OPENAI_KEY` | ✅ |
-| **`bfl`** | `flux-kontext-pro` | `CLAW_BFL_API_KEY` | ✅ |
-| **`seedream`** | `seedream-5-0-lite-260128` | `CLAW_SEEDREAM_API_KEY` | ✅ |
-| **`fal`** | `fal-ai/flux/schnell` | `CLAW_FAL_KEY` | — |
-| **`replicate`** | `black-forest-labs/flux-schnell` | `CLAW_REPLICATE_API_TOKEN` | — |
-| **`stability`** | `core` | `CLAW_STABILITY_API_KEY` | — |
-| **`dashscope`** | `wan2.2-t2i-flash` | `CLAW_DASHSCOPE_API_KEY` | — |
+| **`gemini`** | `gemini-2.5-flash-image` | `HERANDHIM_IMAGE_GEMINI_KEY` | ✅ |
+| **`openrouter`** | `google/gemini-2.5-flash-image` | `HERANDHIM_IMAGE_OPENROUTER_KEY` | ✅ |
+| **`openai`** | `gpt-image-1` | `HERANDHIM_IMAGE_OPENAI_KEY` | ✅ |
+| **`bfl`** | `flux-kontext-pro` | `HERANDHIM_BFL_API_KEY` | ✅ |
+| **`seedream`** | `seedream-5-0-lite-260128` | `HERANDHIM_SEEDREAM_API_KEY` | ✅ |
+| **`fal`** | `fal-ai/flux/schnell` | `HERANDHIM_FAL_KEY` | — |
+| **`replicate`** | `black-forest-labs/flux-schnell` | `HERANDHIM_REPLICATE_API_TOKEN` | — |
+| **`stability`** | `core` | `HERANDHIM_STABILITY_API_KEY` | — |
+| **`dashscope`** | `wan2.2-t2i-flash` | `HERANDHIM_DASHSCOPE_API_KEY` | — |
 | **`comfyui`** | your workflow | *none* | — |
 | **`sdwebui`** | your checkpoint | *none* | — |
-| **`custom`** | yours | `CLAW_IMAGE_API_KEY` | ✅ |
+| **`custom`** | yours | `HERANDHIM_IMAGE_API_KEY` | ✅ |
 
 Three of these need **no new signup at all**. `pollinations` needs no account
 whatsoever — photos work before you've registered anywhere. `gemini` and
@@ -397,19 +397,19 @@ current time in `today_plan.md`. If the plan says *"10:00 coffee on the balcony"
 10:00 selfie will be exactly that.
 
 **Visual consistency.**
-- Edit `~/.claw_soul/context/persona/appearance.md` to lock the character's look
-- Drop reference portraits into `~/.claw_soul/context/photos/reference/` for face anchoring
+- Edit `~/.herandhim/context/persona/appearance.md` to lock the character's look
+- Drop reference portraits into `~/.herandhim/context/photos/reference/` for face anchoring
 - A stable seed derived from the appearance description keeps the face consistent across shots
 
-Photos are stored under `~/.claw_soul/context/photos/` and pruned automatically after 30 days.
+Photos are stored under `~/.herandhim/context/photos/` and pruned automatically after 30 days.
 
 ---
 
 ## 📁 Project layout
 
 ```
-ClawSoul/
-├── claw_soul/
+HerAndHim/
+├── herandhim/
 │   ├── main.py                  # CLI entry point
 │   ├── onboard.py               # setup wizard
 │   ├── daemon.py                # daemon process manager
@@ -446,19 +446,19 @@ ClawSoul/
 ## 🛠️ Development
 
 ```bash
-git clone https://github.com/ericwang915/ClawSoul.git
-cd ClawSoul
+git clone https://github.com/ericwang915/HerAndHim.git
+cd HerAndHim
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 pytest tests/ -v
-ruff check claw_soul tests
+ruff check herandhim tests
 ```
 
 ---
 
 ## 🛡️ Safety & responsible self-hosting
 
-ClawSoul is a **relationship-simulation engine for adults (18+)** — an
+HerAndHim is a **relationship-simulation engine for adults (18+)** — an
 emotional-companionship research project, not an adult-content generator.
 Everything the companion says is generated fiction: it is not a person, and not
 a substitute for professional help.
@@ -471,9 +471,9 @@ at the code level and are never acceptable, in any form, including text.
 
 Two guardrails ship enabled and are deliberately not configuration flags:
 
-- **Crisis safety** (`claw_soul/core/safety.py`) — detects acute distress and
+- **Crisis safety** (`herandhim/core/safety.py`) — detects acute distress and
   responds with care and real helpline resources ahead of persona immersion.
-- **Image content guard** (`claw_soul/core/image_gen/guard.py`) — blocks
+- **Image content guard** (`herandhim/core/image_gen/guard.py`) — blocks
   categorically illegal image generation at the single chokepoint.
 
 If you self-host, you are the operator: local laws on AI chat services, data
@@ -503,5 +503,5 @@ modifications. (This keeps hosted forks honest.)
 ---
 
 <p align="center">
-  <sub>Made with 💕 by ClawSoul</sub>
+  <sub>Made with 💕 by HerAndHim</sub>
 </p>

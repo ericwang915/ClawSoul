@@ -5,13 +5,13 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 
-from claw_soul.core.memory.emotional_graph import (
+from herandhim.core.memory.emotional_graph import (
     EmotionalGraph,
     MAX_DAYS_KEEP,
     MAX_EVENTS_KEEP,
     PRUNE_CHECK_INTERVAL,
 )
-from claw_soul.core.memory.temporal_index import (
+from herandhim.core.memory.temporal_index import (
     TemporalMemoryIndex,
     TimelineEvent,
     MAX_MEMORY_EVENTS,

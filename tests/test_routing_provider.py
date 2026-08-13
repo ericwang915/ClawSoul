@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from claw_soul.core.llm.routing import RoutingProvider
+from herandhim.core.llm.routing import RoutingProvider
 
 
 def _make_provider(name: str) -> MagicMock:
